@@ -6,6 +6,10 @@ In this codebase, the mechanism is named `eval_adapt`. In the paper, the same me
 
 This release is built on top of a DreamerV3 codebase, but the focus of the repository is the **IR mechanism and the paper workflow**, not a general-purpose Dreamer distribution.
 
+## Diagram
+
+![Imagined Rehearsal Monte Carlo Posterior Batching diagram](assets/irmcpb_diagram.png)
+
 ## Attribution
 
 This repository uses DreamerV3 as the underlying world-model agent implementation. The upstream DreamerV3 codebase provides the training stack, world model, and runtime foundation. The contribution released here is the evaluation-time IR mechanism and the experiment tooling used in the paper.
