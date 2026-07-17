@@ -1,84 +1,249 @@
-# Imagined Rehearsal
+# Continual Imagined Rehearsal
 
-Reference implementation for **Imagined Rehearsal (IR)**, a test-time adaptation and policy-repair procedure for world-model agents.
+Research branch for studying **Imagined Rehearsal (IR)** as an online policy-learning mechanism in continual reinforcement learning (CRL).
 
-In this codebase, the mechanism is named `eval_adapt`. In the paper, the same mechanism is referred to as **rehearsal** or **Imagined Rehearsal (IR)**.
+The original repository is a complete implementation of IR for test-time policy repair. This `crl` branch starts a new line of work: the world-model agent will train continually across a sequence of tasks, while IR supplies immediate, current-posterior actor updates between real environment interactions.
 
-This release is built on top of a DreamerV3 codebase, but the focus of the repository is the **IR mechanism and the paper workflow**, not a general-purpose Dreamer distribution.
+> [!IMPORTANT]
+> The CRL method described below is a research plan, not a claim about the current implementation or experimental results. The current code still implements the original evaluation-time IR mechanism.
 
-## Diagram
+## Research Question
+
+> Does just-in-time, posterior-conditioned Imagined Rehearsal accelerate transfer in a continually trained Dreamer agent without increasing forgetting, and can rehearsal be gated to retain that benefit under a fixed compute budget?
+
+The primary hypothesis is that IR will improve the **speed of transfer** after a task change. At each real state, IR can generate many short imagined trajectories and improve the actor before the next real action. Standard Dreamer actor learning also uses imagined trajectories, but normally performs background updates from posterior states sampled from replay. Planned continual IR differs in the timing and selection of those states: it concentrates additional policy optimisation on the agent's current posterior belief, at the moment adaptation is needed.
+
+## Existing Foundation
 
 ![Imagined Rehearsal Monte Carlo Posterior Batching diagram](assets/irmcpb_diagram.png)
 
-## Attribution
+The existing implementation provides:
 
-This repository uses DreamerV3 as the underlying world-model agent implementation. The upstream DreamerV3 codebase provides the training stack, world model, and runtime foundation. The contribution released here is the evaluation-time IR mechanism and the experiment tooling used in the paper.
+- DreamerV3 world-model training;
+- evaluation-time IR from the current recurrent posterior;
+- actor-only imagined policy updates;
+- Monte Carlo Posterior Batching (MCPB);
+- actor corruption and checkpoint-transfer tools;
+- multi-seed evaluation, trace extraction, and plotting scripts;
+- a real-trajectory online actor-repair baseline.
 
-## What IR Does
+In the current evaluation path, IR:
 
-At evaluation time, IR:
+1. infers the current latent posterior from a real observation;
+2. clones the checkpoint actor;
+3. imagines short trajectories in the frozen world model;
+4. updates only the cloned actor from predicted returns;
+5. acts with that adapted actor;
+6. accumulates adaptation within the episode; and
+7. discards the adapted actor at the episode boundary.
 
-1. infers the current latent posterior state from real observations
-2. imagines short rollouts inside the frozen world model
-3. updates a temporary cloned actor using imagined data only
-4. acts in the real environment with that adapted actor clone
+MCPB repeats the current deterministic RSSM state, draws multiple stochastic states from the same posterior logits, and averages the resulting imagined actor loss in one batched update. It captures stochastic posterior and rollout uncertainty, not world-model parameter uncertainty.
 
-Current implementation properties:
+## Planned Continual-Learning Setting
 
-- IR is only active when `eval_adapt.enabled=True`
-- only actor parameters are updated during IR
-- the world model, reward head, continuation head, and value components remain fixed
-- adapted parameters accumulate within an episode and are discarded at episode end
-- training behaviour is unchanged
+The first CRL experiments will use a single agent trained on a sequence of tasks or environment contexts. Unlike the existing evaluation-only procedure:
 
-## Repository Scope
+- the world model, reward model, critic, and actor continue learning from the real experience stream;
+- a continual replay mechanism is used to reduce world-model forgetting;
+- IR is integrated into the interaction/training loop rather than being confined to evaluation;
+- the first implementation will apply IR updates directly to the persistent actor;
+- evaluation will measure both rapid online behaviour and durable learning.
 
-This repository does not ship trained checkpoints, corrupted checkpoints, or large benchmark outputs. You will need to generate those locally or provide them separately.
+The continual world-model mechanism is deliberately not the intended novelty. It will be selected from established work and held constant across all IR ablations, so that differences can be attributed to rehearsal rather than to different replay systems.
 
-## Installation
+### Initial actor semantics
 
-Python 3.11+ is recommended.
+The simplest first version treats IR as an additional persistent actor update:
+
+```text
+real observation
+      |
+      v
+current posterior -----> short imagined rollouts
+      |                           |
+      |                           v
+      |                  persistent actor update
+      |                           |
+      +---------------------------+
+                  |
+                  v
+            next real action
+```
+
+This tests IR as a full training mechanism without immediately introducing a second actor. A fast/slow actor design remains a follow-up if persistent IR improves transfer but causes interference or drift:
+
+- a fast actor would adapt immediately through IR;
+- a slow actor would retain consolidated lifetime knowledge;
+- consolidation would control which fast changes become persistent.
+
+## Hypotheses
+
+1. **Transfer speed:** Always-on IR improves return AUC and reduces the number of real interactions needed after a task transition.
+2. **Retention:** Current-posterior actor updates can improve transfer without materially increasing forgetting when the world model is protected by continual replay.
+3. **MCPB under change:** Posterior batching is most useful near task transitions or other periods of high uncertainty.
+4. **Efficient rehearsal:** A gated method retains most of the transfer benefit of always-on IR while using fewer imagined transitions and less wall-clock time.
+5. **Failure boundary:** IR becomes harmful when the world model is too stale or uncertain for its imagined returns to be trustworthy.
+
+## Rehearsal Gating
+
+Gating will be treated as three separate decisions rather than a single threshold.
+
+### 1. Is actor adaptation needed?
+
+Candidate signals:
+
+- disagreement among an ensemble of actors;
+- a recent return or value drop;
+- large imagined advantages;
+- large expected actor update or policy KL.
+
+### 2. Can the current imagination be trusted?
+
+Candidate signals:
+
+- world-model prediction surprise;
+- reconstruction or dynamics loss;
+- disagreement among world-model predictors;
+- poor agreement between predicted and recently observed rewards.
+
+A large distribution shift may create an urgent need for adaptation while simultaneously making imagined updates unreliable. The gate should be able to defer or reduce IR in that case.
+
+### 3. How much rehearsal compute is justified?
+
+Candidate controls:
+
+- posterior entropy determines MCPB batch size;
+- gradient variance across posterior samples determines whether to draw more samples;
+- actor disagreement determines the number of IR optimiser steps;
+- adaptation stops when disagreement or update magnitude falls below a threshold.
+
+The first experiments will log these candidate signals during always-on IR. Gating rules will be chosen only after testing which signals predict a positive marginal benefit from rehearsal.
+
+## Experimental Plan
+
+### Stage 1: continual baseline
+
+Build a task-sequence runner and reproduce a continual Dreamer baseline using one fixed world-model replay mechanism. Verify:
+
+- task transitions and evaluation do not reset the learned agent;
+- previous tasks can be evaluated without contaminating training state;
+- replay composition can be inspected over the complete lifetime;
+- per-task learning curves and a performance matrix are recorded.
+
+### Stage 2: always-on rehearsal
+
+Integrate persistent IR into the training/interaction loop and compare:
+
+| Method | Current-posterior IR | MCPB | Trigger |
+|---|---:|---:|---|
+| Continual Dreamer | No | No | Never |
+| Always-on IR | Yes | No | Every eligible interaction |
+| Always-on IR + MCPB | Yes | Yes | Every eligible interaction |
+| Periodic IR | Yes | Optional | Fixed cadence |
+| Compute-matched random IR | Yes | Optional | Random |
+| Oracle boundary IR | Yes | Optional | Known task transitions |
+
+The oracle-boundary method is an upper-bound diagnostic, not the final task-agnostic method.
+
+### Stage 3: gated rehearsal
+
+Compare candidate gates under matched budgets:
+
+- actor-ensemble disagreement;
+- posterior entropy;
+- world-model surprise;
+- combined need/trust/compute gating;
+- periodic and random controls with the same number of imagined transitions.
+
+### Stage 4: persistence and consolidation, if needed
+
+If persistent IR learns quickly but forgets or drifts, evaluate:
+
+- temporary per-episode IR;
+- persistent IR;
+- fast/slow actors;
+- guarded consolidation;
+- posterior-anchor rehearsal for retention.
+
+These mechanisms are intentionally deferred until the simpler persistent-actor experiment establishes the failure mode they would address.
+
+## Evaluation
+
+Final return alone cannot distinguish rapid behavioural adaptation from durable continual learning. The planned measurements are:
+
+- return throughout the complete task sequence;
+- return AUC immediately after every task transition;
+- real steps to a fixed performance threshold;
+- forward transfer relative to isolated single-task learning;
+- average and maximum forgetting;
+- performance on every previous task after each training phase;
+- recurrence gain when a task is encountered again;
+- worst-task performance;
+- imagined transitions and optimiser updates;
+- wall-clock time and policy throughput;
+- replay memory and total memory use;
+- performance with IR disabled during evaluation.
+
+The final measurement separates knowledge stored in persistent agent parameters from performance that only exists while online rehearsal is active.
+
+### Experimental controls
+
+- Match compute-heavy methods by imagined transitions and wall-clock time, not only by gradient steps.
+- Use multiple task orders or at least a default and reversed order.
+- Report absolute performance alongside forgetting; an agent that never learns cannot meaningfully forget.
+- Keep the continual world-model mechanism identical across IR variants.
+- Evaluate old tasks from cloned evaluation state so evaluation cannot train the agent.
+- Separate task-aware oracle gating from task-agnostic gating.
+- Log world-model error around task transitions to identify when IR is optimising stale imagination.
+
+## Continual World-Model Learning
+
+The initial implementation will reuse an established replay principle rather than propose a new world-model continual-learning algorithm.
+
+Two leading candidates are:
+
+### Continual-Dreamer
+
+[The Effectiveness of World Models for Continual Reinforcement Learning](https://proceedings.mlr.press/v232/kessler23a.html) finds reservoir replay to be a strong retention mechanism for DreamerV2 and calls the resulting system Continual-Dreamer. The [official implementation](https://github.com/skezle/continual-dreamer) includes MiniGrid and MiniHack task-sequence runners, reservoir sampling, recent/past minibatch mixing, and evaluation tooling.
+
+The repository is useful as a research reference, but it is based on TensorFlow 2.6, DreamerV2, Python 3.8, and older Gym/MiniHack dependencies. It is not a drop-in dependency for this JAX DreamerV3 codebase.
+
+### ARROW
+
+[ARROW: Augmented Replay for RObust World Models](https://openreview.net/forum?id=3FK2tFwNwK) combines a short-term FIFO buffer with a long-term reservoir/distribution-matching buffer under a fixed total memory budget. Its [official implementation](https://github.com/Cerenaut/ARROW) is MIT-licensed and includes DreamerV3 experiments for Atari and Procgen CoinRun.
+
+ARROW is implemented as a separate PyTorch DreamerV3 rather than as a component compatible with this repository. Its dual-buffer design and experimental configurations are nevertheless directly relevant implementation references.
+
+### Likely integration point
+
+This repository's replay buffer currently evicts sequences in FIFO order. It supports mixtures for **sampling**, but those selectors do not change the FIFO **retention** policy. A continual replay implementation will therefore require either:
+
+- a reservoir-aware admission and eviction policy in `embodied/core/replay.py`; or
+- a dual replay wrapper with a short-term FIFO store, a long-term reservoir store, and explicit minibatch mixing.
+
+The choice between simple reservoir replay and an ARROW-style dual buffer will be made after a small reproduction study. Whichever mechanism is selected will be treated as the common backbone, not as the IR contribution.
+
+## Reading Before Development
+
+1. [The Effectiveness of World Models for Continual Reinforcement Learning](https://proceedings.mlr.press/v232/kessler23a.html) — the closest conceptual baseline and the source of Continual-Dreamer.
+2. [ARROW: Augmented Replay for RObust World Models](https://openreview.net/forum?id=3FK2tFwNwK) — the most directly relevant modern DreamerV3 continual replay implementation.
+3. [Continual World: A Robotic Benchmark for Continual Reinforcement Learning](https://proceedings.neurips.cc/paper_files/paper/2021/hash/ef8446f35513a8d6aa2308357a268a7e-Abstract.html) — forward-transfer, forgetting, and task-sequence evaluation design.
+4. [Towards Evaluating Adaptivity of Model-Based Reinforcement Learning Methods](https://proceedings.mlr.press/v162/wan22d.html) — why replay-based model learning can adapt poorly after local changes.
+5. [Same State, Different Task: Continual Reinforcement Learning without Interference](https://arxiv.org/abs/2106.02940) — distinguishes catastrophic forgetting from incompatible objectives and replay interference.
+
+## Current Installation
+
+Python 3.11+ is recommended for the current IR code:
 
 ```bash
 pip install -U -r requirements.txt
 ```
 
-Depending on your hardware and runtime, you may need to adjust the JAX installation line in `requirements.txt`.
+Depending on the available accelerator and CUDA installation, the JAX line in `requirements.txt` may need adjustment.
 
-## Quick Start
+## Current IR Usage
 
-### 1. Train a base agent
-
-Example training command for a DMC visual-control agent:
-
-```bash
-python dreamerv3/main.py \
-  --logdir logs/dmc_walker_walk/train \
-  --configs dmc_vision \
-  --task dmc_walker_walk \
-  --run.steps 1000000 \
-  --run.envs 1 \
-  --jax.platform cuda
-```
-
-This produces a checkpoint directory under `logs/dmc_walker_walk/train/` that can be used for evaluation and corruption experiments.
-
-### 2. Evaluate without IR
-
-```bash
-python dreamerv3/main.py \
-  --script eval_only \
-  --logdir logs/dmc_walker_walk/eval_baseline \
-  --configs dmc_vision \
-  --task dmc_walker_walk \
-  --run.from_checkpoint /path/to/checkpoint \
-  --run.steps 50000 \
-  --run.envs 1 \
-  --jax.platform cuda \
-  --eval_adapt.enabled False
-```
-
-### 3. Evaluate with IR
+The current code can still train a base agent and run the original evaluation-time IR experiments.
 
 ```bash
 python dreamerv3/main.py \
@@ -96,172 +261,38 @@ python dreamerv3/main.py \
   --eval_adapt.lr 1e-4 \
   --eval_adapt.every_k 1 \
   --eval_adapt.actent 3e-4 \
-  --eval_adapt.start_batch 1
+  --eval_adapt.start_batch 512
 ```
 
-To enable Monte Carlo posterior batching, increase `--eval_adapt.start_batch`, for example `--eval_adapt.start_batch 128` or `512`.
+Core existing scripts include:
 
-## Core IR Configuration
-
-Defined in `dreamerv3/configs.yaml` under `eval_adapt`:
-
-```yaml
-eval_adapt:
-  enabled: False
-  steps: 3
-  imag_length: 10
-  lr: 1e-4
-  every_k: 0
-  actent: 3e-4
-  start_batch: 1
-```
-
-Meaning:
-
-- `enabled`: turn IR on or off at evaluation time
-- `steps`: number of gradient updates per adaptation trigger
-- `imag_length`: imagined rollout horizon
-- `lr`: effective IR learning rate
-- `every_k`: in-episode adaptation cadence
-- `actent`: adaptation-time entropy coefficient
-- `start_batch`: number of posterior start states used for Monte Carlo posterior batching
-
-## Small User Guide
-
-### Corrupt a checkpoint
-
-Create actor-only corrupted checkpoint copies:
-
-```bash
-python scripts/corrupt_actor_checkpoint.py \
-  --source /path/to/checkpoint \
-  --out_root checkpoints/corruptions/dmc_walker_walk \
-  --method zero_mask \
-  --scope all \
-  --strength 0.50 \
-  --name zero_mask_moderate_seed0 \
-  --seed 0
-```
-
-You can also use presets such as `--preset zero_mask_calibration_grid` or `--preset zero_mask_severity_triplet`.
-
-### Run a multi-seed rehearsal sweep
-
-Use the generic sweep wrapper to compare a corrupted baseline against IR configurations:
-
-```bash
-python scripts/eval_suite.py \
-  --checkpoint /path/to/corrupted_checkpoint \
-  --configs dmc_vision \
-  --task dmc_walker_walk \
-  --seeds 0,1,2,3,4 \
-  --run_steps 5000 \
-  --run_envs 1 \
-  --jax_platform cuda \
-  --include_baseline \
-  --baseline_name corrupt_baseline \
-  --adapt_steps_grid 1 \
-  --adapt_imag_length_grid 6 \
-  --adapt_lr_grid 1e-4 \
-  --adapt_every_k_grid 1 \
-  --adapt_actent_grid 3e-4 \
-  --adapt_start_batch_grid 1,512
-```
-
-Outputs include:
-
-- `runs.csv`: one row per run
-- `summary_by_config.csv`: seed-aggregated summary statistics
-- `comparison_vs_baseline.csv`: paired comparison against the corrupted baseline
-
-### Run the paper benchmark wrapper
-
-For the main paper workflow, use the dedicated benchmark wrapper:
-
-```bash
-python scripts/rehearsal_benchmark_suite.py \
-  --source_checkpoint /path/to/clean_checkpoint \
-  --corrupted_checkpoints checkpoints/paper_corruptions/dmc_walker_walk/zero_mask \
-  --configs dmc_vision \
-  --task dmc_walker_walk \
-  --seeds 0,1,2,3,4 \
-  --run_steps 5000 \
-  --jax_platform cuda \
-  --adapt_steps 1 \
-  --adapt_imag_length 6 \
-  --adapt_lr 1e-4 \
-  --adapt_every_k 1 \
-  --adapt_actent 3e-4
-```
-
-### Run Walker batch-scaling analysis
-
-```bash
-python scripts/walker_recovery_suite.py \
-  --checkpoints checkpoints/paper_corruptions/dmc_walker_walk/zero_mask/moderate \
-  --configs dmc_vision \
-  --task dmc_walker_walk \
-  --seeds 0,1,2,3,4 \
-  --run_steps 5000 \
-  --jax_platform cuda \
-  --baseline_name corrupt_baseline \
-  --adapt_steps 1 \
-  --adapt_imag_length 6 \
-  --adapt_lr 1e-4 \
-  --adapt_every_k 1 \
-  --adapt_actent 3e-4 \
-  --adapt_start_batch_grid 1,2,4,8,16,32,64,128,256,512
-```
-
-### Run intra-episode trace extraction
-
-```bash
-python scripts/walker_intra_episode_trace_suite.py \
-  --checkpoints checkpoints/paper_corruptions/dmc_walker_walk/zero_mask/moderate \
-  --configs dmc_vision \
-  --task dmc_walker_walk \
-  --seeds 0,1,2,3,4 \
-  --run_steps 5000 \
-  --jax_platform cuda \
-  --adapt_steps 1 \
-  --adapt_imag_length 6 \
-  --adapt_lr 1e-4 \
-  --adapt_every_k 1 \
-  --adapt_actent 3e-4 \
-  --trace_filename trace.jsonl
-```
-
-Plot the resulting trace files with:
-
-```bash
-python scripts/plot_intra_episode_trace.py \
-  --trace_glob 'eval_suite/.../trace.jsonl' \
-  --out figures/intra_episode/moderate_reward_per_step.png \
-  --metric reward \
-  --band std
-```
+- `scripts/corrupt_actor_checkpoint.py` — create actor-corrupted checkpoints;
+- `scripts/transfer_actor_checkpoint.py` — transplant actors between compatible checkpoints;
+- `scripts/eval_suite.py` — multi-seed IR sweeps;
+- `scripts/rehearsal_benchmark_suite.py` — original paper benchmark workflow;
+- `scripts/online_actor_repair_eval.py` — real-trajectory actor-repair baseline;
+- `scripts/walker_intra_episode_trace_suite.py` — per-step adaptation traces.
 
 ## Repository Layout
 
-- `dreamerv3/`: core agent and IR implementation
-- `embodied/`: runtime, environment, and evaluation loop code
-- `scripts/`: corruption, benchmark, analysis, and plotting scripts
+- `dreamerv3/` — Dreamer agent, RSSM, objectives, and IR implementation;
+- `embodied/` — runtime, environments, replay, and training/evaluation loops;
+- `scripts/` — checkpoint manipulation, experiment suites, analysis, and plots;
+- `assets/` — project figures.
 
 Key implementation files:
 
-- `dreamerv3/agent.py`
-- `dreamerv3/configs.yaml`
-- `embodied/jax/agent.py`
-- `embodied/run/eval_only.py`
-- `embodied/run/train_eval.py`
+- `dreamerv3/agent.py`;
+- `dreamerv3/configs.yaml`;
+- `embodied/jax/agent.py`;
+- `embodied/core/replay.py`;
+- `embodied/run/train.py`;
+- `embodied/run/eval_only.py`.
 
-## Important Notes
+## Scope and Attribution
 
-- IR currently assumes a single evaluation environment for adaptive evaluation.
-- Real actions are sampled from the adapted actor; they are not replaced by deterministic mean actions.
-- This repository does not ship the paper checkpoints or large benchmark outputs.
-- `setup.py` is retained for lightweight packaging and editable installs.
+This repository uses DreamerV3 as its world-model agent foundation. The original contribution is Imagined Rehearsal and its evaluation workflow. The planned CRL contribution is the use and efficient gating of current-posterior rehearsal during continual training.
 
-## Citation
+The repository does not ship trained checkpoints or large benchmark outputs.
 
-If you use this repository, please cite both the Imagined Rehearsal paper and the upstream DreamerV3 work on which this release is built.
+If you use this work, cite both the Imagined Rehearsal paper and the upstream DreamerV3 work. Continual replay or benchmark components adopted during this project will retain their original attribution and licensing.
