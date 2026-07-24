@@ -20,7 +20,7 @@ def test_multitask_config_uses_random_goals_and_gpu_scale():
   assert config['env.rlscape.episode_length'] == 200
   assert config['run']['steps'] == 2000000
   assert config['run']['train_ratio'] == 32
-  assert config['replay.size'] == 5000000
+  assert config['replay.size'] == 350000
   assert config['batch_length'] == 32
   assert config['.*\\.rssm']['deter'] == 4096
   assert config['.*\\.rssm']['classes'] == 32
@@ -34,6 +34,7 @@ def test_training_command_selects_multitask_profile(tmp_path):
       seed=7,
       steps=2000000,
       batch_size=8,
+      replay_size=350000,
       mvn_path='/tools/mvn',
       java_home='/tools/java',
   )
@@ -41,6 +42,7 @@ def test_training_command_selects_multitask_profile(tmp_path):
   assert configs == ['rlscape', 'rlscape_m2_multitask']
   assert command[command.index('--run.steps') + 1] == '2000000'
   assert command[command.index('--batch_size') + 1] == '8'
+  assert command[command.index('--replay.size') + 1] == '350000'
   assert command[command.index('--env.rlscape.mvn_path') + 1] == '/tools/mvn'
 
 

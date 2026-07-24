@@ -305,7 +305,7 @@ rlscape_m2_multitask:
   batch_size: 8
   batch_length: 32
   report_length: 32
-  replay.size: 5000000
+  replay.size: 350000
   replay.online: False
   run: {steps: 2000000, envs: 1, train_ratio: 32, log_every: 300, report_every: 1000000, save_every: 1800, ckpt_keep: 3, debug: True}
   jax: {platform: cuda, compute_dtype: bfloat16, prealloc: True, precompile: True}

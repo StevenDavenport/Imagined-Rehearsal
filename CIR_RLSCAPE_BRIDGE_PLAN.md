@@ -187,8 +187,8 @@ does not replace the single-task evidence or authorize task-order selection.
   1.99M executed actions when episodes usually reach the cap);
 - the 50M Dreamer profile, batch size 8, replay sequences of length 32, and
   imagination length 15;
-- training ratio 32 and a 5M-transition FIFO replay, which will not fill during
-  this run;
+- training ratio 32 and a 350k-transition FIFO replay, sized from the measured
+  62GiB host-RAM constraint;
 - one RLScape environment because the current bridge is single-instance;
 - CUDA with bfloat16 and no actor IR.
 
@@ -205,6 +205,13 @@ make this a hardware-dependent claim. The required preflight is a separate 2k
 run at batch size 8; if it OOMs, rerun from a fresh log directory with
 `--batch-size 4` while keeping the model, sequence length, train ratio, replay,
 and interaction budget unchanged.
+
+Replay capacity is constrained by uncompressed in-memory RGB storage. At
+240x160, 350k frames require approximately 37.6GiB before metadata and
+transient buffers. This leaves about 20GiB headroom on the measured 62GiB host;
+the original 5M proposal would require hundreds of GiB and is not runnable on
+this machine. The supervisor records and forwards the exact capacity through
+`--replay-size`.
 
 Long training runs save a recovery checkpoint when an exception escapes the
 environment/driver. `scripts/rlscape_m2_train.py` supervises the child process
@@ -959,7 +966,7 @@ action_adapter:
 
 replay:
   mode: fifo                    # fifo | episode_reservoir
-  size: 5000000                 # M2 will not fill this FIFO capacity
+  size: 350000                  # ~37.6GiB RGB storage on the 62GiB host
   reservoir_episodes: 1000
   reservoir_seed: 0
   sample_unit: episode_then_sequence
@@ -1074,6 +1081,7 @@ without changing task semantics.
 xvfb-run -a python scripts/rlscape_m2_train.py \
   --seed 0 \
   --steps 2000000 \
+  --replay-size 350000 \
   --logdir logs/rlscape/m2_multitask_2m_seed0
 
 xvfb-run -a python scripts/rlscape_m2_eval.py \

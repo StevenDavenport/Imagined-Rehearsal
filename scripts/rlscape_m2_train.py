@@ -31,6 +31,7 @@ def build_command(
     seed: int,
     steps: int,
     batch_size: int,
+    replay_size: int,
     mvn_path: str = '',
     java_home: str = '',
 ) -> list[str]:
@@ -42,6 +43,7 @@ def build_command(
       '--logdir', str(logdir),
       '--run.steps', str(steps),
       '--batch_size', str(batch_size),
+      '--replay.size', str(replay_size),
   ]
   if mvn_path:
     command += ['--env.rlscape.mvn_path', mvn_path]
@@ -72,6 +74,7 @@ def parse_args(argv=None) -> argparse.Namespace:
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--steps', type=int, default=2000000)
   parser.add_argument('--batch-size', type=int, default=8)
+  parser.add_argument('--replay-size', type=int, default=350000)
   parser.add_argument('--max-restarts', type=int, default=20)
   parser.add_argument('--max-stalled-restarts', type=int, default=3)
   parser.add_argument('--restart-delay', type=float, default=10)
@@ -93,6 +96,8 @@ def validate_args(args: argparse.Namespace) -> None:
     raise ValueError('--steps must be positive')
   if args.batch_size <= 0:
     raise ValueError('--batch-size must be positive')
+  if args.replay_size <= 0:
+    raise ValueError('--replay-size must be positive')
   if args.max_restarts < 0 or args.max_stalled_restarts < 0:
     raise ValueError('restart limits must be nonnegative')
   if args.restart_delay < 0:
@@ -124,7 +129,7 @@ def main(argv=None) -> int:
       'batch_length': 32,
       'imag_length': 15,
       'train_ratio': 32,
-      'replay': 'fifo_5m',
+      'replay': {'kind': 'fifo', 'capacity': args.replay_size},
       'actor_ir': False,
   }
   digest = spec_digest(spec)
@@ -144,6 +149,7 @@ def main(argv=None) -> int:
       seed=args.seed,
       steps=args.steps,
       batch_size=args.batch_size,
+      replay_size=args.replay_size,
       mvn_path=args.mvn_path,
       java_home=args.java_home,
   )
