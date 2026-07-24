@@ -1,12 +1,12 @@
 # CIR–RLScape Bridge: Architecture and Experiment Plan
 
-**Status (2026-07-23):** milestone-0 integration, the multigoal Dreamer
+**Status (2026-07-24):** milestone-0 integration, the multigoal Dreamer
 training smoke, and a clean one-seed/1k-action milestone-1 systems calibration
 over all five goals are implemented and verified. Multi-seed single-task
 learning curves, the joint upper bound, the sequential paired-evaluation
 runner, and the reservoir extension remain future milestones.
 
-**Pinned environment contract:** `rl-scape==0.1.1`.
+**Pinned environment contract:** `rl-scape==0.1.2`.
 
 **Scope boundary:** this plan replaces neither
 [`CIR_RESEARCH_PLAN.md`](CIR_RESEARCH_PLAN.md) nor the Cheetah pilot. It defines
@@ -60,11 +60,11 @@ comparison as actor IR.
 The verified vertical slice now includes:
 
 - a dedicated Gymnasium-to-Embodied adapter in
-  `embodied/envs/rlscape.py`, pinned to `rl-scape==0.1.1`;
+  `embodied/envs/rlscape.py`, pinned to `rl-scape==0.1.2`;
 - public image, goal, reward, success, progress, death, and transition identity
   handling without exposing `privileged_state` to the agent;
 - deterministic fixed, round-robin, and seeded-random goal schedules over all
-  five v0.1.1 tasks;
+  five v0.1.2 tasks;
 - native factored `mode: Discrete(4)` and `position: Box(2)` actions, with
   no-op positions canonicalized before both execution and Dreamer replay/RSSM
   use;
@@ -76,7 +76,7 @@ The verified vertical slice now includes:
 - `rlscape`, `rlscape_smoke`, and five fixed-goal named configurations;
 - adapter, Driver, and FIFO replay contract tests.
 
-Verification completed on 2026-07-23:
+Verification completed through 2026-07-24:
 
 - `7 passed` in `embodied/tests/test_rlscape_adapter.py`;
 - a live reset/step/close cycle traversed all five goals at `160x240`, with
@@ -89,7 +89,11 @@ Verification completed on 2026-07-23:
   exactly at action 220, and contained no `comp/` namespace;
 - a non-goal Dummy run still initializes and steps through the original
   unconditioned feature path, confirming that ordinary non-goal Dreamer
-  behavior is preserved.
+  behavior is preserved;
+- a clean public `rl-scape==0.1.2` runtime smoke on a headless GPU host
+  completed 220 driver steps under Xvfb, ran finite updates for every expected
+  Dreamer head, saved its final checkpoint, and shut down both Java processes
+  cleanly.
 
 For a source checkout, RLScape needs its Maven and Java 8 toolchain. They can be
 provided as environment variables:
@@ -104,6 +108,9 @@ python dreamerv3/main.py \
 
 `env.rlscape.mvn_path` and `env.rlscape.java_home` expose the same setup through
 configuration. A prebuilt RLScape runtime avoids the Maven requirement.
+On a headless Linux host, the legacy Java client still initializes AWT despite
+RLScape's application-level headless rendering, so wrap the complete Dreamer
+or supervisor command in `xvfb-run -a`.
 
 This checkpoint deliberately does not claim task learning: the smoke is short,
 and zero reward is expected. Its result is that real frames, mixed actions,
@@ -208,7 +215,7 @@ state, with bounded total and no-progress restart counts.
 
 | Milestone | Question resolved | Required stopping result |
 |---|---|---|
-| 0 — integration smoke | Is the CIR process boundary faithful to RLScape v0.1.1? | Valid reset/action/close cycle with goal and transition identity audited. |
+| 0 — integration smoke | Is the CIR process boundary faithful to RLScape v0.1.2? | Valid reset/action/close cycle with goal and transition identity audited. |
 | 1 — five single-task runs | Which goals are learnable, at what horizon and cost, under canonical control? | Multi-seed learning evidence and calibrated fixed phase budgets. |
 | 2 — joint multitask upper bound | Can one shared goal-conditioned model and behaviour system represent the learnable goals simultaneously? | Adequate per-goal success without sequential non-stationarity. |
 | 3 — FIFO task landscape with paired IR evaluation | As one persistent learner moves through goal blocks, how quickly does it learn each current goal, how much does it forget previous goals, and can temporary actor IR restore performance? | Phase-by-goal frozen/IR matrices and transfer/forgetting curves on paired checkpoint/snapshot/seed tuples. |
@@ -662,7 +669,7 @@ depending on the older `train_critic` flag combination.
 
 | Requirement | Existing support | Missing work / contradiction | Recommended change | Likely files | Tests |
 |---|---|---|---|---|---|
-| Import v0.1.1 | Local RLScape checkout is at the 0.1.1 release commit | Default shell Python reports no installed `rl-scape`; requirements omit it | Pin and runtime-check `rl-scape==0.1.1` | `requirements.txt`, `embodied/envs/rlscape.py` | Version mismatch and missing-package errors |
+| Import v0.1.2 | Local RLScape checkout is at the 0.1.2 release commit | Default shell Python reports no installed `rl-scape`; requirements omit it | Pin and runtime-check `rl-scape==0.1.2` | `requirements.txt`, `embodied/envs/rlscape.py` | Version mismatch and missing-package errors |
 | Reset named goal | RLScape reset metadata supplies task ID/definition | No suite adapter or reset-option path | Dedicated adapter with explicit goal/reset kind/seed | `dreamerv3/main.py`, `embodied/envs/rlscape.py` | Named reset and lifetime/task semantics |
 | RGB observation | RLScape provides RGB-only policy data | Default 384×252 does not fit the current four-level decoder: width/16 is 24, above its max 16 | Use a protocol-bound RLScape resize divisible by 16; planned default 240×160 | Config and adapter | Exact space, dtype, decoder-compatible shape |
 | Goal to policy/replay | Driver/replay preserve ordinary scalar fields | Goal exists only in reset `info`; naïve field enters RSSM | Repeat `goal_id`; explicitly exclude from encoder/decoder; carry to heads | Adapter, `dreamerv3/agent.py` | Reset-to-action-to-replay propagation |
@@ -696,7 +703,7 @@ unvalidated assumption.
 
 ### Commit 1 — adapter-only smoke slice
 
-- Pin `rl-scape==0.1.1`.
+- Pin `rl-scape==0.1.2`.
 - Add `embodied/envs/rlscape.py` and the `rlscape` suite dispatch.
 - Translate RGB, canonical actions, goal metadata, completion/death diagnostics,
   and transition audits.
@@ -706,7 +713,7 @@ unvalidated assumption.
 
 **Stop/rollback:** do not touch Dreamer heads until reset/action/identity
 alignment is proven. If the public package lacks a required field observed in
-the v0.1.1 local source, demonstrate that mismatch before proposing any
+the v0.1.2 local source, demonstrate that mismatch before proposing any
 RLScape change.
 
 ### Commit 2 — goal-conditioned Dreamer heads
@@ -902,7 +909,7 @@ Only after that stopping criterion:
 
 An opt-in test against the external runtime:
 
-- imports exactly 0.1.1;
+- imports exactly 0.1.2;
 - launches one environment;
 - resets a named goal;
 - checks task/frame identity;
@@ -919,7 +926,7 @@ Names and initial defaults:
 ```yaml
 env:
   rlscape:
-    package_version: "0.1.1"
+    package_version: "0.1.2"
     launch: true
     server_dir: ""
     server_runtime_dir: ""
@@ -1064,12 +1071,12 @@ without changing task semantics.
 ### Milestone 2 — joint all-goal upper bound
 
 ```bash
-python scripts/rlscape_m2_train.py \
+xvfb-run -a python scripts/rlscape_m2_train.py \
   --seed 0 \
   --steps 2000000 \
   --logdir logs/rlscape/m2_multitask_2m_seed0
 
-python scripts/rlscape_m2_eval.py \
+xvfb-run -a python scripts/rlscape_m2_eval.py \
   --checkpoint logs/rlscape/m2_multitask_2m_seed0 \
   --log-root logs/rlscape/m2_multitask_2m_seed0_eval20 \
   --seed 1000 \

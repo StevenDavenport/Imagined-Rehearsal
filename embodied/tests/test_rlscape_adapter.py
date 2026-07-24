@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from embodied.envs.rlscape import GOAL_NAMES
+from embodied.envs.rlscape import EXPECTED_VERSION
 from embodied.envs.rlscape import RLScape
 from embodied.envs.rlscape import TASK_IDS
 from embodied.envs.rlscape import canonical_action
@@ -100,6 +101,10 @@ def make_adapter(fake, **kwargs):
   return RLScape(
       'multigoal', env=fake, check_version=False, seed=7,
       goals=GOAL_NAMES, goal_schedule='round_robin', **kwargs)
+
+
+def test_adapter_targets_episode_isolated_rlscape_release():
+  assert EXPECTED_VERSION == '0.1.2'
 
 
 def test_canonical_action_is_pure_and_zeroes_noop_position():
