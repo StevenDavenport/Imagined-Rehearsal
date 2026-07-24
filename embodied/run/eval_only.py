@@ -82,11 +82,23 @@ def eval_only(make_agent, make_env, make_logger, args):
               tran.get('log/eval_adapt/trigger', 0.0)).item()),
           'adapt_steps': float(np.asarray(
               tran.get('log/eval_adapt/steps', 0.0)).item()),
+          'adapt_actor_steps': float(np.asarray(
+              tran.get('log/eval_adapt/actor_steps', 0.0)).item()),
+          'adapt_critic_steps': float(np.asarray(
+              tran.get('log/eval_adapt/critic_steps', 0.0)).item()),
+          'adapt_warmup': float(np.asarray(
+              tran.get('log/eval_adapt/warmup', 0.0)).item()),
       }
       for key in (
           'log/eval_adapt/adapt_opt/loss',
           'log/eval_adapt/adapt_opt/grad_norm',
           'log/eval_adapt/adapt_opt/update_rms',
+          'log/eval_adapt/adapt_actor_opt/loss',
+          'log/eval_adapt/adapt_actor_opt/grad_norm',
+          'log/eval_adapt/adapt_actor_opt/update_rms',
+          'log/eval_adapt/adapt_critic_opt/loss',
+          'log/eval_adapt/adapt_critic_opt/grad_norm',
+          'log/eval_adapt/adapt_critic_opt/update_rms',
       ):
         if key in tran:
           row[key.replace('log/eval_adapt/', '').replace('/', '_')] = float(
@@ -104,15 +116,6 @@ def eval_only(make_agent, make_env, make_logger, args):
   driver.on_step(lambda tran, _: policy_fps.step())
   driver.on_step(logfn)
 
-  if agent.config.eval_adapt.enabled:
-    elements.checkpoint.load(args.from_checkpoint, dict(
-        agent=bind(agent.load, regex='^(?!adapt_opt/)')))
-  else:
-    cp = elements.Checkpoint()
-    cp.agent = agent
-    cp.load(args.from_checkpoint, keys=['agent'])
-
-  print('Start evaluation')
   adapt_cfg = agent.config.eval_adapt
   adapt_params = None
   adapt_policy_params = None
@@ -121,10 +124,12 @@ def eval_only(make_agent, make_env, make_logger, args):
 
   def maybe_adapt(carry, acts, outs, batch_shape):
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
+    first_trigger = adapt_params is None
     if adapt_params is None:
       adapt_params = agent.clone_params()
     adapt_params, carry, mets = agent.adapt(
-        adapt_params, carry, adapt_cfg.steps)
+        adapt_params, carry, adapt_cfg.steps,
+        warmup=(first_trigger and bool(adapt_cfg.train_critic)))
     adapt_policy_params = agent.extract_policy_params(adapt_params)
     carry, acts, _ = agent.policy_latent(carry, params=adapt_policy_params)
     steps_since_adapt = 0
@@ -163,17 +168,39 @@ def eval_only(make_agent, make_env, make_logger, args):
         steps_since_adapt = 0
     return carry, acts, outs
 
-  driver.reset(agent.init_policy)
-  while step < args.steps:
-    driver(policy, steps=10)
-    if should_log(step):
-      logger.add(agg.result())
-      logger.add(epstats.result(), prefix='epstats')
-      logger.add(usage.stats(), prefix='usage')
-      logger.add({'fps/policy': policy_fps.result()})
-      logger.add({'timer': elements.timer.stats()['summary']})
-      logger.write()
+  def write_metrics():
+    logger.add(agg.result())
+    logger.add(epstats.result(), prefix='epstats')
+    logger.add(usage.stats(), prefix='usage')
+    logger.add({'fps/policy': policy_fps.result()})
+    logger.add({'timer': elements.timer.stats()['summary']})
+    logger.write()
 
-  logger.close()
-  if trace_file:
-    trace_file.close()
+  try:
+    # Adaptation optimizer state is evaluation-local and older checkpoints do
+    # not contain the critic-first optimizer namespaces. Always leave these
+    # freshly initialized instead of requiring an exact checkpoint tree match.
+    elements.checkpoint.load(args.from_checkpoint, dict(
+        agent=bind(agent.load, regex=(
+            '^(?!(adapt_opt|adapt_actor_opt|adapt_critic_opt|model_opt)/)'))))
+
+    print('Start evaluation')
+    driver.reset(agent.init_policy)
+    eval_episodes = int(getattr(args, 'eval_episodes', 0))
+    if eval_episodes:
+      if eval_episodes < 0:
+        raise ValueError('run.eval_episodes must be nonnegative')
+      driver(policy, episodes=eval_episodes)
+      write_metrics()
+    else:
+      while step < args.steps:
+        driver(policy, steps=10)
+        if should_log(step):
+          write_metrics()
+  finally:
+    try:
+      driver.close()
+    finally:
+      if trace_file:
+        trace_file.close()
+      logger.close()

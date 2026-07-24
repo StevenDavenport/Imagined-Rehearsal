@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create actor-only corrupted checkpoint copies for any Dreamer checkpoint."""
+"""Create actor and/or critic corrupted Dreamer checkpoint copies."""
 
 from __future__ import annotations
 
@@ -74,6 +74,8 @@ def parse_args() -> argparse.Namespace:
   parser = argparse.ArgumentParser()
   parser.add_argument('--source', type=Path, required=True)
   parser.add_argument('--out_root', type=Path, required=True)
+  parser.add_argument(
+      '--target', default='actor', choices=('actor', 'critic', 'both'))
   parser.add_argument('--preset', default='gaussian_ladder', choices=sorted(PRESETS))
   parser.add_argument(
       '--method',
@@ -125,6 +127,35 @@ def actor_keys(params: dict[str, Any], scope: str) -> list[str]:
   if not keys:
     raise ValueError(f'No actor keys found for scope={scope!r}')
   return keys
+
+
+def critic_keys(params: dict[str, Any], scope: str) -> list[str]:
+  if scope == 'all':
+    prefix = 'val/'
+  elif scope == 'head':
+    prefix = 'val/head/'
+  else:
+    raise NotImplementedError(scope)
+  keys = sorted(k for k in params if k.startswith(prefix))
+  if not keys:
+    raise ValueError(f'No critic keys found for scope={scope!r}')
+  return keys
+
+
+def selected_keys(
+    params: dict[str, Any], target: str, scope: str,
+) -> dict[str, list[str]]:
+  keys = {}
+  if target in ('actor', 'both'):
+    keys['actor'] = actor_keys(params, scope)
+  if target in ('critic', 'both'):
+    keys['critic'] = critic_keys(params, scope)
+  return keys
+
+
+def slowval_key(value_key: str) -> str:
+  assert value_key.startswith('val/'), value_key
+  return 'slowval/' + value_key[len('val/'):]
 
 
 def rms(value: np.ndarray) -> float:
@@ -183,7 +214,10 @@ def build_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
   if args.method:
     if not args.name:
       level = 's' if args.method != 'mix_random' else 'a'
-      name = f'{args.method}_{args.scope}_{level}{fmt_strength(args.strength)}_seed{args.seed}'
+      prefix = '' if args.target == 'actor' else f'{args.target}_'
+      name = (
+          f'{prefix}{args.method}_{args.scope}_{level}'
+          f'{fmt_strength(args.strength)}_seed{args.seed}')
     else:
       name = args.name
     return [{
@@ -196,8 +230,11 @@ def build_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
   specs = []
   for idx, spec in enumerate(PRESETS[args.preset]):
     item = dict(spec)
+    variant_seed = args.seed + idx if args.target == 'actor' else args.seed
     if item['name'].endswith('_seed0'):
-      item['name'] = item['name'][:-6] + f'_seed{args.seed + idx}'
+      item['name'] = item['name'][:-6] + f'_seed{variant_seed}'
+    if args.target != 'actor':
+      item['name'] = f"{args.target}_{item['name']}"
     specs.append(item)
   return specs
 
@@ -219,16 +256,42 @@ def save_variant(
     data: dict[str, Any],
     spec: dict[str, Any],
     seed: int,
+    target: str,
 ) -> dict[str, Any]:
   params = data['params']
-  keys = actor_keys(params, spec['scope'])
-  before = [params[key].copy() for key in keys]
+  keys_by_component = selected_keys(params, target, spec['scope'])
+  before_by_component = {
+      component: [params[key].copy() for key in keys]
+      for component, keys in keys_by_component.items()
+  }
 
   rng = np.random.default_rng(seed)
   fn = METHODS[spec['method']]
-  for key in keys:
-    params[key] = fn(params[key], spec['strength'], rng)
-  after = [params[key] for key in keys]
+  for keys in keys_by_component.values():
+    for key in keys:
+      params[key] = fn(params[key], spec['strength'], rng)
+
+  synced_slowval_keys = []
+  for key in keys_by_component.get('critic', []):
+    slowkey = slowval_key(key)
+    if slowkey not in params:
+      raise KeyError(
+          f'Missing slow critic parameter corresponding to {key}: {slowkey}')
+    if params[slowkey].shape != params[key].shape:
+      raise ValueError(
+          f'Critic/slow critic shape mismatch: {key} {params[key].shape} vs '
+          f'{slowkey} {params[slowkey].shape}')
+    params[slowkey] = params[key].copy()
+    synced_slowval_keys.append(slowkey)
+
+  after_by_component = {
+      component: [params[key] for key in keys]
+      for component, keys in keys_by_component.items()
+  }
+  all_before = [
+      value for values in before_by_component.values() for value in values]
+  all_after = [
+      value for values in after_by_component.values() for value in values]
 
   outdir.mkdir(parents=True, exist_ok=True)
   with (outdir / 'agent.pkl').open('wb') as f:
@@ -238,18 +301,30 @@ def save_variant(
   manifest = {
       'source_checkpoint': str(source),
       'corruption_name': spec['name'],
+      'target': target,
       'method': spec['method'],
       'scope': spec['scope'],
       'strength': float(spec['strength']),
       'severity': spec.get('severity', ''),
       'seed': int(seed),
-      'actor_key_count': len(keys),
-      'actor_param_count': int(sum(int(np.prod(params[key].shape)) for key in keys)),
-      'relative_l2': relative_l2(before, after),
-      'actor_rms_before_mean': float(np.mean([rms(x) for x in before])),
-      'actor_rms_after_mean': float(np.mean([rms(x) for x in after])),
-      'keys': keys,
+      'relative_l2': relative_l2(all_before, all_after),
+      'keys': [key for keys in keys_by_component.values() for key in keys],
+      'slowval_keys_synced': synced_slowval_keys,
   }
+  for component in ('actor', 'critic'):
+    keys = keys_by_component.get(component, [])
+    before = before_by_component.get(component, [])
+    after = after_by_component.get(component, [])
+    manifest[f'{component}_key_count'] = len(keys)
+    manifest[f'{component}_param_count'] = int(sum(
+        int(np.prod(params[key].shape)) for key in keys))
+    manifest[f'{component}_relative_l2'] = (
+        relative_l2(before, after) if keys else 0.0)
+    manifest[f'{component}_rms_before_mean'] = (
+        float(np.mean([rms(x) for x in before])) if before else 0.0)
+    manifest[f'{component}_rms_after_mean'] = (
+        float(np.mean([rms(x) for x in after])) if after else 0.0)
+    manifest[f'{component}_keys'] = keys
   (outdir / 'manifest.json').write_text(json.dumps(manifest, indent=2))
   return manifest
 
@@ -281,14 +356,17 @@ def main() -> int:
       outdir.rmdir()
 
     data = clone_agent_checkpoint(base)
-    manifest = save_variant(source, outdir, data, spec, args.seed + idx)
+    variant_seed = args.seed + idx if args.target == 'actor' else args.seed
+    manifest = save_variant(
+        source, outdir, data, spec, variant_seed, args.target)
     written.append((outdir, manifest))
 
   print('Created corrupted checkpoints:')
   for outdir, manifest in written:
     print(
         f"  {outdir} | {manifest['method']} {manifest['scope']} "
-        f"strength={manifest['strength']} rel_l2={manifest['relative_l2']:.4f}")
+        f"target={manifest['target']} strength={manifest['strength']} "
+        f"rel_l2={manifest['relative_l2']:.4f}")
   return 0
 
 

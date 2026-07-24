@@ -6,6 +6,13 @@ import embodied
 import numpy as np
 
 
+def _copy_scalar_logs(result):
+  return {
+      key: np.array(value, copy=True) for key, value in result.items()
+      if key.startswith('log/') and np.asarray(value).ndim == 0
+  }
+
+
 def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
 
   agent = make_agent()
@@ -45,10 +52,15 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
         episode.add(key + '/sum', value, agg='sum')
     if tran['is_last']:
       result = episode.result()
-      logger.add({
+      episode_metrics = {
           'score': result.pop('score'),
           'length': result.pop('length'),
-      }, prefix='episode')
+      }
+      # The episode aggregate is also handed to epstats below, whose reducers
+      # update NumPy arrays in place. Give asynchronous loggers independent
+      # scalar ownership so later episodes cannot corrupt an already queued row.
+      episode_metrics.update(_copy_scalar_logs(result))
+      logger.add(episode_metrics, prefix='episode')
       rew = result.pop('rewards')
       if len(rew) > 1:
         result['reward_rate'] = (np.abs(rew[1:] - rew[:-1]) >= 0.01).mean()
@@ -93,28 +105,46 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
   print('Start training loop')
   policy = lambda *args: agent.policy(*args, mode='train')
   driver.reset(agent.init_policy)
-  while step < args.steps:
+  try:
+    while step < args.steps:
 
-    driver(policy, steps=10)
+      driver(policy, steps=10)
 
-    if should_report(step) and len(replay):
-      agg = elements.Agg()
-      for _ in range(args.consec_report * args.report_batches):
-        carry_report, mets = agent.report(carry_report, next(stream_report))
-        agg.add(mets)
-      logger.add(agg.result(), prefix='report')
+      if should_report(step) and len(replay):
+        agg = elements.Agg()
+        for _ in range(args.consec_report * args.report_batches):
+          carry_report, mets = agent.report(carry_report, next(stream_report))
+          agg.add(mets)
+        logger.add(agg.result(), prefix='report')
 
-    if should_log(step):
-      logger.add(train_agg.result())
-      logger.add(epstats.result(), prefix='epstats')
-      logger.add(replay.stats(), prefix='replay')
-      logger.add(usage.stats(), prefix='usage')
-      logger.add({'fps/policy': policy_fps.result()})
-      logger.add({'fps/train': train_fps.result()})
-      logger.add({'timer': elements.timer.stats()['summary']})
-      logger.write()
+      if should_log(step):
+        logger.add(train_agg.result())
+        logger.add(epstats.result(), prefix='epstats')
+        logger.add(replay.stats(), prefix='replay')
+        logger.add(usage.stats(), prefix='usage')
+        logger.add({'fps/policy': policy_fps.result()})
+        logger.add({'fps/train': train_fps.result()})
+        logger.add({'timer': elements.timer.stats()['summary']})
+        logger.write()
 
-    if should_save(step):
+      if should_save(step):
+        cp.save()
+
+    # Wall-clock checkpoint intervals can be longer than calibration runs.
+    # Persist the exact terminal action count so a larger follow-on budget does
+    # not resume from an older mid-run checkpoint and duplicate experience.
+    cp.save()
+
+  except BaseException:
+    # RLScape owns an external client/server bridge that can fail independently
+    # of the learner. Preserve the last fully processed transition and optimizer
+    # state so a supervisor can safely resume a long run.
+    try:
       cp.save()
+    except Exception as error:
+      print(f'Could not save recovery checkpoint: {error}')
+    raise
 
-  logger.close()
+  finally:
+    driver.close()
+    logger.close()

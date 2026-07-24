@@ -1,0 +1,22 @@
+[
+  {
+    "name": "clean_no_adaptation",
+    "eval_adapt": {
+      "enabled": false
+    }
+  },
+  {
+    "name": "clean_critic_first_ir_mcpb512",
+    "eval_adapt": {
+      "enabled": true,
+      "train_critic": true,
+      "steps": 1,
+      "imag_length": 6,
+      "lr": 0.0001,
+      "critic_lr": 0.0001,
+      "every_k": 1,
+      "actent": 0.0003,
+      "start_batch": 512
+    }
+  }
+]

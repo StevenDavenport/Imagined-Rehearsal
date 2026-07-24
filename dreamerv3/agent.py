@@ -34,8 +34,19 @@ class Agent(embodied.jax.Agent):
     self.obs_space = obs_space
     self.act_space = act_space
     self.config = config
+    self.goal_cfg = config.goal_conditioning
+    self.goal_enabled = bool(self.goal_cfg.enabled)
+    self.goal_key = str(self.goal_cfg.key)
+    self.goal_count = int(self.goal_cfg.count)
+    self.goal_exclude_keys = tuple(self.goal_cfg.exclude_keys)
+    if self.goal_enabled:
+      assert self.goal_count > 0, self.goal_count
+      for key in (self.goal_key, *self.goal_exclude_keys):
+        assert key in obs_space, (key, tuple(obs_space))
 
-    exclude = ('is_first', 'is_last', 'is_terminal', 'reward')
+    exclude = {'is_first', 'is_last', 'is_terminal', 'reward'}
+    if self.goal_enabled:
+      exclude.update((self.goal_key, *self.goal_exclude_keys))
     enc_space = {k: v for k, v in obs_space.items() if k not in exclude}
     dec_space = {k: v for k, v in obs_space.items() if k not in exclude}
     self.enc = {
@@ -73,17 +84,39 @@ class Agent(embodied.jax.Agent):
 
     self.modules = [
         self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val]
+    self.model_modules = [self.dyn, self.enc, self.dec, self.rew, self.con]
     self.opt = embodied.jax.Optimizer(
         self.modules, self._make_opt(**config.opt), summary_depth=1,
         name='opt')
+    model_opt = config.opt.copy()
+    model_opt.update(
+        lr=config.model_lr, schedule='const', warmup=0, anneal=0)
+    self.model_opt = embodied.jax.Optimizer(
+        self.model_modules, self._make_opt(**model_opt), summary_depth=1,
+        name='model_opt')
     self.adapt_opt = embodied.jax.Optimizer(
         self.pol, self._make_opt(**config.opt), summary_depth=1,
         name='adapt_opt')
+    adapt_actor_opt = config.opt.copy()
+    adapt_actor_opt.update(
+        lr=config.eval_adapt.lr, schedule='const', warmup=0, anneal=0)
+    self.adapt_actor_opt = embodied.jax.Optimizer(
+        self.pol, self._make_opt(**adapt_actor_opt), summary_depth=1,
+        name='adapt_actor_opt')
+    adapt_critic_opt = config.opt.copy()
+    adapt_critic_opt.update(
+        lr=config.eval_adapt.critic_lr, schedule='const', warmup=0, anneal=0)
+    self.adapt_critic_opt = embodied.jax.Optimizer(
+        self.val, self._make_opt(**adapt_critic_opt), summary_depth=1,
+        name='adapt_critic_opt')
 
     scales = self.config.loss_scales.copy()
     rec = scales.pop('rec')
     scales.update({k: rec for k in dec_space})
     self.scales = scales
+    self.model_scales = {
+        k: v for k, v in scales.items()
+        if k not in ('policy', 'value', 'repval')}
 
   @property
   def policy_keys(self):
@@ -105,6 +138,8 @@ class Agent(embodied.jax.Agent):
     zeros = lambda x: jnp.zeros((batch_size, *x.shape), x.dtype)
     dyn_carry = self.dyn.initial(batch_size)
     dyn_carry = {**dyn_carry, 'logit': jnp.zeros_like(dyn_carry['stoch'])}
+    if self.goal_enabled:
+      dyn_carry[self.goal_key] = jnp.zeros((batch_size,), jnp.int32)
     return (
         self.enc.initial(batch_size),
         dyn_carry,
@@ -131,11 +166,14 @@ class Agent(embodied.jax.Agent):
         dyn_carry, tokens, prevact, reset, **kw)
     # Keep posterior logits in carry so adaptation can resample start states.
     dyn_carry = {**dyn_carry, 'logit': feat['logit']}
+    goal = obs[self.goal_key] if self.goal_enabled else None
+    if self.goal_enabled:
+      dyn_carry[self.goal_key] = goal
     dec_entry = {}
     if dec_carry:
       dec_carry, dec_entry, recons = self.dec(dec_carry, feat, reset, **kw)
-    policy = self.pol(self.feat2tensor(feat), bdims=1)
-    act = sample(policy)
+    policy = self.pol(self._head_input(feat, goal), bdims=1)
+    act = self._canonical_action(sample(policy))
     out = {}
     out['finite'] = elements.tree.flatdict(jax.tree.map(
         lambda x: jnp.isfinite(x).all(range(1, x.ndim)),
@@ -148,14 +186,121 @@ class Agent(embodied.jax.Agent):
 
   def policy_latent(self, carry):
     enc_carry, dyn_carry, dec_carry, _ = carry
-    policy = self.pol(self.feat2tensor(dyn_carry), bdims=1)
-    act = sample(policy)
+    policy = self.pol(self._head_input(dyn_carry), bdims=1)
+    act = self._canonical_action(sample(policy))
     out = {}
     out['finite'] = elements.tree.flatdict(jax.tree.map(
         lambda x: jnp.isfinite(x).all(range(1, x.ndim)),
         dict(carry=carry, act=act)))
     carry = (enc_carry, dyn_carry, dec_carry, act)
     return carry, act, out
+
+  def policy_stats(self, carry):
+    """Return distribution parameters for behavioural drift diagnostics."""
+    _, dyn_carry, _, _ = carry
+    policy = self.pol(self._head_input(dyn_carry), bdims=1)
+    stats = {}
+    for key, dist in policy.items():
+      stats[f'{key}/mean'] = dist.pred()
+      stats[f'{key}/entropy'] = dist.entropy()
+      base = getattr(dist, 'output', dist)
+      if hasattr(base, 'stddev'):
+        stats[f'{key}/stddev'] = base.stddev
+    return stats
+
+  def posterior_chunk(self, carry, obs, prevact):
+    """Re-encode a recorded sequence chunk while preserving recurrent state."""
+    enc_carry, dyn_carry = carry
+    reset = obs['is_first']
+    enc_carry, _, tokens = self.enc(
+        enc_carry, obs, reset, training=False)
+    dyn_carry, _, feat = self.dyn.observe(
+        dyn_carry, tokens, self._canonical_action(prevact), reset,
+        training=False)
+    if self.goal_enabled:
+      dyn_carry[self.goal_key] = obs[self.goal_key][:, -1]
+    return (enc_carry, dyn_carry), feat
+
+  def critic_state(self, carry):
+    """Return frozen-head diagnostics for one posterior policy carry."""
+    _, dyn_carry, _, _ = carry
+    inp = sg(self._head_input(dyn_carry))
+    voffset, vscale = self.valnorm.stats()
+    value = self.val(inp, 1)
+    slowvalue = self.slowval(inp, 1)
+    result = {
+        'reward': self.rew(inp, 1).pred(),
+        'continuation': self._continuation(inp, 1),
+        'value': value.pred() * vscale + voffset,
+        'slowvalue': slowvalue.pred() * vscale + voffset,
+        'value_entropy': value.entropy(),
+        'slowvalue_entropy': slowvalue.entropy(),
+        'deter': dyn_carry['deter'],
+        'stoch': dyn_carry['stoch'],
+        'logit': dyn_carry['logit'],
+    }
+    return result
+
+  def critic_rollout(self, carry, horizon=6, start_batch=1):
+    """Generate a fixed-policy imagination bank without modifying parameters."""
+    _, dyn_carry, _, _ = carry
+    start_batch = max(1, int(start_batch))
+    start = {
+        'deter': dyn_carry['deter'],
+        'stoch': dyn_carry['stoch'],
+    }
+    if start_batch > 1:
+      logit = jnp.repeat(dyn_carry['logit'], start_batch, axis=0)
+      start['deter'] = jnp.repeat(start['deter'], start_batch, axis=0)
+      start['stoch'] = self.dyn.sample_posterior(logit)
+    goal = self._carry_goal(dyn_carry)
+    if self.goal_enabled and start_batch > 1:
+      goal = jnp.repeat(goal, start_batch, axis=0)
+    policyfn = lambda feat: self._canonical_action(
+        sample(self.pol(self._head_input(feat, goal), 1)))
+    _, imgfeat, imgact = self.dyn.imagine(
+        start, policyfn, int(horizon), training=False)
+    imggoal = self._repeat_goal(goal, int(horizon))
+    inp = sg(self._head_input(imgfeat, imggoal))
+    voffset, vscale = self.valnorm.stats()
+    result = {
+        'reward': self.rew(inp, 2).pred(),
+        'continuation': self._continuation(inp, 2),
+        'value': self.val(inp, 2).pred() * vscale + voffset,
+        'slowvalue': self.slowval(inp, 2).pred() * vscale + voffset,
+        'value_entropy': self.val(inp, 2).entropy(),
+        'slowvalue_entropy': self.slowval(inp, 2).entropy(),
+        'deter': imgfeat['deter'],
+        'stoch': imgfeat['stoch'],
+        'logit': imgfeat['logit'],
+        'action': imgact,
+    }
+    return result
+
+  def critic_recorded_rollout(self, carry, actions):
+    """Imagine a supplied action sequence for open-loop fidelity probes."""
+    _, dyn_carry, _, _ = carry
+    start = {'deter': dyn_carry['deter'], 'stoch': dyn_carry['stoch']}
+    horizon = jax.tree.leaves(actions)[0].shape[1]
+    _, imgfeat, imgact = self.dyn.imagine(
+        start, self._canonical_action(actions), int(horizon), training=False)
+    goal = self._carry_goal(dyn_carry)
+    imggoal = self._repeat_goal(goal, int(horizon))
+    inp = sg(self._head_input(imgfeat, imggoal))
+    voffset, vscale = self.valnorm.stats()
+    result = {
+        'reward': self.rew(inp, 2).pred(),
+        'continuation': self._continuation(inp, 2),
+        'value': self.val(inp, 2).pred() * vscale + voffset,
+        'slowvalue': self.slowval(inp, 2).pred() * vscale + voffset,
+        'value_entropy': self.val(inp, 2).entropy(),
+        'slowvalue_entropy': self.slowval(inp, 2).entropy(),
+        'deter': imgfeat['deter'],
+        'stoch': imgfeat['stoch'],
+        'logit': imgfeat['logit'],
+        'action': imgact,
+    }
+    return result
 
   def train(self, carry, data):
     carry, obs, prevact, stepid = self._apply_replay_context(carry, data)
@@ -173,20 +318,101 @@ class Agent(embodied.jax.Agent):
       outs['replay'] = updates
     # if self.config.replay.fracs.priority > 0:
     #   outs['replay']['priority'] = losses['model']
-    carry = (*carry, {k: data[k][:, -1] for k in self.act_space})
+    carry = (*carry, self._canonical_action(
+        {k: data[k][:, -1] for k in self.act_space}))
     if nj.creating():
       def dummy(carry):
         _, dyn_carry, _, _ = carry
-        policy = self.pol(self.feat2tensor(dyn_carry), bdims=1)
+        policy = self.pol(self._head_input(dyn_carry), bdims=1)
         loss = sum([
             v.logp(jnp.zeros_like(v.pred())).mean()
             for v in policy.values()])
         return loss, (carry, {})
       self.adapt_opt(dummy, carry, has_aux=True)
+      def dummy_actor(carry):
+        _, dyn_carry, _, _ = carry
+        policy = self.pol(self._head_input(dyn_carry), bdims=1)
+        loss = sum([
+            0.0 * v.logp(jnp.zeros_like(v.pred())).mean()
+            for v in policy.values()])
+        return loss, (carry, {})
+      def dummy_critic(carry):
+        _, dyn_carry, _, _ = carry
+        value = self.val(self._head_input(dyn_carry), bdims=1)
+        return 0.0 * value.pred().mean(), (carry, {})
+      self.adapt_actor_opt(dummy_actor, carry, has_aux=True)
+      self.adapt_critic_opt(dummy_critic, carry, has_aux=True)
+      def dummy_model(carry, obs, prevact, training):
+        loss, aux = self.model_loss(carry, obs, prevact, training)
+        return 0.0 * loss, aux
+      self.model_opt(
+          dummy_model, carry[:3], obs, prevact,
+          training=True, has_aux=True)
     return carry, outs, metrics
+
+  def train_model(self, carry, data):
+    """Train only encoder, RSSM, decoder, reward, and continuation heads."""
+    carry, obs, prevact, stepid = self._apply_replay_context(carry, data)
+    metrics, (carry, entries, outs, mets) = self.model_opt(
+        self.model_loss, carry, obs, prevact, training=True, has_aux=True)
+    metrics.update(mets)
+    outputs = {}
+    if self.config.replay_context:
+      updates = elements.tree.flatdict(dict(
+          stepid=stepid, enc=entries[0], dyn=entries[1], dec=entries[2]))
+      B, T = obs['is_first'].shape
+      assert all(x.shape[:2] == (B, T) for x in updates.values()), (
+          (B, T), {k: v.shape for k, v in updates.items()})
+      outputs['replay'] = updates
+    carry = (*carry, self._canonical_action(
+        {k: data[k][:, -1] for k in self.act_space}))
+    return carry, outputs, metrics
+
+  def model_loss(self, carry, obs, prevact, training):
+    """World-model objective without imagination or behaviour gradients."""
+    enc_carry, dyn_carry, dec_carry = carry
+    prevact = self._canonical_action(prevact)
+    reset = obs['is_first']
+    B, T = reset.shape
+    losses = {}
+    metrics = {}
+
+    enc_carry, enc_entries, tokens = self.enc(
+        enc_carry, obs, reset, training)
+    dyn_carry, dyn_entries, los, repfeat, mets = self.dyn.loss(
+        dyn_carry, tokens, prevact, reset, training)
+    losses.update(los)
+    metrics.update(mets)
+    dec_carry, dec_entries, recons = self.dec(
+        dec_carry, repfeat, reset, training)
+    goal = obs[self.goal_key] if self.goal_enabled else None
+    headinp = self._head_input(repfeat, goal)
+    inp = sg(headinp, skip=self.config.reward_grad)
+    losses['rew'] = self.rew(inp, 2).loss(obs['reward'])
+    con = f32(~obs['is_terminal'])
+    if self.config.contdisc:
+      con *= 1 - 1 / self.config.horizon
+    losses['con'] = self.con(headinp, 2).loss(con)
+    for key, recon in recons.items():
+      space, value = self.obs_space[key], obs[key]
+      assert value.dtype == space.dtype, (key, space, value.dtype)
+      target = f32(value) / 255 if isimage(space) else value
+      losses[key] = recon.loss(sg(target))
+
+    shapes = {k: v.shape for k, v in losses.items()}
+    assert all(x == (B, T) for x in shapes.values()), ((B, T), shapes)
+    assert set(losses) == set(self.model_scales), (
+        sorted(losses), sorted(self.model_scales))
+    metrics.update({f'loss/{k}': v.mean() for k, v in losses.items()})
+    loss = sum(v.mean() * self.model_scales[k] for k, v in losses.items())
+    carry = (enc_carry, dyn_carry, dec_carry)
+    entries = (enc_entries, dyn_entries, dec_entries)
+    outs = {'tokens': tokens, 'repfeat': repfeat, 'losses': losses}
+    return loss, (carry, entries, outs, metrics)
 
   def loss(self, carry, obs, prevact, training):
     enc_carry, dyn_carry, dec_carry = carry
+    prevact = self._canonical_action(prevact)
     reset = obs['is_first']
     B, T = reset.shape
     losses = {}
@@ -201,12 +427,14 @@ class Agent(embodied.jax.Agent):
     metrics.update(mets)
     dec_carry, dec_entries, recons = self.dec(
         dec_carry, repfeat, reset, training)
-    inp = sg(self.feat2tensor(repfeat), skip=self.config.reward_grad)
+    goal = obs[self.goal_key] if self.goal_enabled else None
+    headinp = self._head_input(repfeat, goal)
+    inp = sg(headinp, skip=self.config.reward_grad)
     losses['rew'] = self.rew(inp, 2).loss(obs['reward'])
     con = f32(~obs['is_terminal'])
     if self.config.contdisc:
       con *= 1 - 1 / self.config.horizon
-    losses['con'] = self.con(self.feat2tensor(repfeat), 2).loss(con)
+    losses['con'] = self.con(headinp, 2).loss(con)
     for key, recon in recons.items():
       space, value = self.obs_space[key], obs[key]
       assert value.dtype == space.dtype, (key, space, value.dtype)
@@ -221,7 +449,11 @@ class Agent(embodied.jax.Agent):
     K = min(self.config.imag_last or T, T)
     H = self.config.imag_length
     starts = self.dyn.starts(dyn_entries, dyn_carry, K)
-    policyfn = lambda feat: sample(self.pol(self.feat2tensor(feat), 1))
+    start_goal = (
+        obs[self.goal_key][:, -K:].reshape((B * K,))
+        if self.goal_enabled else None)
+    policyfn = lambda feat: self._canonical_action(
+        sample(self.pol(self._head_input(feat, start_goal), 1)))
     _, imgfeat, imgprevact = self.dyn.imagine(starts, policyfn, H, training)
     first = jax.tree.map(
         lambda x: x[:, -K:].reshape((B * K, 1, *x.shape[2:])), repfeat)
@@ -231,11 +463,12 @@ class Agent(embodied.jax.Agent):
     imgact = concat([imgprevact, lastact], 1)
     assert all(x.shape[:2] == (B * K, H + 1) for x in jax.tree.leaves(imgfeat))
     assert all(x.shape[:2] == (B * K, H + 1) for x in jax.tree.leaves(imgact))
-    inp = self.feat2tensor(imgfeat)
+    imggoal = self._repeat_goal(start_goal, H + 1)
+    inp = self._head_input(imgfeat, imggoal)
     los, imgloss_out, mets = imag_loss(
         imgact,
         self.rew(inp, 2).pred(),
-        self.con(inp, 2).prob(1),
+        self._continuation(inp, 2),
         self.pol(inp, 2),
         self.val(inp, 2),
         self.slowval(inp, 2),
@@ -254,7 +487,8 @@ class Agent(embodied.jax.Agent):
       boot = imgloss_out['ret'][:, 0].reshape(B, K)
       feat, last, term, rew, boot = jax.tree.map(
           lambda x: x[:, -K:], (feat, last, term, rew, boot))
-      inp = self.feat2tensor(feat)
+      replay_goal = obs[self.goal_key][:, -K:] if self.goal_enabled else None
+      inp = self._head_input(feat, replay_goal)
       los, reploss_out, mets = repl_loss(
           last, term, rew, boot,
           self.val(inp, 2),
@@ -338,12 +572,49 @@ class Agent(embodied.jax.Agent):
       grid = video.transpose((1, 2, 0, 3, 4)).reshape((T, H, B * W, C))
       metrics[f'openloop/{key}'] = grid
 
-    carry = (*new_carry, {k: data[k][:, -1] for k in self.act_space})
+    carry = (*new_carry, self._canonical_action(
+        {k: data[k][:, -1] for k in self.act_space}))
     return carry, metrics
 
-  def adapt(self, carry):
+  def adapt(self, carry, critic_only=False, freeze_critic=False):
     if not self.config.eval_adapt.enabled:
       return carry, {}
+
+    # The frozen-critic branch deliberately uses the same dedicated actor
+    # optimizer and factored rollout as critic-first IR. This makes it a clean
+    # ablation: the critic update is the only removed operation. The legacy
+    # actor-only path remains available when both flags are false.
+    if self.config.eval_adapt.train_critic or freeze_critic:
+      rollout = self._adapt_rollout(carry)
+      metrics = {}
+
+      if not freeze_critic:
+        def critic_lossfn(carry):
+          loss, metrics = self._adapt_critic_loss(rollout)
+          return loss, (carry, metrics)
+
+        metrics, (carry, mets) = self.adapt_critic_opt(
+            critic_lossfn, carry, has_aux=True)
+        metrics.update(prefix(mets, 'adapt_critic'))
+        self.slowval.update()
+      if critic_only:
+        if freeze_critic:
+          raise ValueError('critic_only adaptation cannot update a frozen critic')
+        return carry, metrics
+
+      def actor_lossfn(carry):
+        loss, metrics = self._adapt_actor_loss(rollout)
+        return loss, (carry, metrics)
+
+      actor_metrics, (carry, mets) = self.adapt_actor_opt(
+          actor_lossfn, carry, has_aux=True)
+      metrics.update(actor_metrics)
+      metrics.update(prefix(mets, 'adapt_actor'))
+      metrics.update(self._adapt_viewer_metrics(rollout['imgfeat']))
+      return carry, metrics
+
+    if critic_only:
+      raise ValueError('critic_only adaptation requires train_critic=True')
 
     def lossfn(carry):
       loss, metrics = self._adapt_loss(carry)
@@ -353,10 +624,26 @@ class Agent(embodied.jax.Agent):
     metrics.update(prefix(mets, 'adapt'))
     return carry, metrics
 
-  def _adapt_loss(self, carry):
+  def adapt_critic_horizon(self, carry, horizon=6, start_batch=1):
+    """Critic-only update with explicit static rollout controls for ablations."""
+    rollout = self._adapt_rollout(
+        carry, horizon=int(horizon), start_batch=int(start_batch))
+
+    def critic_lossfn(carry):
+      loss, metrics = self._adapt_critic_loss(rollout)
+      return loss, (carry, metrics)
+
+    metrics, (carry, mets) = self.adapt_critic_opt(
+        critic_lossfn, carry, has_aux=True)
+    metrics.update(prefix(mets, 'adapt_critic'))
+    self.slowval.update()
+    return carry, metrics
+
+  def _adapt_rollout(self, carry, horizon=None, start_batch=None):
     _, dyn_carry, _, _ = carry
-    H = self.config.eval_adapt.imag_length
-    start_batch = max(1, int(self.config.eval_adapt.start_batch))
+    H = int(horizon or self.config.eval_adapt.imag_length)
+    start_batch = max(1, int(
+        start_batch or self.config.eval_adapt.start_batch))
 
     start = {
         'deter': dyn_carry['deter'],
@@ -370,7 +657,11 @@ class Agent(embodied.jax.Agent):
       start['deter'] = jnp.repeat(start['deter'], start_batch, axis=0)
       start['stoch'] = self.dyn.sample_posterior(logit)
 
-    policyfn = lambda feat: sample(self.pol(self.feat2tensor(feat), 1))
+    goal = self._carry_goal(dyn_carry)
+    if self.goal_enabled and start_batch > 1:
+      goal = jnp.repeat(goal, start_batch, axis=0)
+    policyfn = lambda feat: self._canonical_action(
+        sample(self.pol(self._head_input(feat, goal), 1)))
     _, imgfeat, imgact = self.dyn.imagine(start, policyfn, H, training=True)
     first = dict(
         deter=start['deter'][:, None],
@@ -382,24 +673,89 @@ class Agent(embodied.jax.Agent):
     lastact = jax.tree.map(lambda x: x[:, None], lastact)
     imgact = concat([imgact, lastact], 1)
 
-    inp = sg(self.feat2tensor(imgfeat))
+    imggoal = self._repeat_goal(goal, H + 1)
+    inp = sg(self._head_input(imgfeat, imggoal))
     rew = sg(self.rew(inp, 2).pred())
-    con = sg(self.con(inp, 2).prob(1))
-    policy = self.pol(inp, 2)
-    value = self.val(sg(inp), 2)
-    slowvalue = self.slowval(sg(inp), 2)
+    con = sg(self._continuation(inp, 2))
+    return {
+        'imgfeat': imgfeat,
+        'imgact': sg(imgact),
+        'inp': inp,
+        'rew': rew,
+        'con': con,
+    }
+
+  def _adapt_critic_loss(self, rollout):
+    policy = self.pol(rollout['inp'], 2)
+    value = self.val(rollout['inp'], 2)
+    slowvalue = self.slowval(rollout['inp'], 2)
     imag_loss_cfg = self.config.imag_loss.copy()
     imag_loss_cfg['actent'] = self.config.eval_adapt.actent
-    loss, metrics = adapt_policy_loss(
-        imgact, rew, con, policy, value, slowvalue,
+    losses, outs, metrics = imag_loss(
+        rollout['imgact'], rollout['rew'], rollout['con'],
+        policy, value, slowvalue,
+        self.retnorm, self.valnorm, self.advnorm,
+        update=False,
+        contdisc=self.config.contdisc,
+        horizon=self.config.horizon,
+        **imag_loss_cfg)
+    disc = 1 if self.config.contdisc else 1 - 1 / self.config.horizon
+    zeros = jnp.zeros_like(rollout['rew'])
+    reward_only_mc = lambda_return(
+        zeros, 1 - rollout['con'], rollout['rew'], zeros, zeros,
+        disc, 1.0)
+    reward_only_lambda = lambda_return(
+        zeros, 1 - rollout['con'], rollout['rew'], zeros, zeros,
+        disc, imag_loss_cfg['lam'])
+    bootstrapped = outs['ret']
+    contribution = bootstrapped - reward_only_lambda
+    voffset, vscale = self.valnorm.stats()
+    value_pred = value.pred() * vscale + voffset
+    metrics.update({
+        'target_reward_only_mean': reward_only_mc.mean(),
+        'target_reward_only_std': reward_only_mc.std(),
+        'target_reward_only_lambda_mean': reward_only_lambda.mean(),
+        'target_reward_only_lambda_std': reward_only_lambda.std(),
+        'target_bootstrapped_mean': bootstrapped.mean(),
+        'target_bootstrapped_std': bootstrapped.std(),
+        'target_bootstrap_contribution_mean': contribution.mean(),
+        'target_bootstrap_contribution_abs': jnp.abs(contribution).mean(),
+        'target_bootstrap_to_reward_ratio': (
+            jnp.abs(contribution).mean() /
+            (jnp.abs(reward_only_lambda).mean() + 1e-8)),
+        'value_abs_p99': jnp.quantile(jnp.abs(value_pred), 0.99),
+        'value_target_mae': jnp.abs(
+            value_pred[:, :-1] - bootstrapped).mean(),
+    })
+    loss = losses['value'].mean()
+    metrics['loss'] = loss
+    return loss, metrics
+
+  def _adapt_actor_loss(self, rollout):
+    policy = self.pol(rollout['inp'], 2)
+    value = self.val(rollout['inp'], 2)
+    slowvalue = self.slowval(rollout['inp'], 2)
+    imag_loss_cfg = self.config.imag_loss.copy()
+    imag_loss_cfg['actent'] = self.config.eval_adapt.actent
+    return adapt_policy_loss(
+        rollout['imgact'], rollout['rew'], rollout['con'],
+        policy, value, slowvalue,
         self.retnorm, self.valnorm, self.advnorm,
         contdisc=self.config.contdisc,
         horizon=self.config.horizon,
         **imag_loss_cfg)
+
+  def _adapt_loss(self, carry):
+    rollout = self._adapt_rollout(carry)
+    loss, metrics = self._adapt_actor_loss(rollout)
     if self.config.eval_adapt.lr != self.config.opt.lr:
       scale = self.config.eval_adapt.lr / self.config.opt.lr
       loss *= scale
+    metrics.update(self._adapt_viewer_metrics(rollout['imgfeat']))
+    return loss, metrics
 
+  def _adapt_viewer_metrics(self, imgfeat):
+    metrics = {}
     viewer = getattr(self.config.eval_adapt, 'viewer', None)
     viewer_enabled = bool(getattr(viewer, 'enabled', False))
     if viewer_enabled and self.dec.imgkeys:
@@ -411,7 +767,48 @@ class Agent(embodied.jax.Agent):
       key = sorted(self.dec.imgkeys)[0]
       frames = jnp.clip(recons[key].pred()[0] * 255, 0, 255).astype(jnp.uint8)
       metrics['viewer_imag_frames'] = frames
-    return loss, metrics
+    return metrics
+
+  def _head_input(self, feat, goal=None):
+    """Concatenate public goal identity onto behaviour-head features."""
+    inp = self.feat2tensor(feat)
+    if not self.goal_enabled:
+      return inp
+    if goal is None:
+      goal = self._carry_goal(feat)
+    goal = jnp.asarray(goal, jnp.int32)
+    onehot = jax.nn.one_hot(goal, self.goal_count, dtype=nn.COMPUTE_DTYPE)
+    assert onehot.shape[:-1] == inp.shape[:-1], (
+        onehot.shape, inp.shape)
+    return jnp.concatenate([inp, onehot], -1)
+
+  def _carry_goal(self, carry):
+    if not self.goal_enabled:
+      return None
+    if self.goal_key in carry:
+      return carry[self.goal_key]
+    return jnp.zeros(carry['deter'].shape[:-1], jnp.int32)
+
+  def _repeat_goal(self, goal, length):
+    if not self.goal_enabled:
+      return None
+    goal = jnp.asarray(goal, jnp.int32)
+    return jnp.broadcast_to(goal[:, None], (goal.shape[0], int(length)))
+
+  def _continuation(self, inp, bdims):
+    """Predict ordinary Dreamer continuation from latent state and goal."""
+    return self.con(inp, bdims).prob(1)
+
+  def _canonical_action(self, action):
+    """Remove semantically ignored position values for RLScape no-ops."""
+    if not bool(self.goal_cfg.canonicalize_noop_position):
+      return action
+    assert 'mode' in action and 'position' in action, tuple(action)
+    mode = jnp.asarray(action['mode'])
+    position = jnp.asarray(action['position'])
+    mask = (mode == 0)[..., None]
+    position = jnp.where(mask, jnp.zeros_like(position), position)
+    return {**action, 'position': position}
 
   def _apply_replay_context(self, carry, data):
     (enc_carry, dyn_carry, dec_carry, prevact) = carry
@@ -441,7 +838,7 @@ class Agent(embodied.jax.Agent):
         lambda normal, replay: nn.where(first_chunk, replay, normal),
         (carry, rhs(obs), rhs(prevact), rhs(stepid)),
         (rep_carry, rep_obs, rep_prevact, rep_stepid))
-    return carry, obs, prevact, stepid
+    return carry, obs, self._canonical_action(prevact), stepid
 
   def _make_opt(
       self,

@@ -308,6 +308,10 @@ class TwoHot(Output):
       wavg = ((p1 * b1)[..., ::-1] + (p2 * b2)).sum(-1)
       return self.unsquash(wavg)
 
+  def entropy(self):
+    logprob = jax.nn.log_softmax(self.logits, -1)
+    return -(self.probs * logprob).sum(-1)
+
   def loss(self, target):
     assert target.dtype == f32, target.dtype
     target = sg(self.squash(target))

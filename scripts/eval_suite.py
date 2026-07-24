@@ -76,9 +76,11 @@ def build_experiments(args: argparse.Namespace) -> list[dict[str, Any]]:
     experiments = []
     defaults = {
         'enabled': False,
+        'train_critic': args.default_adapt_train_critic,
         'steps': args.default_adapt_steps,
         'imag_length': args.default_adapt_imag_length,
         'lr': args.default_adapt_lr,
+        'critic_lr': args.default_adapt_critic_lr,
         'every_k': 0,
         'actent': args.default_adapt_actent,
         'start_batch': args.default_adapt_start_batch,
@@ -93,9 +95,11 @@ def build_experiments(args: argparse.Namespace) -> list[dict[str, Any]]:
           'name': exp['name'],
           'eval_adapt': {
               'enabled': bool(eval_adapt['enabled']),
+              'train_critic': bool(eval_adapt['train_critic']),
               'steps': int(eval_adapt['steps']),
               'imag_length': int(eval_adapt['imag_length']),
               'lr': float(eval_adapt['lr']),
+              'critic_lr': float(eval_adapt['critic_lr']),
               'every_k': int(eval_adapt['every_k']),
               'actent': float(eval_adapt['actent']),
               'start_batch': int(eval_adapt['start_batch']),
@@ -109,9 +113,11 @@ def build_experiments(args: argparse.Namespace) -> list[dict[str, Any]]:
         'name': args.baseline_name,
         'eval_adapt': {
             'enabled': False,
+            'train_critic': False,
             'steps': args.default_adapt_steps,
             'imag_length': args.default_adapt_imag_length,
             'lr': args.default_adapt_lr,
+            'critic_lr': args.default_adapt_critic_lr,
             'every_k': 0,
             'actent': args.default_adapt_actent,
             'start_batch': args.default_adapt_start_batch,
@@ -131,13 +137,17 @@ def build_experiments(args: argparse.Namespace) -> list[dict[str, Any]]:
         f"lr{sanitize_token(f'{lr:.2e}')}_"
         f"k{every_k}_ae{sanitize_token(f'{actent:.2e}')}_sb{start_batch}"
     )
+    if args.adapt_train_critic:
+      name += f"_critic_lr{sanitize_token(f'{args.adapt_critic_lr:.2e}')}"
     exps.append({
         'name': name,
         'eval_adapt': {
             'enabled': True,
+            'train_critic': bool(args.adapt_train_critic),
             'steps': int(steps),
             'imag_length': int(imag_length),
             'lr': float(lr),
+            'critic_lr': float(args.adapt_critic_lr),
             'every_k': int(every_k),
             'actent': float(actent),
             'start_batch': int(start_batch),
@@ -194,10 +204,21 @@ def summarize_run(
   diag = {}
   diag_keys = (
       'epstats/log/eval_adapt/trigger/sum',
+      'epstats/log/eval_adapt/actor_steps/sum',
+      'epstats/log/eval_adapt/critic_steps/sum',
+      'epstats/log/eval_adapt/warmup/sum',
       'epstats/log/eval_adapt/adapt_opt/updates/avg',
       'epstats/log/eval_adapt/adapt_opt/loss/avg',
       'epstats/log/eval_adapt/adapt_opt/grad_norm/avg',
       'epstats/log/eval_adapt/adapt_opt/update_rms/avg',
+      'epstats/log/eval_adapt/adapt_actor_opt/updates/avg',
+      'epstats/log/eval_adapt/adapt_actor_opt/loss/avg',
+      'epstats/log/eval_adapt/adapt_actor_opt/grad_norm/avg',
+      'epstats/log/eval_adapt/adapt_actor_opt/update_rms/avg',
+      'epstats/log/eval_adapt/adapt_critic_opt/updates/avg',
+      'epstats/log/eval_adapt/adapt_critic_opt/loss/avg',
+      'epstats/log/eval_adapt/adapt_critic_opt/grad_norm/avg',
+      'epstats/log/eval_adapt/adapt_critic_opt/update_rms/avg',
   )
   for key in diag_keys:
     values = [float(row[key]) for row in metrics_rows if key in row]
@@ -342,9 +363,11 @@ def build_command(
       '--jax.platform', args.jax_platform,
       '--seed', str(seed),
       '--eval_adapt.enabled', str(bool(eval_adapt['enabled'])),
+      '--eval_adapt.train_critic', str(bool(eval_adapt['train_critic'])),
       '--eval_adapt.steps', str(int(eval_adapt['steps'])),
       '--eval_adapt.imag_length', str(int(eval_adapt['imag_length'])),
       '--eval_adapt.lr', str(float(eval_adapt['lr'])),
+      '--eval_adapt.critic_lr', str(float(eval_adapt['critic_lr'])),
       '--eval_adapt.every_k', str(int(eval_adapt['every_k'])),
       '--eval_adapt.actent', str(float(eval_adapt['actent'])),
       '--eval_adapt.start_batch', str(int(eval_adapt['start_batch'])),
@@ -381,12 +404,16 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('--adapt_steps_grid', default='1,3,5')
   parser.add_argument('--adapt_imag_length_grid', default='10')
   parser.add_argument('--adapt_lr_grid', default='1e-4')
+  parser.add_argument('--adapt_train_critic', action='store_true')
+  parser.add_argument('--adapt_critic_lr', type=float, default=1e-4)
   parser.add_argument('--adapt_every_k_grid', default='0,25')
   parser.add_argument('--adapt_actent_grid', default='3e-4')
   parser.add_argument('--adapt_start_batch_grid', default='1')
   parser.add_argument('--default_adapt_steps', type=int, default=3)
   parser.add_argument('--default_adapt_imag_length', type=int, default=10)
   parser.add_argument('--default_adapt_lr', type=float, default=1e-4)
+  parser.add_argument('--default_adapt_train_critic', action='store_true')
+  parser.add_argument('--default_adapt_critic_lr', type=float, default=1e-4)
   parser.add_argument('--default_adapt_actent', type=float, default=3e-4)
   parser.add_argument('--default_adapt_start_batch', type=int, default=1)
   parser.add_argument('--dry_run', action='store_true')

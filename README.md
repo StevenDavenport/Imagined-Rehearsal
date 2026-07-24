@@ -2,6 +2,11 @@
 
 Research branch for studying **Imagined Rehearsal (IR)** as an online policy-learning mechanism in continual reinforcement learning (CRL).
 
+The current working direction is documented in
+[CIR_RESEARCH_PLAN.md](CIR_RESEARCH_PLAN.md). It supersedes the earlier
+assumption below that CIR would begin as an additional actor update inside an
+otherwise jointly trained Continual-Dreamer agent.
+
 The original repository is a complete implementation of IR for test-time policy repair. This `crl` branch starts a new line of work: the world-model agent will train continually across a sequence of tasks, while IR supplies immediate, current-posterior actor updates between real environment interactions.
 
 > [!IMPORTANT]
@@ -243,7 +248,12 @@ Depending on the available accelerator and CUDA installation, the JAX line in `r
 
 ## Current IR Usage
 
-The current code can still train a base agent and run the original evaluation-time IR experiments.
+The original actor-only IR path remains available. To enable critic-first IR,
+add `--eval_adapt.train_critic True` and set its independent learning rate with
+`--eval_adapt.critic_lr`. At the first observation of each episode, this runs
+one critic-only MCPB update followed by the configured critic-to-actor update
+before the first environment action. Later triggers run the critic-to-actor
+update, and all adapted parameters are discarded at the episode boundary.
 
 ```bash
 python dreamerv3/main.py \
@@ -256,17 +266,155 @@ python dreamerv3/main.py \
   --run.envs 1 \
   --jax.platform cuda \
   --eval_adapt.enabled True \
+  --eval_adapt.train_critic True \
   --eval_adapt.steps 1 \
   --eval_adapt.imag_length 6 \
   --eval_adapt.lr 1e-4 \
+  --eval_adapt.critic_lr 1e-4 \
   --eval_adapt.every_k 1 \
   --eval_adapt.actent 3e-4 \
   --eval_adapt.start_batch 512
 ```
 
+### Cheetah critic-only intermediary experiment
+
+The critic-only diagnostic described in the research plan has a staged,
+resumable CPU runner. The command below collects a fixed healthy-policy
+dataset, checks frozen-world-model fidelity, screens imagination horizons, and
+confirms the most promising critic-repair conditions. The optional proposal
+checkpoint measures the loss of imagined reward coverage caused by the damaged
+actor, but never uses that actor for critic repair.
+
+```bash
+python scripts/critic_intermediary_experiment.py all \
+  --outdir logs/cheetah_critic_intermediary \
+  --clean_checkpoint checkpoints/cheetah_run_vision_seed0 \
+  --proposal_checkpoint \
+    checkpoints/cheetah_run_vision_seed0_corruptions/both_zero_mask_moderate_all_s0p2_seed0 \
+  --jax_platform cpu \
+  --skip_existing
+```
+
+Run `prepare`, `collect`, `probe`, `screen`, `confirm`, and `summarize`
+separately to inspect each stage before paying for the next one. Results are
+stored as CSV and JSON under the output directory; critic snapshots allow
+completed horizon/seed conditions to be reused.
+
+### Early Cheetah continual-IR pilot
+
+The first end-to-end CIR runner implements the fixed A-to-B action-gain pilot
+from the research plan. It starts from the healthy Cheetah checkpoint, gathers
+A and B diagnostics, performs world-model-only replay repair, and then
+alternates persistent in-episode actor-only IR with episode-boundary world-model
+updates. The critic and slow critic are frozen and supply a fixed value
+scaffold to the actor; a namespace hash verifies that actor rehearsal cannot
+change either of them. The dedicated actor optimizer is identical to the one
+used by the critic-first pilot, so the critic update is the only behavioural
+ablation. The run is CPU compatible and resumes automatically when the same log
+directory already contains a checkpoint.
+
+```bash
+python dreamerv3/main.py \
+  --configs dmc_vision cir_cheetah \
+  --logdir logs/cheetah_cir_actor_only_seed0 \
+  --run.from_checkpoint \
+    /home/staff/steven/crl_ir/checkpoints/cheetah_run_vision_seed0 \
+  --jax.platform cpu \
+  --jax.prealloc False
+```
+
+To reproduce the earlier critic-first control, append
+`cir_cheetah_critic_first` to `--configs`. Always use a separate log directory
+because the saved phase state and optimizer counters are resumable.
+
+The matched world-model-only control freezes both actor and critic parameters,
+performs no imagined rehearsal, and otherwise retains the complete schedule:
+
+```bash
+python dreamerv3/main.py \
+  --configs dmc_vision cir_cheetah cir_cheetah_wm_only \
+  --logdir logs/cheetah_cir_wm_only_seed0 \
+  --run.from_checkpoint \
+    /home/staff/steven/crl_ir/checkpoints/cheetah_run_vision_seed0 \
+  --jax.platform cpu \
+  --jax.prealloc False
+```
+
+Actor and critic namespace hashes are checked after every B collection episode.
+Consequently, the only learned parameters in this control belong to the
+encoder, RSSM, decoder, reward head, and continuation head.
+
+Structured results are written under `cir_artifacts/`: `events.jsonl` records
+phase transitions, optimizer work, resource use, namespace hashes, and stop
+guards; `episodes.csv` contains return and aggregate diagnostics;
+`probes.jsonl` and `probe_anchors.jsonl` contain critic and multi-horizon model
+diagnostics; compressed trajectory files retain the latent anchors. The normal
+`ckpt/` directory stores the live agent, replay, counters, and phase state.
+
+### Stationary Walker critic-repair experiment
+
+Train one fresh Walker baseline and retain its final 1.1M-step checkpoint:
+
+```bash
+python dreamerv3/main.py \
+  --logdir logs/critic_ir_walker_seed0 \
+  --configs dmc_vision \
+  --task dmc_walker_walk \
+  --seed 0 \
+  --run.steps 1.1e6 \
+  --run.ckpt_keep 1
+```
+
+Evaluate 20 clean episodes in total (four per evaluation seed) and require a
+mean return of at least 800 before continuing:
+
+```bash
+python scripts/checkpoint_eval_sweep.py \
+  --checkpoints logs/critic_ir_walker_seed0/ckpt \
+  --configs dmc_vision \
+  --task dmc_walker_walk \
+  --seeds 0,1,2,3,4 \
+  --run_steps 4000 \
+  --jax_platform cuda
+```
+
+Create matched actor-and-critic corruptions. The damaged online critic is
+copied into the slow target critic to prevent intact-target leakage:
+
+```bash
+python scripts/corrupt_actor_checkpoint.py \
+  --source logs/critic_ir_walker_seed0/ckpt \
+  --out_root checkpoints/critic_ir_walker \
+  --target both \
+  --preset zero_mask_severity_triplet \
+  --seed 0
+```
+
+Run the clean safety check and the corrupted recovery ladder:
+
+```bash
+python scripts/eval_suite.py \
+  --checkpoint logs/critic_ir_walker_seed0/ckpt \
+  --configs dmc_vision \
+  --task dmc_walker_walk \
+  --seeds 0,1,2,3,4 \
+  --run_steps 10000 \
+  --jax_platform cuda \
+  --suite_json scripts/critic_ir_clean_suite.json
+
+python scripts/walker_recovery_suite.py \
+  --checkpoints checkpoints/critic_ir_walker \
+  --configs dmc_vision \
+  --task dmc_walker_walk \
+  --seeds 0,1,2,3,4 \
+  --run_steps 10000 \
+  --jax_platform cuda \
+  --suite_json scripts/critic_ir_corrupt_suite.json
+```
+
 Core existing scripts include:
 
-- `scripts/corrupt_actor_checkpoint.py` — create actor-corrupted checkpoints;
+- `scripts/corrupt_actor_checkpoint.py` — corrupt the actor, critic, or both;
 - `scripts/transfer_actor_checkpoint.py` — transplant actors between compatible checkpoints;
 - `scripts/eval_suite.py` — multi-seed IR sweeps;
 - `scripts/rehearsal_benchmark_suite.py` — original paper benchmark workflow;

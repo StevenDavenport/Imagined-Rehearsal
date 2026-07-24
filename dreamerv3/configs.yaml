@@ -33,8 +33,30 @@ defaults:
     atari100k: {size: [64, 64], repeat: 4, sticky: False, gray: False, actions: needed, lives: unused, noops: 30, autostart: False, resize: pillow, clip_reward: False}
     dmlab: {size: [64, 64], repeat: 4, episodic: True, use_seed: True}
     minecraft: {size: [64, 64], break_speed: 100.0, logs: False, length: 36000}
-    dmc: {size: [64, 64], repeat: 1, proprio: True, image: True, camera: -1}
+    dmc: {size: [64, 64], repeat: 1, proprio: True, image: True, camera: -1, action_scale: 1.0}
     loconav: {size: [64, 64], repeat: 1, camera: -1}
+    rlscape:
+      use_seed: True
+      goals: [kill_goblin, bury_bones, chop_logs, light_fire, catch_fish]
+      goal_schedule: round_robin
+      package_version: '0.1.1'
+      launch: True
+      server_dir: ''
+      server_runtime_dir: ''
+      client_dir: ''
+      java_home: ''
+      mvn_path: ''
+      username: agent
+      resize: [240, 160]
+      render_mode: rgb_array
+      episode_length: 200
+      reward_mode: sparse_success
+      server_barrier: True
+      sync_to_tick: True
+      tick_divisor: 1
+      auto_calibrate_tick: True
+      reset_kind: task
+      audit_path: ''
 
   replay:
     size: 5e6
@@ -56,6 +78,7 @@ defaults:
     envs: 16
     eval_envs: 4
     eval_eps: 1
+    eval_episodes: 0
     report_batches: 1
     from_checkpoint: ''
     from_checkpoint_regex: ''
@@ -82,11 +105,19 @@ defaults:
     debug: False
     expect_devices: 0
     enable_policy: True
+    precompile: True
     coordinator_address: ''
 
   agent:
     loss_scales: {rec: 1.0, rew: 1.0, con: 1.0, dyn: 1.0, rep: 0.1, policy: 1.0, value: 1.0, repval: 0.3}
+    goal_conditioning:
+      enabled: False
+      key: goal_id
+      count: 0
+      exclude_keys: [goal_complete, is_physical_terminal]
+      canonicalize_noop_position: False
     opt: {lr: 4e-5, agc: 0.3, eps: 1e-20, beta1: 0.9, beta2: 0.999, momentum: True, wd: 0.0, schedule: const, warmup: 1000, anneal: 0}
+    model_lr: 4e-5
     ac_grads: False
     dyn:
       typ: rssm
@@ -121,9 +152,11 @@ defaults:
 
   eval_adapt:
     enabled: False
+    train_critic: False
     steps: 3
     imag_length: 10
     lr: 1e-4
+    critic_lr: 1e-4
     every_k: 0
     actent: 3e-4
     start_batch: 1
@@ -133,6 +166,30 @@ defaults:
     viewer:
       enabled: False
       traj_index: 0
+
+  cir:
+    action_scale_a: 1.0
+    action_scale_b: 0.7
+    baseline_episodes: 3
+    shock_episodes: 2
+    initial_model_updates: 128
+    model_checkpoint_interval: 32
+    cir_episodes: 10
+    episode_model_updates: 32
+    adapt_every: 25
+    adapt_steps: 1
+    eval_milestones: [1, 3, 5, 10]
+    probe_horizons: [6, 12, 24, 48]
+    anchor_stride: 25
+    probe_batch: 8
+    reencode_chunk: 32
+    gamma: 0.997
+    mild_ratio: 0.85
+    severe_ratio: 0.15
+    divergence_factor: 10.0
+    divergence_patience: 2
+    freeze_actor: False
+    freeze_critic: False
 
 size1m: &size1m
   .*\.rssm: {deter: 512, hidden: 64, classes: 4}
@@ -202,6 +259,117 @@ dmc_vision:
   task: dmc_walker_walk
   env.dmc.proprio: False
   run: {steps: 1.1e6, train_ratio: 256}
+
+rlscape:
+  <<: *size1m
+  task: rlscape_multigoal
+  batch_size: 4
+  batch_length: 16
+  report_length: 16
+  replay_context: 0
+  replay.size: 2000
+  replay.online: False
+  run: {envs: 1, debug: True, train_ratio: 8}
+  agent:
+    goal_conditioning:
+      enabled: True
+      key: goal_id
+      count: 5
+      canonicalize_noop_position: True
+
+rlscape_smoke:
+  env.rlscape.episode_length: 32
+  batch_size: 4
+  batch_length: 16
+  report_length: 16
+  replay.size: 2000
+  run: {steps: 220, envs: 1, train_ratio: 4, log_every: 30, report_every: 1000000, save_every: 1000000, debug: True}
+  jax: {platform: cpu, compute_dtype: float32, prealloc: False, precompile: False}
+  agent.report: False
+
+rlscape_m1_pilot:
+  env.rlscape.episode_length: 200
+  batch_size: 4
+  batch_length: 16
+  report_length: 16
+  replay.size: 10000
+  replay.online: False
+  run: {steps: 1000, envs: 1, train_ratio: 4, log_every: 30, report_every: 1000000, save_every: 60, ckpt_keep: 2, debug: True}
+  jax: {platform: cpu, compute_dtype: float32, prealloc: False, precompile: False}
+  agent.report: False
+
+rlscape_m2_multitask:
+  <<: *size50m
+  env.rlscape.goal_schedule: random
+  env.rlscape.episode_length: 200
+  batch_size: 8
+  batch_length: 32
+  report_length: 32
+  replay.size: 5000000
+  replay.online: False
+  run: {steps: 2000000, envs: 1, train_ratio: 32, log_every: 300, report_every: 1000000, save_every: 1800, ckpt_keep: 3, debug: True}
+  jax: {platform: cuda, compute_dtype: bfloat16, prealloc: True, precompile: True}
+  agent.report: False
+
+rlscape_m2_eval:
+  <<: *size50m
+  script: eval_only
+  env.rlscape.episode_length: 200
+  batch_size: 8
+  batch_length: 32
+  report_length: 32
+  run: {envs: 1, eval_episodes: 20, log_every: 300, debug: True}
+  jax: {platform: cuda, compute_dtype: bfloat16, prealloc: True, precompile: True}
+  eval_adapt.enabled: False
+  agent.report: False
+
+rlscape_kill_goblin:
+  task: rlscape_kill_goblin
+  env.rlscape.goals: [kill_goblin]
+  env.rlscape.goal_schedule: fixed
+
+rlscape_bury_bones:
+  task: rlscape_bury_bones
+  env.rlscape.goals: [bury_bones]
+  env.rlscape.goal_schedule: fixed
+
+rlscape_chop_logs:
+  task: rlscape_chop_logs
+  env.rlscape.goals: [chop_logs]
+  env.rlscape.goal_schedule: fixed
+
+rlscape_light_fire:
+  task: rlscape_light_fire
+  env.rlscape.goals: [light_fire]
+  env.rlscape.goal_schedule: fixed
+
+rlscape_catch_fish:
+  task: rlscape_catch_fish
+  env.rlscape.goals: [catch_fish]
+  env.rlscape.goal_schedule: fixed
+
+cir_cheetah:
+  script: cir
+  task: dmc_cheetah_run
+  batch_size: 8
+  batch_length: 32
+  replay_context: 0
+  replay.size: 100000
+  replay.online: False
+  run: {envs: 1, debug: True, ckpt_keep: 2}
+  jax.precompile: False
+  agent.model_lr: 4e-5
+  cir.freeze_critic: True
+  eval_adapt: {enabled: True, train_critic: False, steps: 1, imag_length: 12, lr: 1e-4, critic_lr: 1e-4, every_k: 25, actent: 3e-4, start_batch: 128}
+
+cir_cheetah_critic_first:
+  cir.freeze_critic: False
+  eval_adapt.train_critic: True
+
+cir_cheetah_wm_only:
+  cir.freeze_actor: True
+  cir.freeze_critic: True
+  eval_adapt.train_critic: False
 
 bsuite:
   task: bsuite_mnist/0

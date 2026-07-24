@@ -115,11 +115,15 @@ class Agent(embodied.Agent):
     pattern = re.compile(self.model.policy_keys)
     self.policy_keys = [k for k in self.params.keys() if pattern.search(k)]
     assert self.policy_keys, (list(self.params.keys()), self.model.policy_keys)
+    self.actor_keys = [k for k in self.params if k.startswith('pol/')]
+    assert self.actor_keys
 
     self.policy_params_sharding = {
         k: jax.sharding.NamedSharding(self.policy_mesh, v.spec)
         for k, v in self.train_params_sharding.items()
         if k in self.policy_keys}
+    self.actor_params_sharding = {
+        k: self.train_params_sharding[k] for k in self.actor_keys}
 
     shared_kwargs = {'use_shardmap': jaxcfg.use_shardmap}
     tm, ts = self.train_mirrored, self.train_sharded
@@ -145,6 +149,11 @@ class Agent(embodied.Agent):
         (dona_sharding, allo_sharding, tm, ts, ts), (tp, ts, ts, tm), ar,
         return_params=True, donate_params=True, first_outnums=(3,),
         **shared_kwargs)
+    self._train_model = transform.apply(
+        nj.pure(self.model.train_model), self.train_mesh,
+        (dona_sharding, allo_sharding, tm, ts, ts), (tp, ts, ts, tm), ar,
+        return_params=True, donate_params=True, first_outnums=(3,),
+        **shared_kwargs)
     self._report = transform.apply(
         nj.pure(self.model.report), self.train_mesh,
         (tp, tm, ts, ts), (ts, tm), ar,
@@ -156,11 +165,34 @@ class Agent(embodied.Agent):
     self._policy_latent = transform.apply(
         nj.pure(self.model.policy_latent), self.policy_mesh,
         (pp, pm, ps), (ps, ps, ps), ar, **shared_kwargs)
+    self._policy_stats = transform.apply(
+        nj.pure(self.model.policy_stats), self.train_mesh,
+        (self.actor_params_sharding, tm, ts), (ts,), ar,
+        single_output=True, **shared_kwargs)
+    self._posterior_chunk = transform.apply(
+        nj.pure(self.model.posterior_chunk), self.train_mesh,
+        (tp, tm, ts, ts, ts), (ts, ts), ar, **shared_kwargs)
+    self._critic_state = transform.apply(
+        nj.pure(self.model.critic_state), self.train_mesh,
+        (tp, tm, ts), (ts,), ar, single_output=True, **shared_kwargs)
+    self._critic_rollout = transform.apply(
+        nj.pure(self.model.critic_rollout), self.train_mesh,
+        (tp, tm, ts), (ts,), ar, single_output=True,
+        static_argnums=(3, 4), **shared_kwargs)
+    self._critic_recorded_rollout = transform.apply(
+        nj.pure(self.model.critic_recorded_rollout), self.train_mesh,
+        (tp, tm, ts, ts), (ts,), ar, single_output=True, **shared_kwargs)
     self._adapt = transform.apply(
         nj.pure(self.model.adapt), self.train_mesh,
         (dona_sharding, allo_sharding, tm, ts), (tp, ts, tm), ar,
         return_params=True, donate_params=True, first_outnums=(1,),
+        static_argnums=(4, 5),
         **shared_kwargs)
+    self._adapt_critic_horizon = transform.apply(
+        nj.pure(self.model.adapt_critic_horizon), self.train_mesh,
+        (dona_sharding, allo_sharding, tm, ts), (tp, ts, tm), ar,
+        return_params=True, donate_params=True, first_outnums=(1,),
+        static_argnums=(4, 5), **shared_kwargs)
 
     self.policy_lock = threading.Lock()
     self.train_lock = threading.Lock()
@@ -168,6 +200,8 @@ class Agent(embodied.Agent):
     self.n_batches = elements.Counter()
     self.n_actions = elements.Counter()
     self.n_adapt = elements.Counter()
+    self.n_model_updates = elements.Counter()
+    self.n_probes = elements.Counter()
 
     self.pending_outs = None
     self.pending_mets = None
@@ -308,9 +342,43 @@ class Agent(embodied.Agent):
 
     return carry, acts, outs
 
-  def adapt(self, params, carry, steps=1):
+  def adapt(self, params, carry, steps=1, warmup=False, freeze_critic=False):
     if steps < 1:
       return params, carry, {}
+    carry = internal.to_global(self._stack(carry), self.train_sharded)
+    warmup_mets = None
+    critic_enabled = (
+        bool(self.config.eval_adapt.train_critic) and not freeze_critic)
+    modes = ([True] if warmup and critic_enabled else []) + [False] * steps
+    for critic_only in modes:
+      allo = {k: v for k, v in params.items() if k in self.policy_keys}
+      dona = {k: v for k, v in params.items() if k not in self.policy_keys}
+      seed = self._seeds(self.n_adapt, self.train_mirrored)
+      self.n_adapt.increment()
+      with self.train_lock:
+        params, carry, mets = self._adapt(
+            dona, allo, seed, carry, critic_only, freeze_critic)
+      if critic_only:
+        warmup_mets = mets
+    carry = self._split(internal.to_local(carry))
+    mets = self._take_outs(internal.fetch_async(mets))
+    if warmup_mets is not None:
+      warmup_mets = self._take_outs(internal.fetch_async(warmup_mets))
+      mets.update({f'warmup/{key}': value for key, value in warmup_mets.items()})
+    mets['actor_steps'] = np.float32(steps)
+    mets['critic_steps'] = (
+        np.float32(steps + int(bool(warmup)))
+        if critic_enabled else np.float32(0))
+    mets['warmup'] = np.float32(bool(warmup) and critic_enabled)
+    return params, carry, mets
+
+  def adapt_critic(
+      self, params, carry, steps=1, horizon=None, start_batch=None):
+    """Apply critic-only rehearsal updates and never update the actor."""
+    if steps < 1:
+      return params, carry, {}
+    if not bool(self.config.eval_adapt.train_critic):
+      raise ValueError('adapt_critic requires eval_adapt.train_critic=True')
     carry = internal.to_global(self._stack(carry), self.train_sharded)
     for _ in range(steps):
       allo = {k: v for k, v in params.items() if k in self.policy_keys}
@@ -318,9 +386,78 @@ class Agent(embodied.Agent):
       seed = self._seeds(self.n_adapt, self.train_mirrored)
       self.n_adapt.increment()
       with self.train_lock:
-        params, carry, mets = self._adapt(dona, allo, seed, carry)
+        if horizon is None and start_batch is None:
+          params, carry, mets = self._adapt(
+              dona, allo, seed, carry, True, False)
+        else:
+          horizon = int(horizon or self.config.eval_adapt.imag_length)
+          start_batch = int(start_batch or self.config.eval_adapt.start_batch)
+          params, carry, mets = self._adapt_critic_horizon(
+              dona, allo, seed, carry, horizon, start_batch)
     carry = self._split(internal.to_local(carry))
-    return params, carry, self._take_outs(internal.fetch_async(mets))
+    mets = self._take_outs(internal.fetch_async(mets))
+    mets['actor_steps'] = np.float32(0)
+    mets['critic_steps'] = np.float32(steps)
+    return params, carry, mets
+
+  def adapt_persistent(
+      self, carry, steps=1, warmup=False, freeze_critic=False):
+    """Commit actor or critic-first rehearsal updates to the live agent."""
+    params, carry, mets = self.adapt(
+        self.params, carry, steps=steps, warmup=warmup,
+        freeze_critic=freeze_critic)
+    self.params = params
+    self._sync_policy_params()
+    return carry, mets
+
+  def critic_state(self, carry, params=None):
+    return self._probe(self._critic_state, carry, params)
+
+  def policy_stats(self, carry, actor_params=None):
+    if actor_params is None:
+      actor_params = {k: self.params[k] for k in self.actor_keys}
+    carry = internal.to_global(self._stack(carry), self.train_sharded)
+    seed = self._seeds(self.n_probes, self.train_mirrored)
+    self.n_probes.increment()
+    with self.train_lock:
+      outs = self._policy_stats(actor_params, seed, carry)
+    return self._take_outs(internal.fetch_async(outs))
+
+  def init_observe(self, batch_size):
+    return self.init_train(batch_size)[:2]
+
+  def posterior_chunk(self, carry, obs, prevact):
+    obs = internal.device_put(obs, self.train_sharded)
+    prevact = internal.device_put(prevact, self.train_sharded)
+    seed = self._seeds(self.n_probes, self.train_mirrored)
+    self.n_probes.increment()
+    with self.train_lock:
+      carry, outs = self._posterior_chunk(
+          self.params, seed, carry, obs, prevact)
+    return carry, self._take_outs(internal.fetch_async(outs))
+
+  def critic_rollout(self, carry, horizon=6, start_batch=1, params=None):
+    return self._probe(
+        self._critic_rollout, carry, params, int(horizon), int(start_batch))
+
+  def critic_recorded_rollout(self, carry, actions, params=None):
+    params = self.params if params is None else params
+    carry = internal.to_global(self._stack(carry), self.train_sharded)
+    actions = internal.device_put(actions, self.train_sharded)
+    seed = self._seeds(self.n_probes, self.train_mirrored)
+    self.n_probes.increment()
+    with self.train_lock:
+      outs = self._critic_recorded_rollout(params, seed, carry, actions)
+    return self._take_outs(internal.fetch_async(outs))
+
+  def _probe(self, fn, carry, params=None, *static):
+    params = self.params if params is None else params
+    carry = internal.to_global(self._stack(carry), self.train_sharded)
+    seed = self._seeds(self.n_probes, self.train_mirrored)
+    self.n_probes.increment()
+    with self.train_lock:
+      outs = fn(params, seed, carry, *static)
+    return self._take_outs(internal.fetch_async(outs))
 
   def clone_params(self):
     return jax.tree.map(lambda x: x.copy(), self.params)
@@ -328,6 +465,10 @@ class Agent(embodied.Agent):
   def extract_policy_params(self, params):
     policy_params = {k: params[k].copy() for k in self.policy_keys}
     return internal.move(policy_params, self.policy_params_sharding)
+
+  def extract_actor_params(self, params=None):
+    params = self.params if params is None else params
+    return {k: params[k].copy() for k in self.actor_keys}
 
   @elements.timer.section('jaxagent_train')
   def train(self, carry, data):
@@ -381,6 +522,22 @@ class Agent(embodied.Agent):
 
     return carry, return_outs, return_mets
 
+  @elements.timer.section('jaxagent_train_model')
+  def train_model(self, carry, data):
+    """Apply one synchronous world-model-only replay update."""
+    seed = data.pop('seed')
+    assert sorted(data.keys()) == sorted(self.spaces.keys()), (
+        sorted(data.keys()), sorted(self.spaces.keys()))
+    allo = {k: v for k, v in self.params.items() if k in self.policy_keys}
+    dona = {k: v for k, v in self.params.items() if k not in self.policy_keys}
+    with self.train_lock:
+      self.params, carry, outs, mets = self._train_model(
+          dona, allo, seed, carry, data)
+    self.n_model_updates.increment()
+    self._sync_policy_params()
+    outs, mets = self._take_outs(internal.fetch_async((outs, mets)))
+    return carry, outs, mets
+
   @elements.timer.section('jaxagent_report')
   def report(self, carry, data):
     seed = data.pop('seed')
@@ -417,6 +574,9 @@ class Agent(embodied.Agent):
         'updates': int(self.n_updates),
         'batches': int(self.n_batches),
         'actions': int(self.n_actions),
+        'adapt': int(self.n_adapt),
+        'model_updates': int(self.n_model_updates),
+        'probes': int(self.n_probes),
     }
     data = {'params': params, 'counters': counters}
     return data
@@ -435,9 +595,18 @@ class Agent(embodied.Agent):
       with self.n_batches.lock:
         # We restore n_batches to the checkpointed update counter, so the
         # prefetched batches that were not trained on get repeated.
-        self.n_batches.value = int(data['counters']['updates'])
+        self.n_batches.value = int(max(
+            data['counters']['updates'],
+            data['counters'].get('model_updates', 0)))
       with self.n_actions.lock:
         self.n_actions.value = int(data['counters']['actions'])
+      with self.n_adapt.lock:
+        self.n_adapt.value = int(data['counters'].get('adapt', 0))
+      with self.n_model_updates.lock:
+        self.n_model_updates.value = int(
+            data['counters'].get('model_updates', 0))
+      with self.n_probes.lock:
+        self.n_probes.value = int(data['counters'].get('probes', 0))
 
       if regex:
         params = {k: v for k, v in params.items() if re.match(regex, k)}
@@ -464,6 +633,21 @@ class Agent(embodied.Agent):
             k: self.params[k].copy() for k in self.policy_keys}
         self.policy_params = internal.move(
             policy_params, self.policy_params_sharding)
+
+  def _sync_policy_params(self):
+    if not self.jaxcfg.enable_policy:
+      return
+    with self.policy_lock:
+      policy_params = {
+          k: self.params[k].copy() for k in self.policy_keys}
+      policy_params = internal.move(
+          policy_params, self.policy_params_sharding)
+      old = self.policy_params
+      self.policy_params = policy_params
+      jax.tree.map(lambda x: x.delete(), old)
+      if self.pending_sync:
+        jax.tree.map(lambda x: x.delete(), self.pending_sync)
+        self.pending_sync = None
 
   def _take_outs(self, outs):
     outs = jax.tree.map(lambda x: x.__array__(), outs)

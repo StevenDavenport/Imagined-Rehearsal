@@ -244,7 +244,8 @@ def online_actor_repair_eval(config, persist_actor=False):
   policy_fps = elements.FPS()
 
   elements.checkpoint.load(args.from_checkpoint, dict(
-      agent=bind(agent.load, regex='^(?!adapt_opt/)')))
+      agent=bind(agent.load, regex=(
+          '^(?!(adapt_opt|adapt_actor_opt|adapt_critic_opt|model_opt)/)'))))
 
   online_params = None
   online_policy_params = None

@@ -19,7 +19,8 @@ class DMC(embodied.Env):
   )
 
   def __init__(
-      self, env, repeat=1, size=(64, 64), proprio=True, image=True, camera=-1):
+      self, env, repeat=1, size=(64, 64), proprio=True, image=True, camera=-1,
+      action_scale=1.0):
     if 'MUJOCO_GL' not in os.environ:
       os.environ['MUJOCO_GL'] = 'egl'
     if isinstance(env, str):
@@ -45,6 +46,10 @@ class DMC(embodied.Env):
     self._proprio = proprio
     self._image = image
     self._camera = camera
+    self._action_scale = float(action_scale)
+    if not 0.0 < self._action_scale <= 1.0:
+      raise ValueError(
+          f'action_scale must be in (0, 1], got {self._action_scale}')
 
   @functools.cached_property
   def obs_space(self):
@@ -61,9 +66,11 @@ class DMC(embodied.Env):
     return self._env.act_space
 
   def step(self, action):
+    action = action.copy()
     for key, space in self.act_space.items():
       if not space.discrete:
         assert np.isfinite(action[key]).all(), (key, action[key])
+        action[key] = action[key] * self._action_scale
     obs = self._env.step(action)
     basic = ('is_first', 'is_last', 'is_terminal', 'reward')
     if not self._proprio:

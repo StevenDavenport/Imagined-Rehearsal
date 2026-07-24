@@ -133,10 +133,12 @@ def train_eval(
 
   def maybe_adapt(carry, acts, outs, batch_shape):
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
+    first_trigger = adapt_params is None
     if adapt_params is None:
       adapt_params = agent.clone_params()
     adapt_params, carry, mets = agent.adapt(
-        adapt_params, carry, adapt_cfg.steps)
+        adapt_params, carry, adapt_cfg.steps,
+        warmup=(first_trigger and bool(adapt_cfg.train_critic)))
     adapt_policy_params = agent.extract_policy_params(adapt_params)
     carry, acts, _ = agent.policy_latent(carry, params=adapt_policy_params)
     steps_since_adapt = 0

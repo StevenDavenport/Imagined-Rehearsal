@@ -63,6 +63,7 @@ def main(argv=None):
       consec_train=config.consec_train,
       consec_report=config.consec_report,
       replay_context=config.replay_context,
+      cir=config.cir,
   )
 
   if config.script == 'train':
@@ -89,6 +90,15 @@ def main(argv=None):
     embodied.run.eval_only(
         bind(make_agent, config),
         bind(make_env, config),
+        bind(make_logger, config),
+        args)
+
+  elif config.script == 'cir':
+    embodied.run.cir(
+        bind(make_agent, config),
+        bind(make_replay, config, 'replay'),
+        bind(make_env, config),
+        bind(make_stream, config),
         bind(make_logger, config),
         args)
 
@@ -161,6 +171,8 @@ def make_logger(config):
       outputs.append(elements.logger.JSONLOutput(logdir, 'metrics.jsonl'))
       outputs.append(elements.logger.JSONLOutput(
           logdir, 'scores.jsonl', 'episode/score'))
+      outputs.append(elements.logger.JSONLOutput(
+          logdir, 'episodes.jsonl', 'episode/'))
     elif output == 'tensorboard':
       outputs.append(elements.logger.TensorBoardOutput(
           logdir, config.logger.fps))
@@ -230,6 +242,7 @@ def make_env(config, index, **overrides):
       'langroom': 'embodied.envs.langroom:LangRoom',
       'procgen': 'embodied.envs.procgen:ProcGen',
       'bsuite': 'embodied.envs.bsuite:BSuite',
+      'rlscape': 'embodied.envs.rlscape:RLScape',
       'memmaze': lambda task, **kw: from_gym.FromGym(
           f'MemoryMaze-{task}-v0', **kw),
   }[suite]
@@ -239,6 +252,9 @@ def make_env(config, index, **overrides):
     ctor = getattr(module, cls)
   kwargs = config.env.get(suite, {})
   kwargs.update(overrides)
+  if suite == 'rlscape' and not kwargs.get('audit_path'):
+    kwargs['audit_path'] = str(
+        elements.Path(config.logdir) / f'audit_env{index}.jsonl')
   if kwargs.pop('use_seed', False):
     kwargs['seed'] = hash((config.seed, index)) % (2 ** 32 - 1)
   if kwargs.pop('use_logdir', False):

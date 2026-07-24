@@ -76,20 +76,26 @@ def build_command(args: argparse.Namespace, outdir: Path, checkpoint: Path) -> l
       '--logger_filter', args.logger_filter,
       '--jax_platform', args.jax_platform,
       '--success_threshold', str(float(args.success_threshold)),
-      '--include_baseline',
-      '--baseline_name', args.baseline_name,
-      '--adapt_steps_grid', str(int(args.adapt_steps)),
-      '--adapt_imag_length_grid', str(int(args.adapt_imag_length)),
-      '--adapt_lr_grid', str(float(args.adapt_lr)),
-      '--adapt_every_k_grid', str(int(args.adapt_every_k)),
-      '--adapt_actent_grid', str(float(args.adapt_actent)),
-      '--adapt_start_batch_grid', args.adapt_start_batch_grid,
-      '--default_adapt_steps', str(int(args.adapt_steps)),
-      '--default_adapt_imag_length', str(int(args.adapt_imag_length)),
-      '--default_adapt_lr', str(float(args.adapt_lr)),
-      '--default_adapt_actent', str(float(args.adapt_actent)),
-      '--default_adapt_start_batch', str(int(parse_text_list(args.adapt_start_batch_grid)[0])),
   ]
+  if args.suite_json:
+    cmd.extend(['--suite_json', args.suite_json])
+  else:
+    cmd.extend([
+        '--include_baseline',
+        '--baseline_name', args.baseline_name,
+        '--adapt_steps_grid', str(int(args.adapt_steps)),
+        '--adapt_imag_length_grid', str(int(args.adapt_imag_length)),
+        '--adapt_lr_grid', str(float(args.adapt_lr)),
+        '--adapt_every_k_grid', str(int(args.adapt_every_k)),
+        '--adapt_actent_grid', str(float(args.adapt_actent)),
+        '--adapt_start_batch_grid', args.adapt_start_batch_grid,
+        '--default_adapt_steps', str(int(args.adapt_steps)),
+        '--default_adapt_imag_length', str(int(args.adapt_imag_length)),
+        '--default_adapt_lr', str(float(args.adapt_lr)),
+        '--default_adapt_actent', str(float(args.adapt_actent)),
+        '--default_adapt_start_batch', str(int(
+            parse_text_list(args.adapt_start_batch_grid)[0])),
+    ])
   if args.skip_existing:
     cmd.append('--skip_existing')
   if args.continue_on_error:
@@ -110,9 +116,12 @@ def annotate_rows(
     item['checkpoint'] = str(checkpoint)
     item['checkpoint_name'] = checkpoint.name
     item['corruption_method'] = manifest.get('method', '')
+    item['corruption_target'] = manifest.get('target', 'actor')
     item['corruption_scope'] = manifest.get('scope', '')
     item['corruption_strength'] = manifest.get('strength', '')
     item['corruption_relative_l2'] = manifest.get('relative_l2', '')
+    item['actor_relative_l2'] = manifest.get('actor_relative_l2', '')
+    item['critic_relative_l2'] = manifest.get('critic_relative_l2', '')
     out_rows.append(item)
   return out_rows
 
@@ -133,6 +142,7 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument('--jax_platform', default='cuda')
   parser.add_argument('--success_threshold', type=float, default=0.0)
   parser.add_argument('--baseline_name', default='baseline')
+  parser.add_argument('--suite_json', default='')
   parser.add_argument('--adapt_steps', type=int, default=1)
   parser.add_argument('--adapt_imag_length', type=int, default=5)
   parser.add_argument('--adapt_lr', type=float, default=1e-4)
@@ -195,9 +205,12 @@ def main() -> int:
         'returncode': returncode,
         'wall_seconds': time.time() - start,
         'corruption_method': manifest.get('method', ''),
+        'corruption_target': manifest.get('target', 'actor'),
         'corruption_scope': manifest.get('scope', ''),
         'corruption_strength': manifest.get('strength', ''),
         'corruption_relative_l2': manifest.get('relative_l2', ''),
+        'actor_relative_l2': manifest.get('actor_relative_l2', ''),
+        'critic_relative_l2': manifest.get('critic_relative_l2', ''),
     })
     write_csv(outdir / 'suite_runs.csv', suite_rows)
 
