@@ -39,7 +39,7 @@ defaults:
       use_seed: True
       goals: [kill_goblin, bury_bones, chop_logs, light_fire, catch_fish]
       goal_schedule: round_robin
-      package_version: '0.1.2'
+      package_version: '0.1.3'
       launch: True
       server_dir: ''
       server_runtime_dir: ''
@@ -49,6 +49,11 @@ defaults:
       username: agent
       resize: [240, 160]
       render_mode: rgb_array
+      camera_mode: birdseye
+      resize_filter: area
+      action_interface: mixed
+      grid_columns: 28
+      grid_rows: 18
       episode_length: 200
       reward_mode: sparse_success
       server_barrier: True
@@ -277,6 +282,12 @@ rlscape:
       count: 5
       canonicalize_noop_position: True
 
+rlscape_click_grid:
+  env.rlscape.action_interface: click_grid
+  env.rlscape.grid_columns: 28
+  env.rlscape.grid_rows: 18
+  agent.goal_conditioning.canonicalize_noop_position: False
+
 rlscape_smoke:
   env.rlscape.episode_length: 32
   batch_size: 4
@@ -296,6 +307,18 @@ rlscape_m1_pilot:
   replay.online: False
   run: {steps: 1000, envs: 1, train_ratio: 4, log_every: 30, report_every: 1000000, save_every: 60, ckpt_keep: 2, debug: True}
   jax: {platform: cpu, compute_dtype: float32, prealloc: False, precompile: False}
+  agent.report: False
+
+rlscape_m1_learnability:
+  <<: *size50m
+  env.rlscape.episode_length: 200
+  batch_size: 8
+  batch_length: 32
+  report_length: 32
+  replay.size: 200000
+  replay.online: False
+  run: {steps: 200000, envs: 1, train_ratio: 32, log_every: 300, report_every: 1000000, save_every: 1800, ckpt_keep: 3, debug: True}
+  jax: {platform: cuda, compute_dtype: bfloat16, prealloc: True, precompile: True}
   agent.report: False
 
 rlscape_m2_multitask:

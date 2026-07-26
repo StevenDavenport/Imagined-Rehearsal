@@ -21,6 +21,14 @@ concat = lambda xs, a: jax.tree.map(lambda *x: jnp.concatenate(x, a), *xs)
 isimage = lambda s: s.dtype == np.uint8 and len(s.shape) == 3
 
 
+def select_policy_action(policy, mode):
+  if mode == 'train':
+    return sample(policy)
+  if mode == 'eval':
+    return jax.tree.map(lambda dist: dist.pred(), policy)
+  raise ValueError(f'Unknown policy mode {mode!r}; expected train or eval')
+
+
 class Agent(embodied.jax.Agent):
 
   banner = [
@@ -173,7 +181,7 @@ class Agent(embodied.jax.Agent):
     if dec_carry:
       dec_carry, dec_entry, recons = self.dec(dec_carry, feat, reset, **kw)
     policy = self.pol(self._head_input(feat, goal), bdims=1)
-    act = self._canonical_action(sample(policy))
+    act = self._canonical_action(select_policy_action(policy, mode))
     out = {}
     out['finite'] = elements.tree.flatdict(jax.tree.map(
         lambda x: jnp.isfinite(x).all(range(1, x.ndim)),

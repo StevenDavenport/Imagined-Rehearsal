@@ -89,6 +89,40 @@ class FakeRLScape:
     return info
 
 
+class FakeClickGrid:
+
+  def __init__(self, columns=4, rows=3, outcomes=()):
+    self.columns = columns
+    self.rows = rows
+    self.action_space = SimpleNamespace(n=columns * rows)
+    self.env = FakeRLScape(outcomes)
+    self.observation_space = self.env.observation_space
+
+  def reset(self, *args, **kwargs):
+    return self.env.reset(*args, **kwargs)
+
+  def step(self, action):
+    row, column = divmod(int(action), self.columns)
+    position = np.asarray([
+        2 * (column + 0.5) / self.columns - 1,
+        2 * (row + 0.5) / self.rows - 1,
+    ], np.float32)
+    return self.env.step({'mode': np.int32(2), 'position': position})
+
+  def grid_coordinates(self, action):
+    row, column = divmod(int(action), self.columns)
+    return column, row
+
+  def create_snapshot(self):
+    return self.env.create_snapshot()
+
+  def restore_snapshot(self, snapshot_id):
+    return self.env.restore_snapshot(snapshot_id)
+
+  def close(self):
+    self.env.close()
+
+
 def action(mode=0, position=(0.75, -0.5), reset=False):
   return {
       'mode': np.int32(mode),
@@ -104,7 +138,7 @@ def make_adapter(fake, **kwargs):
 
 
 def test_adapter_targets_episode_isolated_rlscape_release():
-  assert EXPECTED_VERSION == '0.1.2'
+  assert EXPECTED_VERSION == '0.1.3'
 
 
 def test_canonical_action_is_pure_and_zeroes_noop_position():
@@ -187,6 +221,46 @@ def test_adapter_executes_canonical_action_and_audits_it():
   assert obs['log/action_position_abs'] == 0
   row = env.pop_audit()[-1]
   assert row['requested_action'] == {'mode': 0, 'position': [0.0, 0.0]}
+
+
+def test_click_grid_exposes_one_discrete_action_and_audits_canonical_click():
+  fake = FakeClickGrid(columns=4, rows=3, outcomes=[{'truncated': True}])
+  env = make_adapter(
+      fake, action_interface='click_grid', grid_columns=4, grid_rows=3)
+  assert set(env.act_space) == {'action', 'reset'}
+  assert env.act_space['action'].discrete
+  assert int(env.act_space['action'].classes) == 12
+
+  env.step({'action': np.int32(0), 'reset': True})
+  obs = env.step({'action': np.int32(5), 'reset': False})
+
+  assert fake.env.actions[-1]['mode'] == 2
+  np.testing.assert_allclose(fake.env.actions[-1]['position'], [-0.25, 0.0])
+  assert obs['log/action_grid_valid'] == 1
+  assert obs['log/action_grid_index'] == 5
+  assert obs['log/action_grid_column'] == 1
+  assert obs['log/action_grid_row'] == 1
+  assert obs['log/action_mode_2'] == 1
+  row = env.pop_audit()[-1]
+  assert row['requested_action'] == {
+      'interface': 'click_grid',
+      'index': 5,
+      'column': 1,
+      'row': 1,
+      'columns': 4,
+      'rows': 3,
+  }
+  assert row['executed_action']['mode'] == 2
+
+
+@pytest.mark.parametrize('value', [-1, 12, 1.5, np.asarray([1])])
+def test_click_grid_rejects_invalid_policy_actions(value):
+  fake = FakeClickGrid(columns=4, rows=3)
+  env = make_adapter(
+      fake, action_interface='click_grid', grid_columns=4, grid_rows=3)
+  env.step({'action': np.int32(0), 'reset': True})
+  with pytest.raises(ValueError):
+    env.step({'action': value, 'reset': False})
 
 
 def test_adapter_streams_audit_without_retaining_it(tmp_path):

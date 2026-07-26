@@ -2,6 +2,26 @@ import jax.numpy as jnp
 import numpy as np
 
 from dreamerv3.agent import Agent
+from dreamerv3.agent import select_policy_action
+
+
+class _Distribution:
+
+  def __init__(self, prediction):
+    self.prediction = prediction
+
+  def pred(self):
+    return self.prediction
+
+
+def test_eval_policy_uses_deterministic_distribution_predictions():
+  policy = {
+      'action': _Distribution(jnp.asarray([3, 1], jnp.int32)),
+  }
+
+  action = select_policy_action(policy, 'eval')
+
+  np.testing.assert_array_equal(action['action'], [3, 1])
 
 
 def test_head_input_is_deter_stoch_goal_onehot():

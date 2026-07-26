@@ -13,7 +13,8 @@ import embodied
 import numpy as np
 
 
-EXPECTED_VERSION = '0.1.2'
+EXPECTED_VERSION = '0.1.3'
+ACTION_INTERFACES = ('mixed', 'click_grid')
 GOAL_NAMES = (
     'kill_goblin',
     'bury_bones',
@@ -51,7 +52,7 @@ def canonical_action(action):
 
 
 class RLScape(embodied.Env):
-  """Translate RLScape v0.1.2 into the flat Embodied environment contract."""
+  """Translate RLScape v0.1.3 into the flat Embodied environment contract."""
 
   def __init__(
       self,
@@ -70,6 +71,11 @@ class RLScape(embodied.Env):
       username='agent',
       resize=(240, 160),
       render_mode='rgb_array',
+      camera_mode='birdseye',
+      resize_filter='area',
+      action_interface='mixed',
+      grid_columns=28,
+      grid_rows=18,
       episode_length=200,
       reward_mode='sparse_success',
       server_barrier=True,
@@ -83,6 +89,15 @@ class RLScape(embodied.Env):
   ):
     self._seed = int(seed)
     self._rng = np.random.default_rng(self._seed)
+    self._action_interface = str(action_interface)
+    if self._action_interface not in ACTION_INTERFACES:
+      raise ValueError(
+          f'action_interface must be one of {ACTION_INTERFACES}, '
+          f'got {self._action_interface!r}')
+    self._grid_columns = int(grid_columns)
+    self._grid_rows = int(grid_rows)
+    if self._grid_columns <= 0 or self._grid_rows <= 0:
+      raise ValueError('grid_columns and grid_rows must be positive')
     self._schedule = str(goal_schedule)
     if self._schedule not in ('fixed', 'round_robin', 'random'):
       raise ValueError(
@@ -117,12 +132,15 @@ class RLScape(embodied.Env):
           raise RuntimeError(
               f'RLScape version mismatch: expected {package_version}, '
               f'found {installed}')
+      from rl_scape import ClickGridActionWrapper
       from rl_scape import RLScapeEnv
       kwargs = dict(
           launch=bool(launch),
           username=str(username),
           resize=tuple(int(x) for x in resize),
           render_mode=str(render_mode),
+          camera_mode=str(camera_mode),
+          resize_filter=str(resize_filter),
           episode_length=int(episode_length),
           reward_mode=str(reward_mode),
           server_barrier=bool(server_barrier),
@@ -142,6 +160,9 @@ class RLScape(embodied.Env):
         if mvn_path:
           os.environ['RL_SCAPE_MVN'] = str(mvn_path)
         env = RLScapeEnv(**kwargs)
+        if self._action_interface == 'click_grid':
+          env = ClickGridActionWrapper(
+              env, columns=self._grid_columns, rows=self._grid_rows)
       finally:
         if mvn_path:
           if previous_mvn is None:
@@ -149,6 +170,18 @@ class RLScape(embodied.Env):
           else:
             os.environ['RL_SCAPE_MVN'] = previous_mvn
     self._env = env
+    self._raw_env = getattr(self._env, 'unwrapped', self._env)
+    if self._action_interface == 'click_grid':
+      action_space = getattr(self._env, 'action_space', None)
+      grid_actions = getattr(action_space, 'n', None)
+      expected = self._grid_columns * self._grid_rows
+      if grid_actions is None or int(grid_actions) != expected:
+        raise ValueError(
+            'click_grid requires an environment exposing '
+            f'Discrete({expected}), got {action_space!r}')
+      self._grid_actions = expected
+    else:
+      self._grid_actions = None
 
     shape = tuple(int(x) for x in self._env.observation_space.shape)
     if len(shape) != 3 or shape[-1] != 3:
@@ -188,10 +221,20 @@ class RLScape(embodied.Env):
         'log/action_mode_2': elements.Space(np.float32),
         'log/action_mode_3': elements.Space(np.float32),
         'log/action_position_abs': elements.Space(np.float32),
+        'log/action_grid_valid': elements.Space(np.float32),
+        'log/action_grid_index': elements.Space(np.float32),
+        'log/action_grid_column': elements.Space(np.float32),
+        'log/action_grid_row': elements.Space(np.float32),
     }
 
   @property
   def act_space(self):
+    if self._action_interface == 'click_grid':
+      return {
+          'action': elements.Space(
+              np.int32, (), 0, self._grid_actions),
+          'reset': elements.Space(bool),
+      }
     return {
         'mode': elements.Space(np.int32, (), 0, 4),
         'position': elements.Space(np.float32, (2,), -1, 1),
@@ -200,7 +243,7 @@ class RLScape(embodied.Env):
 
   @property
   def raw_env(self):
-    return self._env
+    return self._raw_env
 
   @property
   def last_info(self):
@@ -217,14 +260,14 @@ class RLScape(embodied.Env):
   def step(self, action):
     if bool(np.asarray(action['reset'])) or self._done:
       return self._reset()
-    canonical = canonical_action(action)
-    observation, reward, terminated, truncated, info = self._env.step(canonical)
+    requested = self._canonical_policy_action(action)
+    observation, reward, terminated, truncated, info = self._env.step(requested)
     self._last_info = copy.deepcopy(info)
     self._done = bool(terminated or truncated)
     success = bool(info.get('task_success', False))
     reason = info.get('termination_reason')
     physical = bool(reason == 'player_death')
-    self._append_audit('step', info, canonical)
+    self._append_audit('step', info, requested)
     return self._obs(
         observation,
         reward,
@@ -234,7 +277,8 @@ class RLScape(embodied.Env):
         is_physical_terminal=physical,
         goal_complete=success,
         task_progress=info.get('task_progress', 0),
-        action=canonical,
+        action=requested,
+        executed_action=info.get('executed_action'),
     )
 
   def close(self):
@@ -246,10 +290,10 @@ class RLScape(embodied.Env):
         self._audit_handle = None
 
   def create_snapshot(self):
-    return self._env.create_snapshot()
+    return self._raw_env.create_snapshot()
 
   def restore_snapshot(self, snapshot_id):
-    observation, info = self._env.restore_snapshot(snapshot_id)
+    observation, info = self._raw_env.restore_snapshot(snapshot_id)
     self._last_info = copy.deepcopy(info)
     task_id = info.get('task_id', self._task_id)
     if task_id is not None:
@@ -315,6 +359,7 @@ class RLScape(embodied.Env):
       goal_complete=False,
       task_progress=0,
       action=None,
+      executed_action=None,
   ):
     observation = np.asarray(observation)
     if observation.dtype != np.uint8 or observation.shape != self._shape:
@@ -323,10 +368,24 @@ class RLScape(embodied.Env):
           f'got {observation.dtype}{observation.shape}')
     if self._goal_id is None:
       raise RuntimeError('RLScape goal is unavailable before reset metadata')
-    action_mode = -1 if action is None else int(action['mode'])
-    action_position = (
-        np.zeros((2,), np.float32) if action is None
-        else np.asarray(action['position'], np.float32))
+    action_mode = -1
+    action_position = np.zeros((2,), np.float32)
+    grid_valid = False
+    grid_index = 0
+    grid_column = 0
+    grid_row = 0
+    if action is not None:
+      if self._action_interface == 'click_grid':
+        grid_valid = True
+        grid_index = int(action)
+        grid_column, grid_row = self._grid_coordinates(grid_index)
+        if executed_action is not None:
+          action_mode = int(executed_action['mode'])
+          action_position = np.asarray(
+              executed_action['position'], np.float32)
+      else:
+        action_mode = int(action['mode'])
+        action_position = np.asarray(action['position'], np.float32)
     return {
         'image': observation,
         'reward': np.float32(reward),
@@ -345,7 +404,35 @@ class RLScape(embodied.Env):
             for index in range(4)
         },
         'log/action_position_abs': np.float32(np.abs(action_position).mean()),
+        'log/action_grid_valid': np.float32(grid_valid),
+        'log/action_grid_index': np.float32(grid_index),
+        'log/action_grid_column': np.float32(grid_column),
+        'log/action_grid_row': np.float32(grid_row),
     }
+
+  def _canonical_policy_action(self, action):
+    if self._action_interface == 'mixed':
+      return canonical_action(action)
+    value = np.asarray(action['action'])
+    if value.shape != ():
+      raise ValueError(
+          f'RLScape click-grid action must be scalar, got {value.shape}')
+    if not np.issubdtype(value.dtype, np.integer):
+      raise ValueError(
+          f'RLScape click-grid action must be integer, got {value.dtype}')
+    index = int(value)
+    if not 0 <= index < self._grid_actions:
+      raise ValueError(
+          f'RLScape click-grid action must be in [0, {self._grid_actions}), '
+          f'got {index}')
+    return index
+
+  def _grid_coordinates(self, action):
+    if hasattr(self._env, 'grid_coordinates'):
+      column, row = self._env.grid_coordinates(action)
+      return int(column), int(row)
+    row, column = divmod(int(action), self._grid_columns)
+    return column, row
 
   def _append_audit(self, kind, info, action=None, **extra):
     frame_identity = copy.deepcopy(info.get('frame_identity'))
@@ -369,10 +456,21 @@ class RLScape(embodied.Env):
         **copy.deepcopy(extra),
     }
     if action is not None:
-      row['requested_action'] = {
-          'mode': int(action['mode']),
-          'position': np.asarray(action['position']).tolist(),
-      }
+      if self._action_interface == 'click_grid':
+        column, grid_row = self._grid_coordinates(action)
+        row['requested_action'] = {
+            'interface': 'click_grid',
+            'index': int(action),
+            'column': column,
+            'row': grid_row,
+            'columns': self._grid_columns,
+            'rows': self._grid_rows,
+        }
+      else:
+        row['requested_action'] = {
+            'mode': int(action['mode']),
+            'position': np.asarray(action['position']).tolist(),
+        }
     if self._audit_handle is None:
       self._audit.append(row)
     else:

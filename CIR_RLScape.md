@@ -1,10 +1,10 @@
-We are beginning a new CIR experiment programme integrating the CIR repository with RLScape v0.1.1.
+We are beginning a new CIR experiment programme integrating the CIR repository with RLScape v0.1.3.
 
 Repository in scope:
 - CIR: /home/staff/steven/crl_ir
 
 Environment dependency:
-- Python package: rl-scape==0.1.1
+- Python package: rl-scape==0.1.3
 - RLScape repository, if local inspection is useful: /home/staff/steven/RLScape
 
 This turn is for repository inspection, architectural design, and a concrete implementation plan. Do not begin broad implementation yet. You may add or update one repository planning document after inspecting existing documentation, but do not duplicate an existing plan.
@@ -32,8 +32,8 @@ We are building the simplest defensible bridge from working imagined rehearsal t
 
 1. integrate RLScape correctly;
 2. establish single-task learnability;
-3. establish a joint multitask upper bound;
-4. establish naive sequential learning and forgetting;
+3. establish naive sequential learning and forgetting;
+4. retain joint multitask training as an optional later upper bound;
 5. add fixed reservoir replay as the continual world-model substrate;
 6. test temporary evaluation-time actor-only imagined rehearsal;
 7. consider persistent actor CIR only if evaluation-time IR produces a positive result.
@@ -44,7 +44,7 @@ Can a shared retained world model support temporary actor-only imagined rehearsa
 
 Do not implement critic adaptation, learned compute gates, task-free context inference, semantic language rewards, or persistent CIR in the first vertical slice.
 
-# RLScape v0.1.1 contract
+# RLScape v0.1.3 contract
 
 RLScape currently provides:
 
@@ -60,6 +60,9 @@ RLScape currently provides:
 - a canonical mixed action:
   - mode: Discrete(4), representing noop, move, left click, and right click;
   - position: Box(-1, 1, shape=(2,)), representing normalized absolute image coordinates;
+- an optional flat `Discrete(columns * rows)` click-grid wrapper whose actions
+  are left clicks at cell centres, with a default 28x18 grid;
+- a fixed north-up bird's-eye camera and area-filtered resizing;
 - sparse +1 task-success reward or reward-free mode;
 - task success, progress, factual events, death, and termination diagnostics;
 - task resets and seeded lifetime resets;
@@ -155,19 +158,18 @@ Goal identity must remain constant and auditable within an episode.
 
 Check whether environment info fields such as task_success, termination_reason, task_id, snapshot ID, transition identity, and barrier tag survive the current Embodied wrappers. Recommend which belong in replay, metrics only, or dataset audit records.
 
-# Mixed-action audit
+# Action-space decision
 
-RLScape uses a Dict action containing discrete mode plus continuous position.
+The original mixed action remains supported for compatibility. The current
+single-task learnability gate deliberately uses RLScape 0.1.3's public flat
+click-grid wrapper. Every policy action is one left click at a row-major cell
+centre; there are no move, right-click, or explicit wait actions. Harmless
+screen clicks provide implicit waiting.
 
-Inspect whether the current Dreamer/Embodied actor, distributions, replay, policy output, random policy, and environment wrappers support this mixed action natively.
-
-If they do not, compare the smallest principled options:
-
-- a factored actor with categorical mode and continuous coordinates;
-- an explicit adapter using RLScape’s fixed grid action space;
-- another minimal representation that does not encode task solutions.
-
-Do not silently flatten the action into a huge categorical variable. Do not introduce grounded entities or high-level options in the initial implementation unless raw/fixed-grid control cannot establish single-task learning.
+The first configured grid is 28x18 (504 actions), but grid dimensions remain
+part of the recorded experiment specification and may change after live manual
+coverage tests. This is a deliberate, auditable categorical action choice, not
+an implicit flattening performed inside Dreamer.
 
 # Replay design
 
@@ -255,7 +257,7 @@ Do not add critic-first adaptation. The previous Cheetah pilot showed circular c
 Design the repository changes around these runnable milestones:
 
 Milestone 0 — integration smoke
-- install/import RLScape v0.1.1;
+- install/import RLScape v0.1.3;
 - reset one named task;
 - pass goal metadata to the policy;
 - execute valid actions;
@@ -264,35 +266,37 @@ Milestone 0 — integration smoke
 
 Milestone 1 — single-task learning
 - one configuration per released goal;
-- multiple seeds;
-- success rate, learning AUC, ticks/actions to success;
-- determine whether canonical mouse control is learnable;
+- one seed for the initial capability check;
+- a fresh 50M Dreamer agent for each goal;
+- 200,000 environment steps per goal, resumable to a larger fixed target;
+- 20 deterministic held-out episodes at the resulting checkpoint;
+- success rate, final-window success, and steps/actions to first success;
+- determine whether click-grid control is learnable;
 - no CIR and no reservoir replay.
 
-Milestone 2 — joint multitask upper bound
-- random goal per episode;
-- shared goal-conditioned model and behaviour heads;
-- verifies that conditioning and shared capacity can solve the selected tasks.
-
-Milestone 3 — naive sequential baseline
+Milestone 2 — naive sequential baseline
 - fixed A->B->C->A blocks;
 - FIFO replay;
 - phase-by-goal evaluation matrix;
 - quantify forgetting, transfer, and recurrence.
 
-Milestone 4 — retained-model baseline
+Milestone 3 — retained-model baseline
 - identical stream and compute;
 - episode-level reservoir replay;
 - no IR;
 - determine whether the model and critic remain serviceable and whether actor headroom remains.
 
-Milestone 5 — evaluation-time actor IR
+Milestone 4 — evaluation-time actor IR
 - frozen versus single-start IR versus MCPB;
 - paired evaluation clones and seeds;
 - temporary actor only;
 - no persistent parameter changes.
 
 Persistent actor CIR is a later decision, not part of this implementation plan.
+
+The random-goal joint multitask learner is retained as an optional upper-bound
+control, but it is not a prerequisite for beginning the sequential experiment
+once all five independent agents pass the learnability gate.
 
 # Metrics and controls
 

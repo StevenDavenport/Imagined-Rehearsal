@@ -36,19 +36,33 @@ def build_command(
     seed: int,
     episodes: int,
     episode_length: int,
+    action_interface: str = 'mixed',
+    grid_columns: int = 28,
+    grid_rows: int = 18,
     mvn_path: str = '',
     java_home: str = '',
 ) -> list[str]:
+  configs = ['rlscape']
+  if action_interface == 'click_grid':
+    configs.append('rlscape_click_grid')
+  elif action_interface != 'mixed':
+    raise ValueError(f'Unknown action interface {action_interface!r}')
+  configs.extend((f'rlscape_{goal}', 'rlscape_m2_eval'))
   command = [
       str(python),
       str(repo_root / 'dreamerv3' / 'main.py'),
-      '--configs', 'rlscape', f'rlscape_{goal}', 'rlscape_m2_eval',
+      '--configs', *configs,
       '--seed', str(seed),
       '--logdir', str(logdir),
       '--run.from_checkpoint', str(checkpoint),
       '--run.eval_episodes', str(episodes),
       '--env.rlscape.episode_length', str(episode_length),
   ]
+  if action_interface == 'click_grid':
+    command += [
+        '--env.rlscape.grid_columns', str(grid_columns),
+        '--env.rlscape.grid_rows', str(grid_rows),
+    ]
   if mvn_path:
     command += ['--env.rlscape.mvn_path', mvn_path]
   if java_home:
@@ -107,6 +121,10 @@ def parse_args(argv=None) -> argparse.Namespace:
   parser.add_argument('--episodes', type=int, default=20)
   parser.add_argument('--episode-length', type=int, default=200)
   parser.add_argument(
+      '--action-interface', choices=('mixed', 'click_grid'), default='mixed')
+  parser.add_argument('--grid-columns', type=int, default=28)
+  parser.add_argument('--grid-rows', type=int, default=18)
+  parser.add_argument(
       '--mvn-path', default=os.environ.get(
           'RL_SCAPE_MVN', shutil.which('mvn') or ''))
   parser.add_argument(
@@ -125,6 +143,8 @@ def validate_args(args: argparse.Namespace) -> None:
     raise ValueError('--episodes must be positive')
   if args.episode_length <= 0:
     raise ValueError('--episode-length must be positive')
+  if args.grid_columns <= 0 or args.grid_rows <= 0:
+    raise ValueError('grid dimensions must be positive')
   if not args.python.exists():
     raise FileNotFoundError(args.python)
   if not (args.repo_root / 'dreamerv3' / 'main.py').exists():
@@ -148,6 +168,9 @@ def main(argv=None) -> int:
       'seed': args.seed,
       'episodes_per_goal': args.episodes,
       'episode_length': args.episode_length,
+      'action_interface': args.action_interface,
+      'grid_columns': args.grid_columns,
+      'grid_rows': args.grid_rows,
       'policy_mode': 'eval',
       'actor_ir': False,
       'runs': [],
@@ -164,6 +187,9 @@ def main(argv=None) -> int:
         'seed': args.seed,
         'episodes': args.episodes,
         'episode_length': args.episode_length,
+        'action_interface': args.action_interface,
+        'grid_columns': args.grid_columns,
+        'grid_rows': args.grid_rows,
         'policy_mode': 'eval',
         'actor_ir': False,
     }
@@ -199,6 +225,9 @@ def main(argv=None) -> int:
         seed=args.seed,
         episodes=args.episodes,
         episode_length=args.episode_length,
+        action_interface=args.action_interface,
+        grid_columns=args.grid_columns,
+        grid_rows=args.grid_rows,
         mvn_path=args.mvn_path,
         java_home=args.java_home,
     )
