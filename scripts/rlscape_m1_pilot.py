@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib.metadata
 import json
 import os
 import pathlib
@@ -40,6 +41,7 @@ TRAINING_SPEC_KEYS = (
     'batch_size',
     'replay_size',
     'model_size',
+    'rlscape_version',
     'action_interface',
     'grid_columns',
     'grid_rows',
@@ -425,6 +427,7 @@ def main(argv=None) -> int:
       'batch_size': args.batch_size,
       'replay_size': args.replay_size,
       'model_size': '50m',
+      'rlscape_version': importlib.metadata.version('rl-scape'),
       'action_interface': 'click_grid',
       'grid_columns': args.grid_columns,
       'grid_rows': args.grid_rows,

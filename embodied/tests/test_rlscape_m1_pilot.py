@@ -151,6 +151,7 @@ def test_training_spec_allows_only_target_step_extension():
 
   assert pilot.spec_digest(first) == pilot.spec_digest(extended)
   assert 'target_steps' not in first
+  assert 'rlscape_version' in first
 
 
 def test_main_trains_evaluates_and_extends_same_run(
