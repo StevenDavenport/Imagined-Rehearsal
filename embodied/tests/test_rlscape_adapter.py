@@ -138,7 +138,7 @@ def make_adapter(fake, **kwargs):
 
 
 def test_adapter_targets_episode_isolated_rlscape_release():
-  assert EXPECTED_VERSION == '0.1.3'
+  assert EXPECTED_VERSION == '0.1.4'
 
 
 def test_canonical_action_is_pure_and_zeroes_noop_position():
