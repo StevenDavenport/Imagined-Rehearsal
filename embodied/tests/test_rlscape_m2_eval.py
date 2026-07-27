@@ -30,7 +30,7 @@ def test_single_task_learnability_config_uses_click_grid_gpu_budget():
   path = pathlib.Path(__file__).parents[2] / 'dreamerv3' / 'configs.yaml'
   configs = yaml.YAML(typ='safe').load(path.read_text())
 
-  assert configs['defaults']['env']['rlscape']['package_version'] == '0.1.4'
+  assert configs['defaults']['env']['rlscape']['package_version'] == '0.1.5'
   assert configs['rlscape_click_grid']['env.rlscape.action_interface'] == (
       'click_grid')
   config = configs['rlscape_m1_learnability']

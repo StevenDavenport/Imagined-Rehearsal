@@ -1,10 +1,10 @@
-We are beginning a new CIR experiment programme integrating the CIR repository with RLScape v0.1.4.
+We are beginning a new CIR experiment programme integrating the CIR repository with RLScape v0.1.5.
 
 Repository in scope:
 - CIR: /home/staff/steven/crl_ir
 
 Environment dependency:
-- Python package: rl-scape==0.1.4
+- Python package: rl-scape==0.1.5
 - RLScape repository, if local inspection is useful: /home/staff/steven/RLScape
 
 This turn is for repository inspection, architectural design, and a concrete implementation plan. Do not begin broad implementation yet. You may add or update one repository planning document after inspecting existing documentation, but do not duplicate an existing plan.
@@ -44,7 +44,7 @@ Can a shared retained world model support temporary actor-only imagined rehearsa
 
 Do not implement critic adaptation, learned compute gates, task-free context inference, semantic language rewards, or persistent CIR in the first vertical slice.
 
-# RLScape v0.1.4 contract
+# RLScape v0.1.5 contract
 
 RLScape currently provides:
 
@@ -161,7 +161,7 @@ Check whether environment info fields such as task_success, termination_reason, 
 # Action-space decision
 
 The original mixed action remains supported for compatibility. The current
-single-task learnability gate deliberately uses RLScape 0.1.4's public flat
+single-task learnability gate deliberately uses RLScape 0.1.5's public flat
 click-grid wrapper. Every policy action is one left click at a row-major cell
 centre; there are no move, right-click, or explicit wait actions. Harmless
 screen clicks provide implicit waiting.
@@ -257,7 +257,7 @@ Do not add critic-first adaptation. The previous Cheetah pilot showed circular c
 Design the repository changes around these runnable milestones:
 
 Milestone 0 — integration smoke
-- install/import RLScape v0.1.4;
+- install/import RLScape v0.1.5;
 - reset one named task;
 - pass goal metadata to the policy;
 - execute valid actions;

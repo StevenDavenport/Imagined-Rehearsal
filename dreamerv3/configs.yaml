@@ -39,7 +39,7 @@ defaults:
       use_seed: True
       goals: [kill_goblin, bury_bones, chop_logs, light_fire, catch_fish]
       goal_schedule: round_robin
-      package_version: '0.1.4'
+      package_version: '0.1.5'
       launch: True
       server_dir: ''
       server_runtime_dir: ''
