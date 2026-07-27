@@ -13,7 +13,7 @@ import embodied
 import numpy as np
 
 
-EXPECTED_VERSION = '0.1.5'
+EXPECTED_VERSION = '0.1.6'
 ACTION_INTERFACES = ('mixed', 'click_grid')
 GOAL_NAMES = (
     'kill_goblin',
@@ -52,7 +52,7 @@ def canonical_action(action):
 
 
 class RLScape(embodied.Env):
-  """Translate RLScape v0.1.5 into the flat Embodied environment contract."""
+  """Translate RLScape v0.1.6 into the flat Embodied environment contract."""
 
   def __init__(
       self,
