@@ -1,5 +1,6 @@
 import contextlib
 import dataclasses
+import hashlib
 import re
 import threading
 import time
@@ -164,7 +165,8 @@ class Agent(embodied.Agent):
         static_argnums=(4,), **shared_kwargs)
     self._policy_latent = transform.apply(
         nj.pure(self.model.policy_latent), self.policy_mesh,
-        (pp, pm, ps), (ps, ps, ps), ar, **shared_kwargs)
+        (pp, pm, ps), (ps, ps, ps), ar, static_argnums=(3,),
+        **shared_kwargs)
     self._policy_stats = transform.apply(
         nj.pure(self.model.policy_stats), self.train_mesh,
         (self.actor_params_sharding, tm, ts), (ts,), ar,
@@ -305,7 +307,7 @@ class Agent(embodied.Agent):
     return carry, acts, outs
 
   @elements.timer.section('jaxagent_policy_latent')
-  def policy_latent(self, carry, params=None):
+  def policy_latent(self, carry, params=None, mode='train'):
     if not self.jaxcfg.enable_policy:
       raise Exception('Policy not available when enable_policy=False')
 
@@ -318,7 +320,7 @@ class Agent(embodied.Agent):
 
     with self.policy_lock:
       params = params or self.policy_params
-      carry, acts, outs = self._policy_latent(params, seed, carry)
+      carry, acts, outs = self._policy_latent(params, seed, carry, mode)
 
     if self.jaxcfg.enable_policy:
       with self.policy_lock:
@@ -469,6 +471,53 @@ class Agent(embodied.Agent):
   def extract_actor_params(self, params=None):
     params = self.params if params is None else params
     return {k: params[k].copy() for k in self.actor_keys}
+
+  def discard_params(self, params):
+    """Release temporary device buffers created for evaluation adaptation."""
+    if params is not None:
+      jax.tree.map(
+          lambda value: value.delete() if hasattr(value, 'delete') else None,
+          params)
+
+  def parameter_digests(self):
+    """Return stable digests used to prove evaluation did not mutate state."""
+    params = self.save()['params']
+    groups = {
+        'all': [],
+        'actor': [],
+        'critic': [],
+        'world_model': [],
+        'normalizers': [],
+        'optimizers': [],
+    }
+    for key in sorted(params):
+      groups['all'].append(key)
+      if key.startswith('pol/'):
+        groups['actor'].append(key)
+      if key.startswith(('val/', 'slowval/')):
+        groups['critic'].append(key)
+      if key.startswith(('enc/', 'dyn/', 'dec/', 'rew/', 'con/')):
+        groups['world_model'].append(key)
+      if key.startswith(('retnorm/', 'valnorm/', 'advnorm/')):
+        groups['normalizers'].append(key)
+      if '/opt/' in key or key.startswith((
+          'opt/', 'model_opt/', 'adapt_opt/', 'adapt_actor_opt/',
+          'adapt_critic_opt/')):
+        groups['optimizers'].append(key)
+    result = {}
+    for group, keys in groups.items():
+      digest = hashlib.sha256()
+      for key in keys:
+        value = np.asarray(params[key])
+        digest.update(key.encode())
+        digest.update(str(value.dtype).encode())
+        digest.update(str(tuple(value.shape)).encode())
+        digest.update(value.tobytes(order='C'))
+      result[group] = {
+          'sha256': digest.hexdigest(),
+          'arrays': len(keys),
+      }
+    return result
 
   @elements.timer.section('jaxagent_train')
   def train(self, carry, data):

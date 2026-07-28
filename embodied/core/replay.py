@@ -1,4 +1,8 @@
 import threading
+import hashlib
+import os
+import pathlib
+import shutil
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial as bind
@@ -46,6 +50,7 @@ class Replay:
       self.directory.mkdir()
       self.workers = ThreadPoolExecutor(16, 'replay_saver')
       self.saved = set()
+      self.save_promises = []
     else:
       self.directory = None
     self.save_wait = save_wait
@@ -292,7 +297,7 @@ class Replay:
     return data
 
   @elements.timer.section('replay_save')
-  def save(self):
+  def save(self, wait=None):
     if self.directory:
       with self.rwlock.writing:
         for worker, (chunkid, _) in self.current.items():
@@ -304,9 +309,64 @@ class Replay:
           if chunk.length > 0 and chunk.uuid not in self.saved:
             self.saved.add(chunk.uuid)
             promises.append(self.workers.submit(chunk.save, self.directory))
-        if self.save_wait:
-          [promise.result() for promise in promises]
+        self.save_promises.extend(promises)
+        pending = []
+        for promise in self.save_promises:
+          if promise.done():
+            promise.result()
+          else:
+            pending.append(promise)
+        self.save_promises = pending
+        should_wait = self.save_wait if wait is None else bool(wait)
+        if should_wait:
+          [promise.result() for promise in self.save_promises]
+          self.save_promises.clear()
     return None
+
+  @elements.timer.section('replay_export')
+  def export(self, directory, link=True):
+    """Export the exact active FIFO chunks into a self-contained directory."""
+    if not self.directory:
+      raise ValueError('Replay export requires a persistent source directory')
+    destination = pathlib.Path(directory)
+    if destination.exists() and any(destination.iterdir()):
+      raise FileExistsError(
+          f'Replay export destination is not empty: {destination}')
+    destination.mkdir(parents=True, exist_ok=True)
+
+    self.save(wait=True)
+    with self.rwlock.reading:
+      names = sorted({
+          chunk.filename for chunk in self.chunks.values()
+          if chunk.length > 0
+      })
+    records = []
+    for name in names:
+      source = pathlib.Path(str(self.directory)) / name
+      target = destination / name
+      if not source.is_file():
+        raise FileNotFoundError(
+            f'Active replay chunk was not flushed: {source}')
+      linked = False
+      if link:
+        try:
+          os.link(source, target)
+          linked = True
+        except OSError:
+          pass
+      if not linked:
+        shutil.copy2(source, target)
+      digest = hashlib.sha256()
+      with target.open('rb') as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b''):
+          digest.update(block)
+      records.append({
+          'name': name,
+          'bytes': target.stat().st_size,
+          'sha256': digest.hexdigest(),
+          'linked': linked,
+      })
+    return records
 
   @elements.timer.section('replay_load')
   def load(self, data=None, directory=None, amount=None):

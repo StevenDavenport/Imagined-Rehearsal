@@ -165,6 +165,7 @@ def test_round_robin_goals_and_public_metadata_are_stable():
   assert len(rows) == 5
   assert all('privileged_state' not in row for row in rows)
   assert [row['goal'] for row in rows] == list(GOAL_NAMES)
+  assert all(len(row['frame_sha256']) == 64 for row in rows)
 
 
 def test_random_goal_schedule_is_seeded_and_varied():

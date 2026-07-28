@@ -5,6 +5,8 @@ import elements
 import embodied
 import numpy as np
 
+from . import milestones
+
 
 def _copy_scalar_logs(result):
   return {
@@ -102,6 +104,41 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
         agent=bind(agent.load, regex=args.from_checkpoint_regex)))
   cp.load_or_save()
 
+  try:
+    milestone_every = int(getattr(args, 'milestone_every', 0))
+    milestone_root = str(getattr(args, 'milestone_dir', ''))
+    if bool(milestone_every) != bool(milestone_root):
+      raise ValueError(
+          'run.milestone_every and run.milestone_dir must be set together')
+    if milestone_every < 0:
+      raise ValueError('run.milestone_every must be nonnegative')
+    milestone_metadata = {
+        'goal': str(getattr(args, 'milestone_goal', '')),
+        'phase': int(getattr(args, 'milestone_phase', -1)),
+        'spec_digest': str(getattr(args, 'milestone_spec_digest', '')),
+    }
+    next_milestone = None
+    if milestone_every:
+      current = int(step)
+      for expected in range(milestone_every, current + 1, milestone_every):
+        path = milestones.archive_path(milestone_root, expected)
+        if path.exists():
+          milestones.validate(path, expected_step=expected, full=False)
+        elif expected == current:
+          milestones.create(
+              cp, replay, milestone_root, expected,
+              metadata=milestone_metadata)
+        else:
+          raise milestones.MilestoneError(
+              f'Missing past milestone {path}; step {current} can no longer '
+              'reconstruct that exact training state')
+      next_milestone = (
+          (current // milestone_every) + 1) * milestone_every
+  except BaseException:
+    driver.close()
+    logger.close()
+    raise
+
   print('Start training loop')
   policy = lambda *args: agent.policy(*args, mode='train')
   driver.reset(agent.init_policy)
@@ -109,6 +146,19 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
     while step < args.steps:
 
       driver(policy, steps=10)
+
+      if (
+          next_milestone is not None and
+          next_milestone <= int(args.steps) and
+          int(step) >= next_milestone
+      ):
+        if int(step) != next_milestone:
+          raise milestones.MilestoneError(
+              f'Training stepped past milestone {next_milestone}: {int(step)}')
+        milestones.create(
+            cp, replay, milestone_root, next_milestone,
+            metadata=milestone_metadata)
+        next_milestone += milestone_every
 
       if should_report(step) and len(replay):
         agg = elements.Agg()

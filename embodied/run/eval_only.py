@@ -121,6 +121,24 @@ def eval_only(make_agent, make_env, make_logger, args):
   adapt_policy_params = None
   adapt_every_k = int(getattr(adapt_cfg, 'every_k', 0))
   steps_since_adapt = 0
+  requested_mode = str(getattr(
+      args, 'eval_policy_mode', 'deterministic')).lower()
+  policy_modes = {'deterministic': 'eval', 'sampled': 'train'}
+  if requested_mode not in policy_modes:
+    raise ValueError(
+        'run.eval_policy_mode must be deterministic or sampled, got '
+        f'{requested_mode!r}')
+  agent_policy_mode = policy_modes[requested_mode]
+
+  def discard_adaptation():
+    nonlocal adapt_params, adapt_policy_params, steps_since_adapt
+    discard = getattr(agent, 'discard_params', None)
+    if discard:
+      discard(adapt_policy_params)
+      discard(adapt_params)
+    adapt_params = None
+    adapt_policy_params = None
+    steps_since_adapt = 0
 
   def maybe_adapt(carry, acts, outs, batch_shape):
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
@@ -129,9 +147,15 @@ def eval_only(make_agent, make_env, make_logger, args):
       adapt_params = agent.clone_params()
     adapt_params, carry, mets = agent.adapt(
         adapt_params, carry, adapt_cfg.steps,
-        warmup=(first_trigger and bool(adapt_cfg.train_critic)))
+        warmup=(first_trigger and bool(adapt_cfg.train_critic)),
+        freeze_critic=not bool(adapt_cfg.train_critic))
+    if adapt_policy_params is not None:
+      discard = getattr(agent, 'discard_params', None)
+      if discard:
+        discard(adapt_policy_params)
     adapt_policy_params = agent.extract_policy_params(adapt_params)
-    carry, acts, _ = agent.policy_latent(carry, params=adapt_policy_params)
+    carry, acts, _ = agent.policy_latent(
+        carry, params=adapt_policy_params, mode=agent_policy_mode)
     steps_since_adapt = 0
     outs['log/eval_adapt/trigger'] = np.full(batch_shape, 1.0, np.float32)
     outs['log/eval_adapt/steps'] = np.full(
@@ -146,11 +170,15 @@ def eval_only(make_agent, make_env, make_logger, args):
   def policy(carry, obs, **kwargs):
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
     carry, acts, outs = agent.policy(
-        carry, obs, mode='eval', params=adapt_policy_params)
+        carry, obs, mode=agent_policy_mode, params=adapt_policy_params)
     if adapt_cfg.enabled:
       if obs['is_first'].shape[0] != 1:
         raise ValueError('eval_adapt requires eval envs=1')
-      if obs['is_first'].any():
+      if obs['is_last'].any():
+        # The driver masks terminal actions. Adapting here would spend compute
+        # on an unused action and then immediately throw its parameters away.
+        discard_adaptation()
+      elif obs['is_first'].any():
         assert (
             adapt_params is None and
             adapt_policy_params is None and
@@ -162,10 +190,6 @@ def eval_only(make_agent, make_env, make_logger, args):
         if adapt_every_k > 0 and steps_since_adapt >= adapt_every_k:
           carry, acts = maybe_adapt(
               carry, acts, outs, obs['is_first'].shape)
-      if obs['is_last'].any():
-        adapt_params = None
-        adapt_policy_params = None
-        steps_since_adapt = 0
     return carry, acts, outs
 
   def write_metrics():
@@ -183,8 +207,10 @@ def eval_only(make_agent, make_env, make_logger, args):
     elements.checkpoint.load(args.from_checkpoint, dict(
         agent=bind(agent.load, regex=(
             '^(?!(adapt_opt|adapt_actor_opt|adapt_critic_opt|model_opt)/)'))))
+    digests = getattr(agent, 'parameter_digests', None)
+    integrity_before = digests() if digests else None
 
-    print('Start evaluation')
+    print(f'Start {requested_mode} evaluation')
     driver.reset(agent.init_policy)
     eval_episodes = int(getattr(args, 'eval_episodes', 0))
     if eval_episodes:
@@ -197,8 +223,23 @@ def eval_only(make_agent, make_env, make_logger, args):
         driver(policy, steps=10)
         if should_log(step):
           write_metrics()
+    integrity_after = digests() if digests else None
+    integrity = {
+        'policy_mode': requested_mode,
+        'adapt_enabled': bool(adapt_cfg.enabled),
+        'before': integrity_before,
+        'after': integrity_after,
+        'equal': integrity_before == integrity_after,
+    }
+    (logdir / 'eval_integrity.json').write_text(
+        json.dumps(integrity, indent=2, sort_keys=True) + '\n')
+    if integrity_before is not None and not integrity['equal']:
+      raise RuntimeError(
+          'Persistent agent parameters changed during evaluation; see '
+          f'{logdir / "eval_integrity.json"}')
   finally:
     try:
+      discard_adaptation()
       driver.close()
     finally:
       if trace_file:

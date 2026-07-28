@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.metadata
 import json
 import os
@@ -299,7 +300,9 @@ class RLScape(embodied.Env):
     if task_id is not None:
       self._set_goal(task_id)
     self._done = False
-    self._append_audit('restore', info, snapshot_id=snapshot_id)
+    self._append_audit(
+        'restore', info, snapshot_id=snapshot_id,
+        frame_sha256=self._frame_sha256(observation))
     return self._obs(observation, 0.0, is_first=True)
 
   def _reset(self):
@@ -327,7 +330,8 @@ class RLScape(embodied.Env):
           f'received {info.get("goal")!r}')
     self._append_audit(
         'reset', info, reset_seed=options['reset_seed'],
-        reset_kind=options.get('reset_kind', 'task'))
+        reset_kind=options.get('reset_kind', 'task'),
+        frame_sha256=self._frame_sha256(observation))
     self._episode_index += 1
     return self._obs(observation, 0.0, is_first=True)
 
@@ -476,6 +480,15 @@ class RLScape(embodied.Env):
     else:
       self._audit_handle.write(json.dumps(
           row, default=self._json_default, sort_keys=True) + '\n')
+
+  @staticmethod
+  def _frame_sha256(observation):
+    frame = np.asarray(observation)
+    digest = hashlib.sha256()
+    digest.update(str(frame.dtype).encode())
+    digest.update(str(tuple(frame.shape)).encode())
+    digest.update(frame.tobytes(order='C'))
+    return digest.hexdigest()
 
   @staticmethod
   def _json_default(value):

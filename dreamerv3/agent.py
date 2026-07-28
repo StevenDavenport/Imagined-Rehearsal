@@ -192,10 +192,10 @@ class Agent(embodied.jax.Agent):
           enc=enc_entry, dyn=dyn_entry, dec=dec_entry)))
     return carry, act, out
 
-  def policy_latent(self, carry):
+  def policy_latent(self, carry, mode='train'):
     enc_carry, dyn_carry, dec_carry, _ = carry
     policy = self.pol(self._head_input(dyn_carry), bdims=1)
-    act = self._canonical_action(sample(policy))
+    act = self._canonical_action(select_policy_action(policy, mode))
     out = {}
     out['finite'] = elements.tree.flatdict(jax.tree.map(
         lambda x: jnp.isfinite(x).all(range(1, x.ndim)),
