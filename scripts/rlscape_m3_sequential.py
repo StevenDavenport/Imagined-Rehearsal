@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run resilient five-phase RLScape sequential FIFO training and evaluation."""
+"""Run resilient RLScape sequential training and paired evaluation."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from embodied.run import milestones  # noqa: E402
 from scripts.checkpoint_utils import resolve_checkpoint_path  # noqa: E402
-from scripts.rlscape_m1_pilot import GOALS  # noqa: E402
+from scripts.rlscape_m1_pilot import GOALS as ALL_GOALS  # noqa: E402
 from scripts.rlscape_m1_pilot import spec_digest  # noqa: E402
 from scripts.rlscape_m1_pilot import write_json  # noqa: E402
 from scripts.rlscape_m3_process import run_managed  # noqa: E402
@@ -29,6 +29,7 @@ from scripts.rlscape_m3_process import run_managed  # noqa: E402
 
 PHASE_STEPS = 500_000
 MILESTONE_EVERY = 250_000
+GOALS = ALL_GOALS  # Backward-compatible canonical ladder alias.
 
 
 def git_revision(repo_root: pathlib.Path) -> str:
@@ -48,17 +49,26 @@ def checkpoint_step(logdir: pathlib.Path) -> int:
 
 
 def experiment_spec(args) -> dict[str, Any]:
+  goals = tuple(args.goals)
+  reservoir = args.replay_kind == 'episode_reservoir'
+  replay_capacity = (
+      args.reservoir_episodes_per_goal * len(goals)
+      if reservoir else args.fifo_replay_size)
+  original = not reservoir and goals == tuple(ALL_GOALS)
   return {
       'format': 1,
-      'name': 'rlscape_experiment_1_sequential_fifo_actor_ir',
+      'name': (
+          'rlscape_experiment_1_sequential_fifo_actor_ir'
+          if original else
+          f'rlscape_sequential_{args.replay_kind}_{len(goals)}goal_actor_ir'),
       'git_commit': git_revision(args.repo_root),
       'seed': args.seed,
-      'goals': list(GOALS),
+      'goals': list(goals),
       'steps_per_goal': PHASE_STEPS,
-      'total_steps': PHASE_STEPS * len(GOALS),
+      'total_steps': PHASE_STEPS * len(goals),
       'milestone_every': MILESTONE_EVERY,
       'milestones': list(range(
-          MILESTONE_EVERY, PHASE_STEPS * len(GOALS) + 1,
+          MILESTONE_EVERY, PHASE_STEPS * len(goals) + 1,
           MILESTONE_EVERY)),
       'episode_length': 200,
       'action_interface': 'click_grid',
@@ -71,9 +81,21 @@ def experiment_spec(args) -> dict[str, Any]:
       'train_ratio': 32,
       'compute_dtype': 'bfloat16',
       'replay': {
-          'kind': 'fifo',
-          'capacity': 200_000,
-          'reservoir': False,
+          'kind': args.replay_kind,
+          'capacity': replay_capacity,
+          'capacity_unit': 'episodes' if reservoir else 'sequence_starts',
+          'capacity_per_goal': (
+              args.reservoir_episodes_per_goal if reservoir else None),
+          'persistent_across_phases': True,
+          'retention': (
+              'algorithm_r_within_goal' if reservoir else 'global_fifo'),
+          'sampling': (
+              'goal_then_episode_then_sequence'
+              if reservoir else 'uniform_sequence_start'),
+          'statistical_stream_reservoir': reservoir,
+          'short_episode_rule': (
+              'concatenate_fragments_with_reset'
+              if reservoir else None),
           'save_wait': True,
       },
       'goal_conditioning': {
@@ -114,12 +136,24 @@ def build_train_command(
     target_step: int,
     digest: str,
 ) -> list[str]:
+  reservoir = args.replay_kind == 'episode_reservoir'
+  replay_capacity = (
+      args.reservoir_episodes_per_goal * len(args.goals)
+      if reservoir else args.fifo_replay_size)
+  configs = [
+      'rlscape', 'rlscape_click_grid', f'rlscape_{goal}',
+      'rlscape_m3_sequential']
+  if reservoir:
+    configs.append('rlscape_m3_episode_reservoir')
   command = [
       str(args.python), str(args.repo_root / 'dreamerv3' / 'main.py'),
-      '--configs', 'rlscape', 'rlscape_click_grid',
-      f'rlscape_{goal}', 'rlscape_m3_sequential',
+      '--configs', *configs,
       '--seed', str(args.seed),
       '--logdir', str(training_logdir),
+      '--replay.kind', args.replay_kind,
+      '--replay.size', str(replay_capacity),
+      '--replay.groups', str(len(args.goals) if reservoir else 1),
+      '--replay.retention', 'reservoir' if reservoir else 'fifo',
       '--run.steps', str(target_step),
       '--run.milestone_every', str(MILESTONE_EVERY),
       '--run.milestone_dir', str(milestone_root),
@@ -154,6 +188,15 @@ def parse_args(argv=None):
   parser.add_argument(
       '--python', type=pathlib.Path, default=pathlib.Path(sys.executable))
   parser.add_argument('--seed', type=int, default=0)
+  parser.add_argument(
+      '--goals', nargs='+', default=list(ALL_GOALS),
+      help='Ordered prefix of the canonical RLScape goal ladder.')
+  parser.add_argument(
+      '--replay-kind', choices=('fifo', 'episode_reservoir'), default='fifo')
+  parser.add_argument(
+      '--fifo-replay-size', type=int, default=200_000)
+  parser.add_argument(
+      '--reservoir-episodes-per-goal', type=int, default=1_000)
   parser.add_argument('--max-restarts', type=int, default=20)
   parser.add_argument('--max-stalled-restarts', type=int, default=4)
   parser.add_argument('--restart-delay', type=float, default=15)
@@ -182,6 +225,13 @@ def preflight(args) -> None:
     raise ValueError('restart limits must be nonnegative')
   if args.restart_delay < 0:
     raise ValueError('--restart-delay must be nonnegative')
+  args.goals = tuple(args.goals)
+  if not args.goals or args.goals != tuple(ALL_GOALS[:len(args.goals)]):
+    raise ValueError(
+        '--goals must be a nonempty ordered prefix of: '
+        + ', '.join(ALL_GOALS))
+  if min(args.fifo_replay_size, args.reservoir_episodes_per_goal) < 1:
+    raise ValueError('replay capacities must be positive')
   if min(args.poll_seconds, args.startup_timeout, args.stall_timeout) <= 0:
     raise ValueError('poll and timeout values must be positive')
   if not args.dry_run:
@@ -243,7 +293,7 @@ def main(argv=None) -> int:
     status['updated_unix'] = time.time()
     write_json(status_path, status)
 
-  for phase, goal in enumerate(GOALS):
+  for phase, goal in enumerate(args.goals):
     free_gb = shutil.disk_usage(args.experiment_root).free / 1024 ** 3
     if not args.dry_run and free_gb < args.min_free_gb:
       status.update(
@@ -269,7 +319,7 @@ def main(argv=None) -> int:
         milestone_root=milestone_root, goal=goal, phase=phase,
         target_step=target, digest=digest)
     print(
-        f'\n=== Phase {phase + 1}/{len(GOALS)}: {goal}, '
+        f'\n=== Phase {phase + 1}/{len(args.goals)}: {goal}, '
         f'target={target} ===', flush=True)
     print(' '.join(command), flush=True)
     if args.dry_run:

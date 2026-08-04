@@ -4,6 +4,7 @@ from .clock import GlobalClock
 from .clock import LocalClock
 from .driver import Driver
 from .random import RandomAgent
+from .episode_replay import EpisodeReplay
 from .replay import Replay
 from .wrappers import Wrapper
 

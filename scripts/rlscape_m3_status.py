@@ -36,6 +36,7 @@ def recent_episodes(path: pathlib.Path, limit=100) -> list[dict]:
 
 
 def collect(root: pathlib.Path) -> dict:
+  experiment = read_json(root / 'experiment_spec.json')
   supervisor = read_json(root / 'supervisor_status.json')
   queue = read_json(root / 'evaluations' / 'queue.json')
   states = queue.get('states', {})
@@ -60,12 +61,19 @@ def collect(root: pathlib.Path) -> dict:
     active = {}
   free_gb = (
       shutil.disk_usage(root).free / 1024 ** 3 if root.exists() else None)
+  training_target = int(experiment.get('total_steps', TOTAL_STEPS))
+  milestone_target = len(experiment.get('milestones', ())) or TOTAL_MILESTONES
+  evaluation_target = (
+      len(queue.get('spec', {}).get('units', ())) or
+      sum(4 * (phase + 1)
+          for phase in range(len(experiment.get('goals', ())))) or
+      TOTAL_EVAL_PAIRS)
   return {
       'status': supervisor.get('status', 'not_started'),
       'training_step': checkpoint_step(root / 'training'),
-      'training_target': TOTAL_STEPS,
+      'training_target': training_target,
       'milestones': len(milestones),
-      'milestone_target': TOTAL_MILESTONES,
+      'milestone_target': milestone_target,
       'recent_episodes': len(episodes),
       'recent_success_rate': (
           sum(successes) / len(successes) if successes else None),
@@ -73,7 +81,7 @@ def collect(root: pathlib.Path) -> dict:
       'evaluation_status': queue.get('status', 'not_started'),
       'evaluation_pairs_complete': complete_pairs,
       'evaluation_pairs_failed': failed_pairs,
-      'evaluation_pairs_target': TOTAL_EVAL_PAIRS,
+      'evaluation_pairs_target': evaluation_target,
       'active_pid': active.get('pid'),
       'active_adopted': active.get('adopted'),
       'last_activity_age_seconds': (

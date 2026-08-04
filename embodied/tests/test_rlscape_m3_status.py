@@ -40,3 +40,18 @@ def test_status_collects_training_milestones_and_eval_pairs(tmp_path):
   assert result['evaluation_pairs_complete'] == 1
   assert result['evaluation_pairs_failed'] == 1
   assert result['total_restarts'] == 2
+
+
+def test_status_uses_three_goal_experiment_targets(tmp_path):
+  (tmp_path / 'experiment_spec.json').write_text(json.dumps({
+      'goals': ['kill_goblin', 'bury_bones', 'chop_logs'],
+      'total_steps': 1_500_000,
+      'milestones': [
+          250_000, 500_000, 750_000, 1_000_000, 1_250_000, 1_500_000],
+  }))
+
+  result = status.collect(tmp_path)
+
+  assert result['training_target'] == 1_500_000
+  assert result['milestone_target'] == 6
+  assert result['evaluation_pairs_target'] == 24

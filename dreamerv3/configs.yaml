@@ -64,7 +64,11 @@ defaults:
       audit_path: ''
 
   replay:
+    kind: fifo
     size: 5e6
+    groups: 1
+    group_key: goal_id
+    retention: fifo
     online: True
     fracs: {uniform: 1.0, priority: 0.0, recency: 0.0}
     prio: {exponent: 0.8, maxfrac: 0.5, initial: inf, zero_on_sample: True}
@@ -362,9 +366,15 @@ rlscape_m3_sequential:
   replay.size: 200000
   replay.online: False
   replay.save_wait: True
+  logger.filter: 'score|length|fps|ratio|train/loss/|train/rand/|replay/(items|episodes|ram_gb|episodes_seen|admitted|replaced|rejected|abandoned|active_goals|goal_)'
   run: {steps: 500000, envs: 1, train_ratio: 32, log_every: 300, report_every: 1000000, save_every: 1800, ckpt_keep: 3, debug: True, milestone_every: 250000}
   jax: {platform: cuda, compute_dtype: bfloat16, prealloc: True, precompile: True}
   agent.report: False
+
+rlscape_m3_episode_reservoir:
+  replay.kind: episode_reservoir
+  replay.retention: reservoir
+  replay.online: False
 
 rlscape_m3_eval:
   <<: *size50m

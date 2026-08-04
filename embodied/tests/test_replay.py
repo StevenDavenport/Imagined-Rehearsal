@@ -1,4 +1,5 @@
 import collections
+import pathlib
 import threading
 import time
 
@@ -355,3 +356,134 @@ class TestReplay:
       [worker.join() for worker in workers]
 
     assert len(replay) == capacity
+
+
+class TestEpisodeReplay:
+
+  def add_episode(self, replay, goal, value, length=2, worker=0):
+    for step in range(length):
+      replay.add({
+          'goal_id': np.int32(goal),
+          'value': np.int32(value),
+          'is_first': np.bool_(step == 0),
+          'is_last': np.bool_(step == length - 1),
+          'is_terminal': np.bool_(False),
+      }, worker)
+
+  def test_algorithm_r_goal_balance_and_short_episode_sampling(self, tmpdir):
+    replay = embodied.replay.EpisodeReplay(
+        length=5, capacity=6, groups=3, directory=tmpdir,
+        retention='reservoir', seed=7)
+    for goal in range(3):
+      for episode in range(50):
+        self.add_episode(replay, goal, 100 * goal + episode, length=1)
+
+    assert replay.episodes_seen.tolist() == [50, 50, 50]
+    assert [len(replay.slots[x]) for x in range(3)] == [2, 2, 2]
+    batch = replay.sample(600)
+    counts = np.bincount(batch['goal_id'][:, 0], minlength=3)
+    assert np.all((150 < counts) & (counts < 250)), counts
+    assert batch['value'].shape == (600, 5)
+    assert batch['is_first'].all()  # One-step episodes are joined explicitly.
+    assert np.all(batch['goal_id'] == batch['goal_id'][:, :1])
+
+  def test_algorithm_r_empirical_inclusion_probability(self, tmpdir):
+    trials = 1_000
+    counts = np.zeros(10, np.int64)
+    for seed in range(trials):
+      replay = embodied.replay.EpisodeReplay(
+          length=1, capacity=2, groups=1, directory=tmpdir,
+          retention='reservoir', seed=seed)
+      for episode in range(10):
+        self.add_episode(replay, 0, episode, length=1)
+      for record in replay.slots[0]:
+        counts[int(record['data']['value'][0])] += 1
+
+    # Every stream episode has inclusion probability M / n = 0.2.
+    assert np.all(np.abs(counts / trials - 0.2) < 0.04), counts
+
+  def test_sampling_does_not_change_future_admission(self, tmpdir):
+    left = embodied.replay.EpisodeReplay(
+        length=1, capacity=2, groups=1, directory=tmpdir / 'left',
+        retention='reservoir', seed=5)
+    right = embodied.replay.EpisodeReplay(
+        length=1, capacity=2, groups=1, directory=tmpdir / 'right',
+        retention='reservoir', seed=5)
+    for replay in (left, right):
+      for episode in range(2):
+        self.add_episode(replay, 0, episode, length=1)
+    left.sample(1_000)
+    for replay in (left, right):
+      for episode in range(2, 100):
+        self.add_episode(replay, 0, episode, length=1)
+
+    retained = lambda replay: [
+        int(record['data']['value'][0]) for record in replay.slots[0]]
+    assert retained(left) == retained(right)
+
+  def test_exact_restore_future_admission_partials_and_export(self, tmpdir):
+    source = pathlib.Path(str(tmpdir)) / 'source'
+    replay = embodied.replay.EpisodeReplay(
+        length=3, capacity=6, groups=3, directory=source,
+        retention='reservoir', seed=3)
+    for goal in range(3):
+      for episode in range(10):
+        self.add_episode(replay, goal, episode, length=2)
+    replay.add({
+        'goal_id': np.int32(0), 'value': np.int32(999),
+        'is_first': np.bool_(True), 'is_last': np.bool_(False),
+        'is_terminal': np.bool_(False)}, worker=4)
+    state = replay.save()
+
+    restored = embodied.replay.EpisodeReplay(
+        length=3, capacity=6, groups=3, directory=source,
+        retention='reservoir', seed=999)
+    restored.load(state)
+    assert 4 in restored.partials
+    for candidate in (replay, restored):
+      candidate.add({
+          'goal_id': np.int32(0), 'value': np.int32(999),
+          'is_first': np.bool_(False), 'is_last': np.bool_(True),
+          'is_terminal': np.bool_(False)}, worker=4)
+      for goal in range(3):
+        for episode in range(10, 20):
+          self.add_episode(candidate, goal, episode, length=2)
+    assert [[record['episode_id'] for record in replay.slots[group]]
+            for group in range(3)] == [
+                [record['episode_id'] for record in restored.slots[group]]
+                for group in range(3)]
+    expected = replay.sample(20)
+    actual = restored.sample(20)
+    assert expected.keys() == actual.keys()
+    assert all(np.array_equal(expected[key], actual[key]) for key in expected)
+
+    destination = pathlib.Path(str(tmpdir)) / 'export'
+    records = restored.export(destination)
+    assert records and (destination / 'manifest.json').is_file()
+    assert all((destination / record['name']).is_file()
+               for record in records)
+    exported = embodied.replay.EpisodeReplay(
+        length=3, capacity=6, groups=3, directory=destination,
+        retention='reservoir', seed=123)
+    exported.load(restored.save())
+    assert [[record['episode_id'] for record in exported.slots[group]]
+            for group in range(3)] == [
+                [record['episode_id'] for record in restored.slots[group]]
+                for group in range(3)]
+
+  def test_fresh_reset_abandons_restored_partial(self, tmpdir):
+    replay = embodied.replay.EpisodeReplay(
+        length=2, capacity=2, groups=1, directory=tmpdir,
+        retention='reservoir', seed=0)
+    replay.add({
+        'goal_id': np.int32(0), 'value': np.int32(1),
+        'is_first': np.bool_(True), 'is_last': np.bool_(False),
+        'is_terminal': np.bool_(False)}, worker=0)
+    replay.add({
+        'goal_id': np.int32(0), 'value': np.int32(2),
+        'is_first': np.bool_(True), 'is_last': np.bool_(True),
+        'is_terminal': np.bool_(False)}, worker=0)
+
+    assert replay.episodes_seen.tolist() == [1]
+    assert replay.slots[0][0]['data']['value'].tolist() == [2]
+    assert replay.stats()['abandoned'] == 1

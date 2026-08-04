@@ -198,7 +198,9 @@ def make_replay(config, folder, mode='train'):
   consec = config.consec_train if mode == 'train' else config.consec_report
   capacity = config.replay.size if mode == 'train' else config.replay.size / 10
   length = consec * batlen + config.replay_context
-  assert config.batch_size * length <= capacity
+  replay_kind = str(config.replay.kind)
+  if replay_kind == 'fifo':
+    assert config.batch_size * length <= capacity
 
   directory = elements.Path(config.logdir) / folder
   if config.replicas > 1:
@@ -207,6 +209,22 @@ def make_replay(config, folder, mode='train'):
       length=length, capacity=int(capacity), online=config.replay.online,
       chunksize=config.replay.chunksize, directory=directory,
       save_wait=bool(config.replay.save_wait))
+
+  if replay_kind == 'episode_reservoir':
+    if mode != 'train':
+      raise ValueError('Episode reservoir is only supported for training')
+    if config.replay.fracs.uniform != 1:
+      raise ValueError(
+          'Episode reservoir currently requires uniform sampling')
+    return embodied.replay.EpisodeReplay(
+        **kwargs,
+        groups=int(config.replay.groups),
+        group_key=str(config.replay.group_key),
+        retention=str(config.replay.retention),
+        seed=int(config.seed),
+    )
+  if replay_kind != 'fifo':
+    raise ValueError(f'Unknown replay kind: {replay_kind!r}')
 
   if config.replay.fracs.uniform < 1 and mode == 'train':
     assert config.jax.compute_dtype in ('bfloat16', 'float32'), (

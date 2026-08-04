@@ -100,8 +100,13 @@ def reset_identities(logdir: pathlib.Path) -> list[dict[str, Any]]:
   return [{
       'goal': row.get('goal'),
       'reset_seed': row.get('reset_seed'),
-      'frame_sha256': row.get('frame_sha256'),
   } for row in rows if row.get('kind') == 'reset']
+
+
+def reset_frame_hashes(logdir: pathlib.Path) -> list[str | None]:
+  rows = read_jsonl(logdir / 'audit_env0.jsonl')
+  return [row.get('frame_sha256')
+          for row in rows if row.get('kind') == 'reset']
 
 
 def condition_summary(
@@ -238,16 +243,28 @@ def main(argv=None) -> int:
   milestone_root = args.experiment_root / 'milestones'
   eval_root = args.experiment_root / 'evaluations'
   eval_root.mkdir(parents=True, exist_ok=True)
-  units = build_units()
+  experiment_path = args.experiment_root / 'experiment_spec.json'
+  if not experiment_path.is_file():
+    raise FileNotFoundError(experiment_path)
+  experiment = json.loads(experiment_path.read_text())
+  goals = tuple(experiment.get('goals', ()))
+  if not goals:
+    raise ValueError(f'Experiment goal list is empty: {experiment_path}')
+  if goals != tuple(GOALS[:len(goals)]):
+    raise ValueError(
+        'Experiment goals must be an ordered prefix of the canonical ladder: '
+        f'{goals}')
+  units = build_units(goals)
   spec = {
       'format': 1,
       'experiment_root': str(args.experiment_root),
-      'goals': list(GOALS),
+      'goals': list(goals),
       'units': units,
       'eval_seed': args.eval_seed,
       'episode_length': args.episode_length,
       'grid': [args.grid_columns, args.grid_rows],
-      'pairing': 'same_environment_seed_and_initial_frame',
+      'pairing': 'same_goal_and_environment_seed',
+      'initial_frame_hash': 'diagnostic_only_across_process_lifetimes',
       'conditions': {
           'frozen': {'actor_ir': False},
           'actor_ir': {
@@ -386,9 +403,20 @@ def main(argv=None) -> int:
       paired = bool(
           actor_ir and frozen.get('complete') and actor_ir.get('complete') and
           frozen_resets == actor_resets)
+      frozen_frames = reset_frame_hashes(pathlib.Path(frozen['logdir']))
+      actor_frames = (
+          reset_frame_hashes(pathlib.Path(actor_ir['logdir']))
+          if actor_ir else [])
+      frame_mismatches = (
+          sum(left != right
+              for left, right in zip(frozen_frames, actor_frames)) +
+          abs(len(frozen_frames) - len(actor_frames)))
       attempt.update(
           finished_unix=time.time(),
           paired_reset_identity=paired,
+          paired_initial_frames=(
+              bool(frozen_frames) and frame_mismatches == 0),
+          frame_mismatch_count=frame_mismatches,
           reset_mismatch_count=(
               sum(
                   left != right

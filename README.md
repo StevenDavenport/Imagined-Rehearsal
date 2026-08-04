@@ -219,14 +219,22 @@ The repository is useful as a research reference, but it is based on TensorFlow 
 
 ARROW is implemented as a separate PyTorch DreamerV3 rather than as a component compatible with this repository. Its dual-buffer design and experimental configurations are nevertheless directly relevant implementation references.
 
-### Likely integration point
+### Implemented integration
 
-This repository's replay buffer currently evicts sequences in FIFO order. It supports mixtures for **sampling**, but those selectors do not change the FIFO **retention** policy. A continual replay implementation will therefore require either:
+The original sliding-sequence FIFO replay remains unchanged. The optional
+`embodied/core/episode_replay.py:EpisodeReplay` instead stages complete
+episodes and applies Algorithm R independently within each goal. Training
+samples a represented goal uniformly, then a retained episode and sequence
+start. Short episodes are concatenated with explicit `is_first` boundaries so
+successful short trajectories are not discarded.
 
-- a reservoir-aware admission and eviction policy in `embodied/core/replay.py`; or
-- a dual replay wrapper with a short-term FIFO store, a long-term reservoir store, and explicit minibatch mixing.
-
-The choice between simple reservoir replay and an ARROW-style dual buffer will be made after a small reproduction study. Whichever mechanism is selected will be treated as the common backbone, not as the IR contribution.
+The episode reservoir persists its admission and sampling RNGs, per-goal
+episode counters, retained slots, partial episodes, and sampling counters. Its
+manifest and retained files are included in the same immutable 250k-step
+milestone archives as FIFO replay. Select it through
+`--replay-kind episode_reservoir`; FIFO remains the default. An ARROW-style
+dual buffer remains a possible later comparison rather than part of this first
+reservoir experiment.
 
 ## Reading Before Development
 

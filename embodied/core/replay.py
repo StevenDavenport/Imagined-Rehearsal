@@ -11,6 +11,7 @@ import elements
 import numpy as np
 
 from . import chunk as chunklib
+from .episode_replay import EpisodeReplay
 from . import limiters
 from . import selectors
 
