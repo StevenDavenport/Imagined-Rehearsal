@@ -184,7 +184,9 @@ def make_figures(output_root: pathlib.Path, labels: list[str]) -> None:
     _heat(
         axes[1, col], failed, f'{label}: failed episodes',
         MODEL_GOALS, GOALS, vmin=value_min, vmax=value_max, cmap='coolwarm')
-  fig.colorbar(im, ax=axes.tolist(), shrink=.8, label='Predicted initial value')
+  fig.colorbar(
+      im, ax=axes.ravel().tolist(), shrink=.8,
+      label='Predicted initial value')
   fig.suptitle('Critic goal sweep at the identical episode-start states')
   fig.savefig(figure_dir / 'initial_value_goal_confusion.pdf')
   fig.savefig(figure_dir / 'initial_value_goal_confusion.png')

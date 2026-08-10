@@ -259,6 +259,41 @@ def test_workflow_command_is_offline_checkpoint_audit(tmp_path):
   assert '--run.eval_episodes' not in command
 
 
+def test_comparison_figure_generation_accepts_two_dimensional_axes(tmp_path):
+  states, goals = 12, 5
+  actual = np.repeat(np.arange(3), 4)
+  first = np.tile([True, False, True, False], 3)
+  success = np.tile([True, True, False, False], 3)
+  complete = np.tile([False, True, False, False], 3)
+  values = np.linspace(0, 1, states * goals, dtype=np.float32).reshape(
+      states, goals)
+  predictions = {
+      'actual_goal': actual,
+      'goal_complete': complete,
+      'reward_prediction': values,
+      'continuation_prediction': .997 * (1 - values),
+      'discount': np.asarray(.997, np.float32),
+      'value_prediction': values,
+      'is_first': first,
+      'episode_success': success,
+      'return_inclusive': success.astype(np.float32),
+      'episode_id': np.repeat(np.arange(6), 2),
+  }
+  for label in ('strong', 'weak'):
+    directory = tmp_path / label
+    directory.mkdir()
+    np.savez_compressed(directory / 'predictions.npz', **predictions)
+
+  workflow.make_figures(tmp_path, ['strong', 'weak'])
+
+  expected = (
+      'completion_confusion', 'initial_value_goal_confusion',
+      'value_calibration', 'head_separation', 'critic_checkpoint_drift')
+  for name in expected:
+    assert (tmp_path / 'figures' / f'{name}.pdf').is_file()
+    assert (tmp_path / 'figures' / f'{name}.png').is_file()
+
+
 def test_head_audit_config_is_large_model_and_read_only():
   path = pathlib.Path(__file__).parents[2] / 'dreamerv3' / 'configs.yaml'
   configs = yaml.YAML(typ='safe').load(path.read_text())
