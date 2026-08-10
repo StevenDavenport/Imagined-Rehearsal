@@ -174,6 +174,9 @@ class Agent(embodied.Agent):
     self._posterior_chunk = transform.apply(
         nj.pure(self.model.posterior_chunk), self.train_mesh,
         (tp, tm, ts, ts, ts), (ts, ts), ar, **shared_kwargs)
+    self._head_audit_chunk = transform.apply(
+        nj.pure(self.model.head_audit_chunk), self.train_mesh,
+        (tp, tm, ts, ts, ts), (ts, ts), ar, **shared_kwargs)
     self._critic_state = transform.apply(
         nj.pure(self.model.critic_state), self.train_mesh,
         (tp, tm, ts), (ts,), ar, single_output=True, **shared_kwargs)
@@ -435,6 +438,17 @@ class Agent(embodied.Agent):
     self.n_probes.increment()
     with self.train_lock:
       carry, outs = self._posterior_chunk(
+          self.params, seed, carry, obs, prevact)
+    return carry, self._take_outs(internal.fetch_async(outs))
+
+  def head_audit_chunk(self, carry, obs, prevact):
+    """Re-encode a sequence and sweep every goal-conditioned head."""
+    obs = internal.device_put(obs, self.train_sharded)
+    prevact = internal.device_put(prevact, self.train_sharded)
+    seed = self._seeds(self.n_probes, self.train_mirrored)
+    self.n_probes.increment()
+    with self.train_lock:
+      carry, outs = self._head_audit_chunk(
           self.params, seed, carry, obs, prevact)
     return carry, self._take_outs(internal.fetch_async(outs))
 

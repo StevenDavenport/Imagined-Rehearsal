@@ -207,6 +207,12 @@ defaults:
     freeze_actor: False
     freeze_critic: False
 
+  head_audit:
+    selection: ''
+    goal_names: [kill_goblin, bury_bones, chop_logs, light_fire, catch_fish]
+    chunk_length: 32
+    horizon: 333
+
 size1m: &size1m
   .*\.rssm: {deter: 512, hidden: 64, classes: 4}
   .*\.depth: 4
@@ -390,6 +396,18 @@ rlscape_m3_eval:
 
 rlscape_m3_actor_ir:
   eval_adapt: {enabled: True, train_critic: False, steps: 1, imag_length: 6, lr: 4e-5, critic_lr: 4e-5, every_k: 1, actent: 3e-4, start_batch: 128}
+
+rlscape_m3_head_audit:
+  <<: *size50m
+  script: head_audit
+  env.rlscape.episode_length: 200
+  batch_size: 8
+  batch_length: 32
+  report_length: 32
+  replay_context: 0
+  jax: {platform: cuda, compute_dtype: bfloat16, prealloc: True, precompile: False}
+  agent.report: False
+  eval_adapt.enabled: False
 
 rlscape_kill_goblin:
   task: rlscape_kill_goblin

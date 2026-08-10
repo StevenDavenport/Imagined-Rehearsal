@@ -229,6 +229,61 @@ class Agent(embodied.jax.Agent):
       dyn_carry[self.goal_key] = obs[self.goal_key][:, -1]
     return (enc_carry, dyn_carry), feat
 
+  def head_audit_chunk(self, carry, obs, prevact):
+    """Evaluate all goal-conditioned heads on one recorded sequence.
+
+    The observations are encoded with the checkpoint under audit. Each
+    posterior state is then repeated across every configured goal ID, keeping
+    the latent fixed so differences can only come from goal conditioning in
+    the heads. This function is inference-only and does not update parameters,
+    normalizers, recurrent entries, or optimizer state.
+    """
+    enc_carry, dyn_carry = carry
+    reset = obs['is_first']
+    enc_carry, _, tokens = self.enc(
+        enc_carry, obs, reset, training=False)
+    dyn_carry, _, feat = self.dyn.observe(
+        dyn_carry, tokens, self._canonical_action(prevact), reset,
+        training=False)
+
+    if not self.goal_enabled:
+      raise ValueError('head_audit_chunk requires goal conditioning')
+    goals = jnp.arange(self.goal_count, dtype=jnp.int32)
+    goals = jnp.broadcast_to(
+        goals, (*feat['deter'].shape[:2], self.goal_count))
+    swept = {
+        key: jnp.broadcast_to(
+            value[:, :, None],
+            (*value.shape[:2], self.goal_count, *value.shape[2:]))
+        for key, value in feat.items()
+    }
+    inp = sg(self._head_input(swept, goals))
+    reward = self.rew(inp, 3)
+    continuation = self.con(inp, 3)
+    value = self.val(inp, 3)
+    slowvalue = self.slowval(inp, 3)
+    voffset, vscale = self.valnorm.stats()
+
+    logits = feat['logit']
+    probs = jax.nn.softmax(logits, -1)
+    posterior_entropy = -jnp.sum(
+        probs * jnp.log(jnp.maximum(probs, 1e-8)), -1).mean(-1)
+    result = {
+        'reward': reward.pred(),
+        'reward_entropy': reward.entropy(),
+        'continuation': continuation.prob(1),
+        'continuation_entropy': continuation.entropy(),
+        'value': value.pred() * vscale + voffset,
+        'slowvalue': slowvalue.pred() * vscale + voffset,
+        'value_entropy': value.entropy(),
+        'slowvalue_entropy': slowvalue.entropy(),
+        'posterior_entropy': posterior_entropy,
+        'deter_rms': jnp.sqrt(jnp.mean(jnp.square(feat['deter']), -1)),
+        'stoch_rms': jnp.sqrt(
+            jnp.mean(jnp.square(feat['stoch']), (-2, -1))),
+    }
+    return (enc_carry, dyn_carry), result
+
   def critic_state(self, carry):
     """Return frozen-head diagnostics for one posterior policy carry."""
     _, dyn_carry, _, _ = carry
