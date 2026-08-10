@@ -212,6 +212,8 @@ class Agent(embodied.jax.Agent):
       stats[f'{key}/mean'] = dist.pred()
       stats[f'{key}/entropy'] = dist.entropy()
       base = getattr(dist, 'output', dist)
+      if hasattr(base, 'logits'):
+        stats[f'{key}/logits'] = base.logits
       if hasattr(base, 'stddev'):
         stats[f'{key}/stddev'] = base.stddev
     return stats
@@ -780,7 +782,9 @@ class Agent(embodied.jax.Agent):
         return carry, metrics
 
       def actor_lossfn(carry):
-        loss, metrics = self._adapt_actor_loss(rollout)
+        objective = getattr(
+            self, '_adapt_actor_objective', self._adapt_actor_loss)
+        loss, metrics = objective(rollout)
         return loss, (carry, metrics)
 
       actor_metrics, (carry, mets) = self.adapt_actor_opt(
@@ -922,9 +926,103 @@ class Agent(embodied.jax.Agent):
         horizon=self.config.horizon,
         **imag_loss_cfg)
 
+  def _adapt_reward_only_actor_loss(self, rollout):
+    """Actor IR using imagined rewards without critic bootstrapping.
+
+    This deliberately does not subtract a learned value baseline or the
+    historical return-normalizer offset. Zero-reward particles therefore
+    contribute no policy-gradient signal (apart from optional entropy), while
+    particles that reach predicted reward reinforce their sampled actions.
+    """
+    policy = self.pol(rollout['inp'], 2)
+    imag_loss_cfg = self.config.imag_loss.copy()
+    disc = 1 if self.config.contdisc else 1 - 1 / self.config.horizon
+    zeros = jnp.zeros_like(rollout['rew'])
+    ret = lambda_return(
+        zeros, 1 - rollout['con'], rollout['rew'], zeros, zeros,
+        disc, imag_loss_cfg['lam'])
+    _, rscale = self.retnorm(ret, update=False)
+    advantage = ret / jnp.maximum(rscale, 1e-8)
+    weight = jnp.cumprod(disc * rollout['con'], 1) / disc
+    logpi = sum([
+        dist.logp(sg(rollout['imgact'][key]))[:, :-1]
+        for key, dist in policy.items()])
+    entropies = {
+        key: dist.entropy()[:, :-1] for key, dist in policy.items()}
+    entropy = sum(entropies.values())
+    actent = float(self.config.eval_adapt.actent)
+    loss = sg(weight[:, :-1]) * -(
+        logpi * sg(advantage) + actent * entropy)
+    metrics = {
+        'adv': advantage.mean(),
+        'adv_std': advantage.std(),
+        'rew': rollout['rew'].mean(),
+        'con': rollout['con'].mean(),
+        'ret': ret.mean(),
+        'reward_only': ret.mean(),
+        'reward_particle_rate': (ret.max(-1) >= .5).mean(),
+        'weight': weight[:, :-1].mean(),
+    }
+    for key, value in entropies.items():
+      metrics[f'ent/{key}'] = value.mean()
+    return loss.mean(), metrics
+
+  def _adapt_actor_objective(self, rollout):
+    objective = str(getattr(
+        self.config.eval_adapt, 'objective', 'standard'))
+    if objective == 'standard':
+      return self._adapt_actor_loss(rollout)
+    if objective == 'reward_only':
+      return self._adapt_reward_only_actor_loss(rollout)
+    if objective == 'distill':
+      raise ValueError(
+          'Reference distillation uses distill_actor(), not imagination')
+    raise ValueError(f'Unknown eval_adapt.objective: {objective!r}')
+
+  def distill_actor(self, carry, teacher_stats):
+    """Fit the temporary actor to a reference categorical distribution."""
+
+    def lossfn(carry):
+      _, dyn_carry, _, _ = carry
+      goal = self._carry_goal(dyn_carry)
+      inp = sg(self._head_input(dyn_carry, goal))
+      policy = self.pol(inp, 1)
+      losses = {}
+      agreements = {}
+      for key, dist in policy.items():
+        logits_key = f'{key}/logits'
+        if logits_key not in teacher_stats:
+          raise ValueError(
+              f'Reference distillation requires categorical logits: '
+              f'{logits_key}')
+        student = getattr(dist, 'output', dist)
+        if not hasattr(student, 'logits'):
+          raise ValueError(
+              f'Reference distillation only supports categorical actions: '
+              f'{key}')
+        teacher_logits = sg(teacher_stats[logits_key])
+        teacher_prob = jax.nn.softmax(teacher_logits, -1)
+        student_logprob = jax.nn.log_softmax(student.logits, -1)
+        losses[key] = -(teacher_prob * student_logprob).sum(-1)
+        agreements[key] = (
+            jnp.argmax(student.logits, -1) ==
+            jnp.argmax(teacher_logits, -1)).astype(f32)
+      loss = sum(losses.values()).mean()
+      metrics = {'loss': loss}
+      for key, dist in policy.items():
+        metrics[f'nll/{key}'] = losses[key].mean()
+        metrics[f'ent/{key}'] = dist.entropy().mean()
+        metrics[f'agreement/{key}'] = agreements[key].mean()
+      return loss, (carry, metrics)
+
+    metrics, (carry, mets) = self.adapt_actor_opt(
+        lossfn, carry, has_aux=True)
+    metrics.update(prefix(mets, 'adapt_actor'))
+    return carry, metrics
+
   def _adapt_loss(self, carry):
     rollout = self._adapt_rollout(carry)
-    loss, metrics = self._adapt_actor_loss(rollout)
+    loss, metrics = self._adapt_actor_objective(rollout)
     if self.config.eval_adapt.lr != self.config.opt.lr:
       scale = self.config.eval_adapt.lr / self.config.opt.lr
       loss *= scale

@@ -169,6 +169,8 @@ defaults:
   eval_adapt:
     enabled: False
     train_critic: False
+    objective: standard
+    reference_checkpoint: ''
     steps: 3
     imag_length: 10
     lr: 1e-4

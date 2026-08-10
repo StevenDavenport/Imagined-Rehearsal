@@ -202,6 +202,11 @@ class Agent(embodied.Agent):
         (dona_sharding, allo_sharding, tm, ts), (tp, ts, tm), ar,
         return_params=True, donate_params=True, first_outnums=(1,),
         static_argnums=(4, 5), **shared_kwargs)
+    self._distill_actor = transform.apply(
+        nj.pure(self.model.distill_actor), self.train_mesh,
+        (dona_sharding, allo_sharding, tm, ts, ts), (tp, ts, tm), ar,
+        return_params=True, donate_params=True, first_outnums=(1,),
+        **shared_kwargs)
 
     self.policy_lock = threading.Lock()
     self.train_lock = threading.Lock()
@@ -407,6 +412,27 @@ class Agent(embodied.Agent):
     mets = self._take_outs(internal.fetch_async(mets))
     mets['actor_steps'] = np.float32(0)
     mets['critic_steps'] = np.float32(steps)
+    return params, carry, mets
+
+  def distill_actor(self, params, carry, teacher_stats, steps=1):
+    """Update only temporary actor parameters toward reference actions."""
+    if steps < 1:
+      return params, carry, {}
+    carry = internal.to_global(self._stack(carry), self.train_sharded)
+    teacher_stats = internal.device_put(teacher_stats, self.train_sharded)
+    for _ in range(steps):
+      allo = {k: v for k, v in params.items() if k in self.policy_keys}
+      dona = {k: v for k, v in params.items() if k not in self.policy_keys}
+      seed = self._seeds(self.n_adapt, self.train_mirrored)
+      self.n_adapt.increment()
+      with self.train_lock:
+        params, carry, mets = self._distill_actor(
+            dona, allo, seed, carry, teacher_stats)
+    carry = self._split(internal.to_local(carry))
+    mets = self._take_outs(internal.fetch_async(mets))
+    mets['actor_steps'] = np.float32(steps)
+    mets['critic_steps'] = np.float32(0)
+    mets['warmup'] = np.float32(0)
     return params, carry, mets
 
   def adapt_persistent(

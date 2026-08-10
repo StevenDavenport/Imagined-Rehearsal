@@ -117,8 +117,13 @@ def eval_only(make_agent, make_env, make_logger, args):
   driver.on_step(logfn)
 
   adapt_cfg = agent.config.eval_adapt
+  adapt_objective = str(getattr(adapt_cfg, 'objective', 'standard'))
+  if adapt_objective not in ('standard', 'reward_only', 'distill'):
+    raise ValueError(
+        f'Unknown eval_adapt.objective: {adapt_objective!r}')
   adapt_params = None
   adapt_policy_params = None
+  reference_actor_params = None
   adapt_every_k = int(getattr(adapt_cfg, 'every_k', 0))
   steps_since_adapt = 0
   requested_mode = str(getattr(
@@ -145,10 +150,18 @@ def eval_only(make_agent, make_env, make_logger, args):
     first_trigger = adapt_params is None
     if adapt_params is None:
       adapt_params = agent.clone_params()
-    adapt_params, carry, mets = agent.adapt(
-        adapt_params, carry, adapt_cfg.steps,
-        warmup=(first_trigger and bool(adapt_cfg.train_critic)),
-        freeze_critic=not bool(adapt_cfg.train_critic))
+    if adapt_objective == 'distill':
+      if reference_actor_params is None:
+        raise RuntimeError('Reference actor parameters were not loaded')
+      teacher_stats = agent.policy_stats(
+          carry, actor_params=reference_actor_params)
+      adapt_params, carry, mets = agent.distill_actor(
+          adapt_params, carry, teacher_stats, adapt_cfg.steps)
+    else:
+      adapt_params, carry, mets = agent.adapt(
+          adapt_params, carry, adapt_cfg.steps,
+          warmup=(first_trigger and bool(adapt_cfg.train_critic)),
+          freeze_critic=not bool(adapt_cfg.train_critic))
     if adapt_policy_params is not None:
       discard = getattr(agent, 'discard_params', None)
       if discard:
@@ -207,6 +220,20 @@ def eval_only(make_agent, make_env, make_logger, args):
     elements.checkpoint.load(args.from_checkpoint, dict(
         agent=bind(agent.load, regex=(
             '^(?!(adapt_opt|adapt_actor_opt|adapt_critic_opt|model_opt)/)'))))
+    if adapt_cfg.enabled and adapt_objective == 'distill':
+      reference_checkpoint = str(getattr(
+          adapt_cfg, 'reference_checkpoint', ''))
+      if not reference_checkpoint:
+        raise ValueError(
+            'eval_adapt.reference_checkpoint is required for distillation')
+      # Temporarily load and copy only the clean actor parameters, and then
+      # restore the evaluated (corrupted) actor.
+      # Encoder/dynamics parameters are identical by Stage 2 construction.
+      elements.checkpoint.load(reference_checkpoint, dict(
+          agent=bind(agent.load, regex='^pol/')))
+      reference_actor_params = agent.extract_actor_params()
+      elements.checkpoint.load(args.from_checkpoint, dict(
+          agent=bind(agent.load, regex='^pol/')))
     digests = getattr(agent, 'parameter_digests', None)
     integrity_before = digests() if digests else None
 
@@ -227,6 +254,9 @@ def eval_only(make_agent, make_env, make_logger, args):
     integrity = {
         'policy_mode': requested_mode,
         'adapt_enabled': bool(adapt_cfg.enabled),
+        'adapt_objective': adapt_objective,
+        'reference_checkpoint': str(getattr(
+            adapt_cfg, 'reference_checkpoint', '')),
         'before': integrity_before,
         'after': integrity_after,
         'equal': integrity_before == integrity_after,
@@ -244,4 +274,6 @@ def eval_only(make_agent, make_env, make_logger, args):
     finally:
       if trace_file:
         trace_file.close()
+      if reference_actor_params is not None:
+        agent.discard_params(reference_actor_params)
       logger.close()
