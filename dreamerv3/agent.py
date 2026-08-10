@@ -293,6 +293,113 @@ class Agent(embodied.jax.Agent):
     }
     return (enc_carry, dyn_carry), result
 
+  def imagination_audit(self, start, goal, horizon=6, start_batch=128):
+    """Reproduce the actor-IR imagination objective without updating it.
+
+    ``start`` contains a batch of posterior RSSM states and ``goal`` contains
+    one goal ID per state. Posterior sampling, policy sampling, the H+1 state
+    convention, lambda returns, normalizer use, and entropy coefficient match
+    the actor-only evaluation adaptation path exactly. Outputs retain the
+    posterior-particle axis so rare optimistic trajectories remain visible.
+    """
+    horizon = int(horizon)
+    start_batch = int(start_batch)
+    if horizon < 1 or start_batch < 1:
+      raise ValueError((horizon, start_batch))
+    batch = start['deter'].shape[0]
+    logit = jnp.repeat(start['logit'], start_batch, axis=0)
+    imagined_start = {
+        'deter': jnp.repeat(start['deter'], start_batch, axis=0),
+        'stoch': self.dyn.sample_posterior(logit),
+    }
+    goal = jnp.repeat(jnp.asarray(goal, jnp.int32), start_batch, axis=0)
+    policyfn = lambda feat: self._canonical_action(
+        sample(self.pol(self._head_input(feat, goal), 1)))
+    _, future_feat, imgact = self.dyn.imagine(
+        imagined_start, policyfn, horizon, training=True)
+    first = dict(
+        deter=imagined_start['deter'][:, None],
+        stoch=imagined_start['stoch'][:, None],
+        logit=jnp.zeros_like(future_feat['logit'][:, :1]),
+    )
+    imgfeat = concat([first, future_feat], 1)
+    lastact = policyfn(jax.tree.map(lambda x: x[:, -1], imgfeat))
+    lastact = jax.tree.map(lambda x: x[:, None], lastact)
+    imgact = concat([imgact, lastact], 1)
+
+    imggoal = self._repeat_goal(goal, horizon + 1)
+    inp = sg(self._head_input(imgfeat, imggoal))
+    reward = sg(self.rew(inp, 2).pred())
+    continuation = sg(self._continuation(inp, 2))
+    policy = self.pol(inp, 2)
+    value_dist = self.val(inp, 2)
+    slowvalue_dist = self.slowval(inp, 2)
+    voffset, vscale = self.valnorm.stats()
+    value = value_dist.pred() * vscale + voffset
+    slowvalue = slowvalue_dist.pred() * vscale + voffset
+    target_value = (
+        slowvalue if bool(self.config.imag_loss.slowtar) else value)
+    discount = (
+        1.0 if bool(self.config.contdisc)
+        else 1 - 1 / float(self.config.horizon))
+    last = jnp.zeros_like(continuation)
+    terminal = 1 - continuation
+    lam = float(self.config.imag_loss.lam)
+    returns = lambda_return(
+        last, terminal, reward, target_value, target_value, discount, lam)
+    zeros = jnp.zeros_like(reward)
+    reward_only_mc = lambda_return(
+        zeros, terminal, reward, zeros, zeros, discount, 1.0)
+    reward_only_lambda = lambda_return(
+        zeros, terminal, reward, zeros, zeros, discount, lam)
+    bootstrap = returns - reward_only_lambda
+
+    weight = jnp.cumprod(discount * continuation, 1) / discount
+    roffset, rscale = self.retnorm(returns, update=False)
+    advantage = (returns - target_value[:, :-1]) / rscale
+    aoffset, ascale = self.advnorm(advantage, update=False)
+    advantage_normalized = (advantage - aoffset) / ascale
+    logpi = sum([
+        dist.logp(sg(imgact[key]))[:, :-1]
+        for key, dist in policy.items()])
+    entropies = {
+        key: dist.entropy()[:, :-1] for key, dist in policy.items()}
+    policy_entropy = sum(entropies.values())
+    reinforce_loss = (
+        sg(weight[:, :-1]) * -logpi * sg(advantage_normalized))
+    entropy_loss = (
+        sg(weight[:, :-1]) *
+        -float(self.config.eval_adapt.actent) * policy_entropy)
+
+    prior_prob = jax.nn.softmax(future_feat['logit'], -1)
+    prior_entropy = -jnp.sum(
+        prior_prob * jnp.log(jnp.maximum(prior_prob, 1e-8)), -1).mean(-1)
+    result = {
+        'reward': reward,
+        'continuation': continuation,
+        'value': value,
+        'slowvalue': slowvalue,
+        'return': returns,
+        'reward_only_mc': reward_only_mc,
+        'reward_only_lambda': reward_only_lambda,
+        'bootstrap_contribution': bootstrap,
+        'advantage': advantage,
+        'advantage_normalized': advantage_normalized,
+        'weight': weight[:, :-1],
+        'logpi': logpi,
+        'policy_entropy': policy_entropy,
+        'reinforce_loss': reinforce_loss,
+        'entropy_loss': entropy_loss,
+        'prior_entropy': prior_entropy,
+        'deter_rms': jnp.sqrt(
+            jnp.mean(jnp.square(future_feat['deter']), -1)),
+        'stoch_rms': jnp.sqrt(
+            jnp.mean(jnp.square(future_feat['stoch']), (-2, -1))),
+        'action': jax.tree.map(lambda x: x[:, :-1], imgact),
+    }
+    reshape = lambda x: x.reshape((batch, start_batch, *x.shape[1:]))
+    return jax.tree.map(reshape, result)
+
   def critic_state(self, carry):
     """Return frozen-head diagnostics for one posterior policy carry."""
     _, dyn_carry, _, _ = carry

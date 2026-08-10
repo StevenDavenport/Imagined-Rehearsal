@@ -177,6 +177,10 @@ class Agent(embodied.Agent):
     self._head_audit_chunk = transform.apply(
         nj.pure(self.model.head_audit_chunk), self.train_mesh,
         (tp, tm, ts, ts, ts), (ts, ts), ar, **shared_kwargs)
+    self._imagination_audit = transform.apply(
+        nj.pure(self.model.imagination_audit), self.train_mesh,
+        (tp, tm, ts, ts), (ts,), ar, single_output=True,
+        static_argnums=(4, 5), **shared_kwargs)
     self._critic_state = transform.apply(
         nj.pure(self.model.critic_state), self.train_mesh,
         (tp, tm, ts), (ts,), ar, single_output=True, **shared_kwargs)
@@ -431,11 +435,14 @@ class Agent(embodied.Agent):
   def init_observe(self, batch_size):
     return self.init_train(batch_size)[:2]
 
-  def posterior_chunk(self, carry, obs, prevact):
+  def posterior_chunk(self, carry, obs, prevact, seed_index=None):
     obs = internal.device_put(obs, self.train_sharded)
     prevact = internal.device_put(prevact, self.train_sharded)
-    seed = self._seeds(self.n_probes, self.train_mirrored)
-    self.n_probes.increment()
+    if seed_index is None:
+      seed = self._seeds(self.n_probes, self.train_mirrored)
+      self.n_probes.increment()
+    else:
+      seed = self._seeds(int(seed_index), self.train_mirrored)
     with self.train_lock:
       carry, outs = self._posterior_chunk(
           self.params, seed, carry, obs, prevact)
@@ -451,6 +458,17 @@ class Agent(embodied.Agent):
       carry, outs = self._head_audit_chunk(
           self.params, seed, carry, obs, prevact)
     return carry, self._take_outs(internal.fetch_async(outs))
+
+  def imagination_audit(
+      self, start, goal, horizon=6, start_batch=128, seed_index=0):
+    """Run the exact actor-IR imagination path without changing parameters."""
+    start = internal.device_put(start, self.train_sharded)
+    goal = internal.device_put(goal, self.train_sharded)
+    seed = self._seeds(int(seed_index), self.train_mirrored)
+    with self.train_lock:
+      outs = self._imagination_audit(
+          self.params, seed, start, goal, int(horizon), int(start_batch))
+    return self._take_outs(internal.fetch_async(outs))
 
   def critic_rollout(self, carry, horizon=6, start_batch=1, params=None):
     return self._probe(

@@ -65,6 +65,7 @@ def main(argv=None):
       replay_context=config.replay_context,
       cir=config.cir,
       head_audit=config.head_audit,
+      imagination_audit=config.imagination_audit,
   )
 
   if config.script == 'train':
@@ -96,6 +97,11 @@ def main(argv=None):
 
   elif config.script == 'head_audit':
     embodied.run.head_audit(
+        bind(make_agent, config),
+        args)
+
+  elif config.script == 'imagination_audit':
+    embodied.run.imagination_audit(
         bind(make_agent, config),
         args)
 
