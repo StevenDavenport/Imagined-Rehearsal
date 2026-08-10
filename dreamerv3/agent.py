@@ -225,8 +225,6 @@ class Agent(embodied.jax.Agent):
     dyn_carry, _, feat = self.dyn.observe(
         dyn_carry, tokens, self._canonical_action(prevact), reset,
         training=False)
-    if self.goal_enabled:
-      dyn_carry[self.goal_key] = obs[self.goal_key][:, -1]
     return (enc_carry, dyn_carry), feat
 
   def head_audit_chunk(self, carry, obs, prevact):

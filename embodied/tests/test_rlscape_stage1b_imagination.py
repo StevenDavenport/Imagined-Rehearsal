@@ -19,6 +19,50 @@ from scripts import rlscape_stage1b_imagination as workflow
 imagination_audit = importlib.import_module('embodied.run.imagination_audit')
 
 
+class _ChunkEncoder:
+
+  def __call__(self, carry, obs, reset, training):
+    del reset, training
+    return carry, {}, obs['tokens']
+
+
+class _ChunkDynamics:
+
+  def observe(self, carry, tokens, action, reset, training):
+    del action, reset, training
+    assert set(carry) == {'deter', 'stoch'}
+    feat = {
+        'deter': tokens,
+        'stoch': jnp.zeros((*tokens.shape[:-1], 1, 2)),
+        'logit': jnp.zeros((*tokens.shape[:-1], 1, 2)),
+    }
+    return carry, {}, feat
+
+
+def test_posterior_chunk_keeps_rssm_carry_free_of_goal_metadata():
+  agent = object.__new__(Agent)
+  agent.goal_enabled = True
+  agent.goal_key = 'goal_id'
+  agent.enc = _ChunkEncoder()
+  agent.dyn = _ChunkDynamics()
+  agent._canonical_action = lambda action: action
+  carry = ({}, {
+      'deter': jnp.zeros((1, 2)),
+      'stoch': jnp.zeros((1, 1, 2)),
+  })
+  obs = {
+      'tokens': jnp.zeros((1, 3, 2)),
+      'is_first': jnp.zeros((1, 3), bool),
+      'goal_id': jnp.zeros((1, 3), jnp.int32),
+  }
+  prevact = {'action': jnp.zeros((1, 3), jnp.int32)}
+
+  carry, _ = agent.posterior_chunk(carry, obs, prevact)
+  carry, _ = agent.posterior_chunk(carry, obs, prevact)
+
+  assert set(carry[1]) == {'deter', 'stoch'}
+
+
 def _episode(length=12, success=True):
   complete = np.zeros(length, bool)
   if success:
