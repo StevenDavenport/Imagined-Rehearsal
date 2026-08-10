@@ -260,6 +260,13 @@ class Agent(embodied.jax.Agent):
     inp = sg(self._head_input(swept, goals))
     reward = self.rew(inp, 3)
     continuation = self.con(inp, 3)
+    continuation_prob = continuation.prob(1)
+    epsilon = jnp.finfo(continuation_prob.dtype).eps
+    continuation_safe = jnp.clip(
+        continuation_prob, epsilon, 1 - epsilon)
+    continuation_entropy = -(
+        continuation_safe * jnp.log(continuation_safe) +
+        (1 - continuation_safe) * jnp.log(1 - continuation_safe))
     value = self.val(inp, 3)
     slowvalue = self.slowval(inp, 3)
     voffset, vscale = self.valnorm.stats()
@@ -271,8 +278,10 @@ class Agent(embodied.jax.Agent):
     result = {
         'reward': reward.pred(),
         'reward_entropy': reward.entropy(),
-        'continuation': continuation.prob(1),
-        'continuation_entropy': continuation.entropy(),
+        'continuation': continuation_prob,
+        # Binary intentionally implements logp/prob but not entropy in
+        # embodied.jax.outs. Compute the exact Bernoulli entropy here.
+        'continuation_entropy': continuation_entropy,
         'value': value.pred() * vscale + voffset,
         'slowvalue': slowvalue.pred() * vscale + voffset,
         'value_entropy': value.entropy(),

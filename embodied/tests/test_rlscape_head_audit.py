@@ -3,6 +3,7 @@ import importlib
 import json
 import pathlib
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import ruamel.yaml as yaml
@@ -186,6 +187,27 @@ class _GoalHead:
     return _Distribution(goal_value)
 
 
+class _BinaryDistribution:
+
+  def __init__(self, logit):
+    self.logit = logit
+
+  def prob(self, value):
+    assert value == 1
+    return jax.nn.sigmoid(self.logit)
+
+  def entropy(self):
+    raise NotImplementedError
+
+
+class _BinaryGoalHead:
+
+  def __call__(self, inp, bdims):
+    del bdims
+    logit = inp[..., -3] + 2 * inp[..., -2] + 3 * inp[..., -1]
+    return _BinaryDistribution(logit)
+
+
 class _Norm:
 
   def stats(self):
@@ -201,7 +223,7 @@ def test_model_head_audit_holds_latent_fixed_and_sweeps_goals():
   agent.enc = _Encoder()
   agent.dyn = _Dynamics()
   agent.rew = _GoalHead()
-  agent.con = _GoalHead()
+  agent.con = _BinaryGoalHead()
   agent.val = _GoalHead()
   agent.slowval = _GoalHead()
   agent.valnorm = _Norm()
@@ -218,6 +240,8 @@ def test_model_head_audit_holds_latent_fixed_and_sweeps_goals():
   np.testing.assert_array_equal(output['reward'][0, 0], [1, 2, 3])
   np.testing.assert_array_equal(output['value'][0, 1], [1, 2, 3])
   np.testing.assert_allclose(output['posterior_entropy'], np.log(2))
+  assert np.isfinite(output['continuation_entropy']).all()
+  assert (output['continuation_entropy'] > 0).all()
 
 
 def test_workflow_command_is_offline_checkpoint_audit(tmp_path):
