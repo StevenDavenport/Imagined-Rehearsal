@@ -1,4 +1,5 @@
 from .cir import cir
+from .critic_provenance import critic_provenance
 from .eval_only import eval_only
 from .head_audit import head_audit
 from .imagination_audit import imagination_audit

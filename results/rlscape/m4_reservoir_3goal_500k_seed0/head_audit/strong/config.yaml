@@ -1,0 +1,278 @@
+agent:
+  ac_grads: false
+  advnorm: {impl: none, limit: 1e-08, rate: 0.01}
+  conhead: {act: silu, layers: 1, norm: rms, output: binary, outscale: 1.0,
+      units: 512, winit: trunc_normal_in}
+  contdisc: true
+  dec:
+    simple:
+      act: silu
+      bspace: 8
+      depth: 32
+      kernel: 5
+      layers: 3
+      mults: [2, 3, 4, 4]
+      norm: rms
+      outer: false
+      outscale: 1.0
+      strided: false
+      units: 512
+      winit: trunc_normal_in
+    typ: simple
+  dyn:
+    rssm: {absolute: false, act: silu, blocks: 8, classes: 32, deter: 4096,
+        dynlayers: 1, free_nats: 1.0, hidden: 512, imglayers: 2, norm: rms,
+        obslayers: 1, outscale: 1.0, stoch: 32, unimix: 0.01, winit:
+        trunc_normal_in}
+    typ: rssm
+  enc:
+    simple:
+      act: silu
+      depth: 32
+      kernel: 5
+      layers: 3
+      mults: [2, 3, 4, 4]
+      norm: rms
+      outer: false
+      strided: false
+      symlog: true
+      units: 512
+      winit: trunc_normal_in
+    typ: simple
+  goal_conditioning:
+    canonicalize_noop_position: false
+    count: 5
+    enabled: true
+    exclude_keys: [goal_complete, is_physical_terminal]
+    key: goal_id
+  horizon: 333
+  imag_last: 0
+  imag_length: 15
+  imag_loss: {actent: 0.0003, lam: 0.95, slowreg: 1.0, slowtar: false}
+  loss_scales: {con: 1.0, dyn: 1.0, policy: 1.0, rec: 1.0, rep: 0.1, repval: 0.3,
+    rew: 1.0, value: 1.0}
+  model_lr: 4e-05
+  opt: {agc: 0.3, anneal: 0, beta1: 0.9, beta2: 0.999, eps: 1e-20, lr: 4e-05,
+      momentum: true, schedule: const, warmup: 1000, wd: 0.0}
+  policy: {act: silu, layers: 3, maxstd: 1.0, minstd: 0.1, norm: rms, outscale:
+      0.01, unimix: 0.01, units: 512, winit: trunc_normal_in}
+  policy_dist_cont: bounded_normal
+  policy_dist_disc: categorical
+  repl_loss: {lam: 0.95, slowreg: 1.0, slowtar: false}
+  report: false
+  report_gradnorms: false
+  repval_grad: true
+  repval_loss: true
+  retnorm: {debias: false, impl: perc, limit: 1.0, perchi: 95.0, perclo: 5.0,
+      rate: 0.01}
+  reward_grad: true
+  rewhead: {act: silu, bins: 255, layers: 1, norm: rms, output: symexp_twohot,
+      outscale: 0.0, units: 512, winit: trunc_normal_in}
+  slowvalue: {every: 1, rate: 0.02}
+  valnorm: {impl: none, limit: 1e-08, rate: 0.01}
+  value: {act: silu, bins: 255, layers: 3, norm: rms, output: symexp_twohot,
+      outscale: 0.0, units: 512, winit: trunc_normal_in}
+batch_length: 32
+batch_size: 8
+cir:
+  action_scale_a: 1.0
+  action_scale_b: 0.7
+  adapt_every: 25
+  adapt_steps: 1
+  anchor_stride: 25
+  baseline_episodes: 3
+  cir_episodes: 10
+  divergence_factor: 10.0
+  divergence_patience: 2
+  episode_model_updates: 32
+  eval_milestones: [1, 3, 5, 10]
+  freeze_actor: false
+  freeze_critic: false
+  gamma: 0.997
+  initial_model_updates: 128
+  mild_ratio: 0.85
+  model_checkpoint_interval: 32
+  probe_batch: 8
+  probe_horizons: [6, 12, 24, 48]
+  reencode_chunk: 32
+  severe_ratio: 0.15
+  shock_episodes: 2
+clock_addr: ''
+clock_port: ''
+consec_report: 1
+consec_train: 1
+env:
+  atari:
+    actions: all
+    aggregate: max
+    autostart: false
+    clip_reward: false
+    gray: true
+    lives: unused
+    noops: 30
+    pooling: 2
+    repeat: 4
+    resize: pillow
+    size: [96, 96]
+    sticky: true
+  atari100k:
+    actions: needed
+    autostart: false
+    clip_reward: false
+    gray: false
+    lives: unused
+    noops: 30
+    repeat: 4
+    resize: pillow
+    size: [64, 64]
+    sticky: false
+  crafter:
+    logs: false
+    size: [64, 64]
+  dmc:
+    action_scale: 1.0
+    camera: -1
+    image: true
+    proprio: true
+    repeat: 1
+    size: [64, 64]
+  dmlab:
+    episodic: true
+    repeat: 4
+    size: [64, 64]
+    use_seed: true
+  loconav:
+    camera: -1
+    repeat: 1
+    size: [64, 64]
+  minecraft:
+    break_speed: 100.0
+    length: 36000
+    logs: false
+    size: [64, 64]
+  procgen:
+    resize: pillow
+    size: [96, 96]
+  rlscape:
+    action_interface: click_grid
+    audit_path: ''
+    auto_calibrate_tick: true
+    camera_mode: birdseye
+    client_dir: ''
+    episode_length: 200
+    goal_schedule: fixed
+    goals: [chop_logs]
+    grid_columns: 28
+    grid_rows: 18
+    java_home: ''
+    launch: true
+    mvn_path: ''
+    package_version: 0.1.6
+    render_mode: rgb_array
+    reset_kind: task
+    resize: [240, 160]
+    resize_filter: area
+    reward_mode: sparse_success
+    server_barrier: true
+    server_dir: ''
+    server_runtime_dir: ''
+    sync_to_tick: true
+    tick_divisor: 1
+    use_seed: true
+    username: agent
+errfile: false
+eval_adapt:
+  actent: 0.0003
+  critic_lr: 0.0001
+  enabled: false
+  every_k: 0
+  imag_length: 10
+  lr: 0.0001
+  start_batch: 1
+  steps: 3
+  trace: {enabled: false, filename: trace.jsonl}
+  train_critic: false
+  viewer: {enabled: false, traj_index: 0}
+head_audit:
+  chunk_length: 32
+  goal_names: [kill_goblin, bury_bones, chop_logs, light_fire, catch_fish]
+  horizon: 333
+  selection:
+    /home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/head_audit/selection.json
+ipv6: false
+jax:
+  compute_dtype: bfloat16
+  coordinator_address: ''
+  debug: false
+  enable_policy: true
+  expect_devices: 0
+  jit: true
+  mock_devices: 0
+  platform: cuda
+  policy_devices: [0]
+  prealloc: true
+  precompile: false
+  train_devices: [0]
+logdir:
+  /home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/head_audit/strong
+logger:
+  filter: score|length|fps|ratio|train/loss/|train/rand/
+  fps: 15
+  outputs: [jsonl, scope]
+  timer: true
+  user: ''
+method: name
+random_agent: false
+replay:
+  chunksize: 1024
+  fracs: {priority: 0.0, recency: 0.0, uniform: 1.0}
+  group_key: goal_id
+  groups: 1
+  kind: fifo
+  online: false
+  prio: {exponent: 0.8, initial: inf, maxfrac: 0.5, zero_on_sample: true}
+  priosignal: model
+  recexp: 1.0
+  retention: fifo
+  save_wait: false
+  size: 2000.0
+replay_context: 0
+replica: 0
+replicas: 1
+report_length: 32
+run:
+  actor_addr: localhost:{auto}
+  actor_batch: -1
+  actor_threads: 1
+  agent_process: false
+  ckpt_keep: 1
+  debug: true
+  duration: 0
+  envs: 1
+  episode_timeout: 180
+  eval_envs: 4
+  eval_episodes: 0
+  eval_eps: 1
+  eval_policy_mode: deterministic
+  from_checkpoint:
+    /home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001250000/checkpoint
+  from_checkpoint_regex: ''
+  log_every: 120
+  logger_addr: localhost:{auto}
+  milestone_dir: ''
+  milestone_every: 0
+  milestone_goal: ''
+  milestone_phase: -1
+  milestone_spec_digest: ''
+  remote_envs: false
+  remote_replay: false
+  replay_addr: localhost:{auto}
+  report_batches: 1
+  report_every: 300
+  save_every: 900
+  steps: 10000000000.0
+  train_ratio: 8.0
+  usage: {gc: false, gputil: false, malloc: false, nvsmi: true, psutil: true}
+script: head_audit
+seed: 0
+task: rlscape_chop_logs

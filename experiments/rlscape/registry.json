@@ -1,0 +1,94 @@
+{
+  "format": 1,
+  "programme": "rlscape_continual_imagined_rehearsal",
+  "canonical_registry": "experiments/rlscape/README.md",
+  "experiments": [
+    {
+      "id": "stage0",
+      "slug": "sequential_reservoir_baseline",
+      "name": "Sequential Reservoir Baseline and Checkpoint IR",
+      "status": "complete",
+      "hypothesis_status": "mixed",
+      "runner": "scripts/rlscape_stage0_sequential.py",
+      "historical_runner": "scripts/rlscape_m3_sequential.py",
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0",
+      "report_section": "Study I"
+    },
+    {
+      "id": "stage1a",
+      "slug": "same_state_head_audit",
+      "name": "Same-State Goal-Conditioned Head Audit",
+      "status": "complete",
+      "hypothesis_status": "supported",
+      "runner": "scripts/rlscape_stage1a_head_audit.py",
+      "historical_runner": "scripts/rlscape_head_audit.py",
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/head_audit",
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/head_audit",
+      "protocol": "experiments/rlscape/stage1a_same_state_head_audit.md",
+      "report_section": "Study IIa"
+    },
+    {
+      "id": "stage1b",
+      "slug": "imagination_path_audit",
+      "name": "Exact Imagination-Path Audit",
+      "status": "complete",
+      "hypothesis_status": "supported",
+      "runner": "scripts/rlscape_stage1b_imagination.py",
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/imagination_audit",
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/imagination_audit",
+      "protocol": "experiments/rlscape/stage1b_imagination_path_audit.md",
+      "report_section": "Study IIb"
+    },
+    {
+      "id": "stage2",
+      "slug": "controlled_actor_recovery",
+      "name": "Controlled Actor Corruption and Recovery",
+      "status": "complete",
+      "hypothesis_status": "supported",
+      "runner": "scripts/rlscape_stage2_actor_recovery.py",
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage2_actor_recovery",
+      "portable_results": "reports/rlscape_ir_research_diary/data/stage2_controlled_actor_recovery",
+      "protocol": "experiments/rlscape/stage2_controlled_actor_recovery.md",
+      "report_section": "Study III"
+    },
+    {
+      "id": "stage3a",
+      "slug": "critic_provenance_calibration",
+      "name": "Critic Provenance and Calibration Audit",
+      "status": "ready_to_run",
+      "hypothesis_status": "unresolved",
+      "runner": "scripts/rlscape_stage3a_critic_provenance.py",
+      "protocol": "experiments/rlscape/stage3a_critic_provenance_calibration.md"
+    },
+    {
+      "id": "stage3b",
+      "slug": "natural_forgetting_recovery",
+      "name": "Natural Forgetting Recovery",
+      "status": "ready_to_run",
+      "hypothesis_status": "unresolved",
+      "runner": "scripts/rlscape_stage3b_natural_forgetting.py",
+      "protocol": "experiments/rlscape/stage3b_natural_forgetting_recovery.md"
+    },
+    {
+      "id": "stage4",
+      "slug": "counterfactual_goal_conditioning_repair",
+      "name": "Counterfactual Goal-Conditioning Repair",
+      "status": "reserved",
+      "hypothesis_status": "unresolved"
+    },
+    {
+      "id": "stage5",
+      "slug": "gated_continual_ir",
+      "name": "Gated Continual Imagined Rehearsal",
+      "status": "reserved",
+      "hypothesis_status": "unresolved"
+    },
+    {
+      "id": "stage6",
+      "slug": "full_continual_validation",
+      "name": "Full Continual-Learning Validation",
+      "status": "reserved",
+      "hypothesis_status": "unresolved"
+    }
+  ]
+}

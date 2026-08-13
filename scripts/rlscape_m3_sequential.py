@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Run resilient RLScape sequential training and paired evaluation."""
+"""Historical M3 implementation for canonical RLScape Stage 0.
+
+Use ``scripts/rlscape_stage0_sequential.py`` for new commands. This module
+retains its original name because completed manifests and status helpers import
+it directly.
+"""
 
 from __future__ import annotations
 

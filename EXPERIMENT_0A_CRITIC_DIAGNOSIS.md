@@ -76,7 +76,8 @@ damaged actor to affect critic repair.
 ### Critic repair screen
 
 Critic-only IR was screened at horizons 3, 6, 12, 24, and 48. Every condition
-used 128 MCPB particles, 128 critic updates, and rehearsal seeds 0, 1, and 2.
+used 128 MCPB posterior samples, 128 critic updates, and rehearsal seeds 0, 1,
+and 2.
 The actor and world model were hashed after every run to verify that critic
 rehearsal had not modified them.
 

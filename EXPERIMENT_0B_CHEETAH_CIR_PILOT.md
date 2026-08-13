@@ -303,7 +303,7 @@ Rehearsal started at the first live posterior and then every 25 environment
 steps. Every trigger used:
 
 ```text
-MCPB particles:       128
+MCPB posterior samples: 128
 imagination horizon:  12
 optimizer steps:      1 per enabled component
 learning rate:        1e-4, constant

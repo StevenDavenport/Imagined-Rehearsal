@@ -1,0 +1,20 @@
+{
+  "actor_ir_path": true,
+  "anchors_per_episode": 4,
+  "checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001250000/checkpoint",
+  "chunk_length": 32,
+  "format": 1,
+  "goal_names": [
+    "kill_goblin",
+    "bury_bones",
+    "chop_logs",
+    "light_fire",
+    "catch_fish"
+  ],
+  "horizon": 6,
+  "particles": 128,
+  "seed_base": 20260810,
+  "selection": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/head_audit/selection.json",
+  "selection_sha256": "cf27e16dec276e63d10c5bf5831df5ed5ea9bc0bde771c20a9fee16337305d34",
+  "spec_digest": "2a60e8bb7630755ec39184b83d66418a1e050e485e17c878df445686e9a7fd9d"
+}

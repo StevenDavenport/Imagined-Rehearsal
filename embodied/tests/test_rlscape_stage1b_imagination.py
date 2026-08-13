@@ -170,6 +170,20 @@ class _Dynamics:
     return start, feat, actions
 
 
+class _RecordedDynamics(_Dynamics):
+
+  def imagine(self, start, policy_or_actions, horizon, training):
+    assert training is False
+    assert isinstance(policy_or_actions, dict)
+    feat = {
+        'deter': jnp.repeat(start['deter'][:, None], horizon, 1),
+        'stoch': jnp.repeat(start['stoch'][:, None], horizon, 1),
+        'logit': jnp.repeat(
+            jnp.zeros_like(start['stoch'])[:, None], horizon, 1),
+    }
+    return start, feat, policy_or_actions
+
+
 class _Normalize:
 
   def stats(self):
@@ -225,6 +239,46 @@ def test_model_imagination_audit_matches_ir_lambda_return_convention():
       value, value, 1.0, .95)
   np.testing.assert_allclose(output['return'][0], expected)
   assert (np.asarray(output['entropy_loss']) < 0).all()
+
+
+def test_recorded_imagination_audit_uses_supplied_action_prefix():
+  agent = object.__new__(Agent)
+  agent.goal_enabled = True
+  agent.goal_count = 5
+  agent.goal_cfg = SimpleNamespace(canonicalize_noop_position=False)
+  agent.config = SimpleNamespace(
+      contdisc=True, horizon=333,
+      imag_loss=SimpleNamespace(slowtar=True, lam=.95),
+      eval_adapt=SimpleNamespace(actent=3e-4))
+  agent.dyn = _RecordedDynamics()
+  agent.pol = _PolicyHead()
+  agent.rew = _ScalarHead(.1)
+  agent.con = _BinaryHead()
+  agent.val = _ScalarHead(.4)
+  agent.slowval = _ScalarHead(.3)
+  agent.valnorm = _Normalize()
+  agent.retnorm = _Normalize()
+  agent.advnorm = _Normalize()
+  agent._head_input = lambda feat, goal=None: jnp.concatenate([
+      feat['deter'],
+      feat['stoch'].reshape((*feat['stoch'].shape[:-2], -1)),
+      jax.nn.one_hot(goal, 5),
+  ], -1)
+  actions = {'action': jnp.asarray([[2, 3, 4]], jnp.int32)}
+
+  _, output = nj.pure(agent.recorded_imagination_audit)(
+      {},
+      {
+          'deter': jnp.ones((1, 2)),
+          'stoch': jnp.ones((1, 1, 2)),
+          'logit': jnp.zeros((1, 1, 2)),
+      },
+      jnp.asarray([2]), actions, horizon=3, start_batch=4,
+      seed=jax.random.PRNGKey(0))
+
+  expected = np.tile(np.asarray([2, 3, 4]), (4, 1))
+  np.testing.assert_array_equal(output['action']['action'][0], expected)
+  assert output['return'].shape == (1, 4, 3)
 
 
 def _shard(path, episode_id, actual_goal, success):

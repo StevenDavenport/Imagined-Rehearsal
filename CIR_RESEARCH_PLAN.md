@@ -1,11 +1,13 @@
 # Continual Imagined Rehearsal: Research Plan
 
 > [!IMPORTANT]
-> This is the current working research plan for Continual Imagined Rehearsal
-> (CIR). It describes hypotheses and intended experiments, not implemented
-> features or established results. It supersedes the earlier assumption that
-> CIR would simply add IR to an otherwise jointly trained Continual-Dreamer
-> agent.
+> This is the long-range conceptual plan for Continual Imagined Rehearsal
+> (CIR), written before the completed RLScape mechanism experiments. It
+> describes hypotheses and intended systems, not the current experimental
+> status. In particular, its critic-first proposal is now challenged by the
+> observed critic-bootstrap failure. The canonical executed evidence chain and
+> next protocols live in
+> [`experiments/rlscape/README.md`](experiments/rlscape/README.md).
 
 ## Central Thesis
 
@@ -307,9 +309,9 @@ The experiment has two diagnostic parts:
    continuation predictions. Report return error separately for low, middle,
    and high realised-reward bands.
 2. Repair only the critic from healthy-posterior anchors. Screen horizons 3, 6,
-   12, 24, and 48 with 128 MCPB particles, 128 critic updates, and three
+   12, 24, and 48 with 128 MCPB posterior samples, 128 critic updates, and three
    rehearsal seeds. Confirm the best two fidelity-qualified horizons plus the
-   horizon-6 control using 512 particles and 256 updates.
+   horizon-6 control using 512 posterior samples and 256 updates.
 
 The primary repair quantity is closure of the initial corrupt-to-clean critic
 MAE gap on held-out anchors. Also record calibration, rank correlation, value
@@ -329,8 +331,8 @@ Interpretation is deliberately conditional. Poor recorded-action fidelity
 redirects work to the world model. Adequate fidelity but less than 20% critic
 gap closure points to critic targets or bootstrapping. At least 50% closure with
 the healthy actor makes damaged-actor rollout coverage the next question.
-Intermediate recovery calls for critic learning-rate, particle-count, and
-update-count ablations before changing the architecture.
+Intermediate recovery calls for critic learning-rate, posterior-sample-count,
+and update-count ablations before changing the architecture.
 
 The implementation is `scripts/critic_intermediary_experiment.py`. Its stages
 are `prepare`, `collect`, `probe`, `screen`, `confirm`, and `summarize`; `all`

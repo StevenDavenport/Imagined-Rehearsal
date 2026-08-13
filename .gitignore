@@ -5,6 +5,17 @@ __pycache__/
 dist/
 build/
 
+# LaTeX build state; reports keep source, figures, bibliography, and PDFs.
+reports/**/*.aux
+reports/**/*.blg
+reports/**/*.fdb_latexmk
+reports/**/*.fls
+reports/**/*.log
+reports/**/*.out
+reports/**/*.toc
+reports/**/missfont.log
+reports/**/build/
+
 checkpoints/
 eval_suite/
 publish_plan/

@@ -224,6 +224,15 @@ defaults:
     anchors_per_episode: 4
     seed_base: 20260810
 
+  critic_provenance:
+    selection: ''
+    goal_names: [kill_goblin, bury_bones, chop_logs, light_fire, catch_fish]
+    chunk_length: 32
+    horizons: [1, 3, 6, 15, 20]
+    posterior_samples: 128
+    anchors_per_episode: 4
+    seed_base: 20260813
+
 size1m: &size1m
   .*\.rssm: {deter: 512, hidden: 64, classes: 4}
   .*\.depth: 4
@@ -423,6 +432,19 @@ rlscape_m3_head_audit:
 rlscape_m3_imagination_audit:
   <<: *size50m
   script: imagination_audit
+  env.rlscape.episode_length: 200
+  batch_size: 8
+  batch_length: 32
+  report_length: 32
+  replay_context: 0
+  jax: {platform: cuda, compute_dtype: bfloat16, prealloc: True, precompile: False}
+  agent.report: False
+  eval_adapt.enabled: False
+  eval_adapt.actent: 3e-4
+
+rlscape_stage3a_critic_provenance:
+  <<: *size50m
+  script: critic_provenance
   env.rlscape.episode_length: 200
   batch_size: 8
   batch_length: 32

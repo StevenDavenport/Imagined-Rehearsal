@@ -64,6 +64,7 @@ def main(argv=None):
       consec_report=config.consec_report,
       replay_context=config.replay_context,
       cir=config.cir,
+      critic_provenance=config.critic_provenance,
       head_audit=config.head_audit,
       imagination_audit=config.imagination_audit,
   )
@@ -102,6 +103,11 @@ def main(argv=None):
 
   elif config.script == 'imagination_audit':
     embodied.run.imagination_audit(
+        bind(make_agent, config),
+        args)
+
+  elif config.script == 'critic_provenance':
+    embodied.run.critic_provenance(
         bind(make_agent, config),
         args)
 

@@ -1,0 +1,42 @@
+{
+  "counterfactual_goal_sweep": [
+    "kill_goblin",
+    "bury_bones",
+    "chop_logs",
+    "light_fire",
+    "catch_fish"
+  ],
+  "data_step": 1250000,
+  "experiment_root": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0",
+  "format": 1,
+  "heads": [
+    "reward",
+    "continuation",
+    "value",
+    "slowvalue"
+  ],
+  "same_state_bank": true,
+  "selection": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/head_audit/selection.json",
+  "selection_counts": {
+    "0": {
+      "available_failure": 302,
+      "available_success": 698,
+      "selected_failure": 64,
+      "selected_success": 64
+    },
+    "1": {
+      "available_failure": 175,
+      "available_success": 825,
+      "selected_failure": 64,
+      "selected_success": 64
+    },
+    "2": {
+      "available_failure": 363,
+      "available_success": 637,
+      "selected_failure": 64,
+      "selected_success": 64
+    }
+  },
+  "strong_step": 1250000,
+  "weak_step": 1500000
+}

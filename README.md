@@ -7,6 +7,12 @@ The current working direction is documented in
 assumption below that CIR would begin as an additional actor update inside an
 otherwise jointly trained Continual-Dreamer agent.
 
+The executed RLScape evidence chain, canonical stage names, maintained
+protocols, and future experiment reservations are indexed separately in the
+[RLScape experiment registry](experiments/rlscape/README.md). That registry is
+authoritative when older `M1`--`M4` engineering milestones or roadmap labels
+conflict with the scientific stage names.
+
 The original repository is a complete implementation of IR for test-time policy repair. This `crl` branch starts a new line of work: the world-model agent will train continually across a sequence of tasks, while IR supplies immediate, current-posterior actor updates between real environment interactions.
 
 > [!IMPORTANT]
@@ -124,9 +130,13 @@ Candidate controls:
 
 The first experiments will log these candidate signals during always-on IR. Gating rules will be chosen only after testing which signals predict a positive marginal benefit from rehearsal.
 
-## Experimental Plan
+## Historical CIR roadmap
 
-### Stage 1: continual baseline
+The phase labels below predate the executed RLScape diagnostic programme. They
+are retained as conceptual background, but they are not the canonical RLScape
+experiment stages.
+
+### Roadmap phase A: continual baseline
 
 Build a task-sequence runner and reproduce a continual Dreamer baseline using one fixed world-model replay mechanism. Verify:
 
@@ -135,7 +145,7 @@ Build a task-sequence runner and reproduce a continual Dreamer baseline using on
 - replay composition can be inspected over the complete lifetime;
 - per-task learning curves and a performance matrix are recorded.
 
-### Stage 2: always-on rehearsal
+### Roadmap phase B: always-on rehearsal
 
 Integrate persistent IR into the training/interaction loop and compare:
 
@@ -150,7 +160,7 @@ Integrate persistent IR into the training/interaction loop and compare:
 
 The oracle-boundary method is an upper-bound diagnostic, not the final task-agnostic method.
 
-### Stage 3: gated rehearsal
+### Roadmap phase C: gated rehearsal
 
 Compare candidate gates under matched budgets:
 
@@ -160,7 +170,7 @@ Compare candidate gates under matched budgets:
 - combined need/trust/compute gating;
 - periodic and random controls with the same number of imagined transitions.
 
-### Stage 4: persistence and consolidation, if needed
+### Roadmap phase D: persistence and consolidation, if needed
 
 If persistent IR learns quickly but forgets or drifts, evaluate:
 

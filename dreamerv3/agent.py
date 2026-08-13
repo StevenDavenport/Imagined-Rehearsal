@@ -300,7 +300,7 @@ class Agent(embodied.jax.Agent):
     one goal ID per state. Posterior sampling, policy sampling, the H+1 state
     convention, lambda returns, normalizer use, and entropy coefficient match
     the actor-only evaluation adaptation path exactly. Outputs retain the
-    posterior-particle axis so rare optimistic trajectories remain visible.
+    MCPB posterior-sample axis so rare optimistic trajectories remain visible.
     """
     horizon = int(horizon)
     start_batch = int(start_batch)
@@ -326,6 +326,53 @@ class Agent(embodied.jax.Agent):
     lastact = policyfn(jax.tree.map(lambda x: x[:, -1], imgfeat))
     lastact = jax.tree.map(lambda x: x[:, None], lastact)
     imgact = concat([imgact, lastact], 1)
+
+    return self._imagination_audit_outputs(
+        imgfeat, imgact, goal, batch, start_batch)
+
+  def recorded_imagination_audit(
+      self, start, goal, actions, horizon=6, start_batch=128):
+    """Audit the IR return under a recorded-action proposal control.
+
+    The MCPB posterior sampling and all learned heads match
+    :meth:`imagination_audit`, but the first ``horizon`` actions come from the
+    replay episode rather than the checkpoint actor. This isolates optimism
+    generally present in the learned model/value system from optimism induced
+    by actor-selected imagined trajectories.
+    """
+    horizon = int(horizon)
+    start_batch = int(start_batch)
+    if horizon < 1 or start_batch < 1:
+      raise ValueError((horizon, start_batch))
+    batch = start['deter'].shape[0]
+    logit = jnp.repeat(start['logit'], start_batch, axis=0)
+    imagined_start = {
+        'deter': jnp.repeat(start['deter'], start_batch, axis=0),
+        'stoch': self.dyn.sample_posterior(logit),
+    }
+    goal = jnp.repeat(jnp.asarray(goal, jnp.int32), start_batch, axis=0)
+    actions = self._canonical_action(jax.tree.map(
+        lambda value: jnp.repeat(value, start_batch, axis=0), actions))
+    _, future_feat, imgact = self.dyn.imagine(
+        imagined_start, actions, horizon, training=False)
+    first = dict(
+        deter=imagined_start['deter'][:, None],
+        stoch=imagined_start['stoch'][:, None],
+        logit=jnp.zeros_like(future_feat['logit'][:, :1]),
+    )
+    imgfeat = concat([first, future_feat], 1)
+    policyfn = lambda feat: self._canonical_action(
+        sample(self.pol(self._head_input(feat, goal), 1)))
+    lastact = policyfn(jax.tree.map(lambda x: x[:, -1], imgfeat))
+    lastact = jax.tree.map(lambda x: x[:, None], lastact)
+    imgact = concat([imgact, lastact], 1)
+    return self._imagination_audit_outputs(
+        imgfeat, imgact, goal, batch, start_batch)
+
+  def _imagination_audit_outputs(
+      self, imgfeat, imgact, goal, batch, start_batch):
+    """Evaluate the common learned IR target on an imagined trajectory."""
+    horizon = imgfeat['deter'].shape[1] - 1
 
     imggoal = self._repeat_goal(goal, horizon + 1)
     inp = sg(self._head_input(imgfeat, imggoal))
@@ -371,6 +418,7 @@ class Agent(embodied.jax.Agent):
         sg(weight[:, :-1]) *
         -float(self.config.eval_adapt.actent) * policy_entropy)
 
+    future_feat = jax.tree.map(lambda x: x[:, 1:], imgfeat)
     prior_prob = jax.nn.softmax(future_feat['logit'], -1)
     prior_entropy = -jnp.sum(
         prior_prob * jnp.log(jnp.maximum(prior_prob, 1e-8)), -1).mean(-1)
@@ -379,6 +427,9 @@ class Agent(embodied.jax.Agent):
         'continuation': continuation,
         'value': value,
         'slowvalue': slowvalue,
+        'target_value': target_value,
+        'discount': jnp.ones_like(reward) * discount,
+        'lambda': jnp.ones_like(reward) * lam,
         'return': returns,
         'reward_only_mc': reward_only_mc,
         'reward_only_lambda': reward_only_lambda,
@@ -930,9 +981,10 @@ class Agent(embodied.jax.Agent):
     """Actor IR using imagined rewards without critic bootstrapping.
 
     This deliberately does not subtract a learned value baseline or the
-    historical return-normalizer offset. Zero-reward particles therefore
-    contribute no policy-gradient signal (apart from optional entropy), while
-    particles that reach predicted reward reinforce their sampled actions.
+    historical return-normalizer offset. Posterior samples whose imagined
+    trajectories contain zero reward therefore contribute no policy-gradient
+    signal (apart from optional entropy), while samples that reach predicted
+    reward reinforce their sampled actions.
     """
     policy = self.pol(rollout['inp'], 2)
     imag_loss_cfg = self.config.imag_loss.copy()

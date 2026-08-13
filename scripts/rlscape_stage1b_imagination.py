@@ -109,9 +109,9 @@ def make_figures(output_root: pathlib.Path, labels=('strong', 'weak')):
       ('return_p95', 'imagined_return_p95', '95th percentile IR return',
        'magma'),
       ('reward_event_particle_rate', 'imagined_reward_events',
-       'Particles with an imagined reward event', 'viridis'),
+       'MCPB posterior samples with an imagined reward event', 'viridis'),
       ('stop_particle_rate', 'imagined_stop_events',
-       'Particles with an imagined stop event', 'viridis'),
+       'MCPB posterior samples with an imagined stop event', 'viridis'),
   ):
     matrices = {label: _matrix(rows[label], field) for label in labels}
     values = np.concatenate([matrix[np.isfinite(matrix)]
@@ -224,7 +224,11 @@ def parse_args(argv=None):
   parser.add_argument('--strong-step', type=int, default=1_250_000)
   parser.add_argument('--weak-step', type=int, default=1_500_000)
   parser.add_argument('--horizon', type=int, default=6)
-  parser.add_argument('--particles', type=int, default=128)
+  parser.add_argument(
+      '--particles', type=int, default=128,
+      help=(
+          'Number of MCPB posterior samples. The legacy flag name is kept '
+          'for compatibility with completed Stage 1B manifests.'))
   parser.add_argument('--anchors-per-episode', type=int, default=4)
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--poll-seconds', type=float, default=30)
@@ -247,7 +251,8 @@ def main(argv=None) -> int:
       args.selection.expanduser().resolve() if args.selection else
       args.experiment_root / 'head_audit' / 'selection.json')
   if min(args.horizon, args.particles, args.anchors_per_episode) < 1:
-    raise ValueError('horizon, particles, and anchors must be positive')
+    raise ValueError(
+        'horizon, MCPB posterior samples, and anchors must be positive')
   if not args.python.is_file():
     raise FileNotFoundError(args.python)
   selection = load_selection(args.selection)

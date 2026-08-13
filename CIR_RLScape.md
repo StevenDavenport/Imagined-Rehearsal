@@ -1,3 +1,10 @@
+# Archived initial CIR--RLScape design brief
+
+> This is the original prompt that initiated the RLScape integration. It is
+> retained verbatim as research provenance and is not the current experiment
+> registry. See [`experiments/rlscape/README.md`](experiments/rlscape/README.md)
+> for canonical stage names, completed results, and planned experiments.
+
 We are beginning a new CIR experiment programme integrating the CIR repository with RLScape v0.1.6.
 
 Repository in scope:

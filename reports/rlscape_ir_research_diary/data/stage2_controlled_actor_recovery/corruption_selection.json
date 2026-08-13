@@ -1,0 +1,249 @@
+{
+  "candidates": [
+    {
+      "checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage2_actor_recovery/corruptions/zero_mask_all_s0p4_seed0",
+      "goal_retention": {
+        "bury_bones": 0.2,
+        "chop_logs": 0.35294117647058826,
+        "kill_goblin": 0.5
+      },
+      "goal_success": {
+        "bury_bones": 0.1,
+        "chop_logs": 0.3,
+        "kill_goblin": 0.25
+      },
+      "improvement_penalty": 0.0,
+      "manifest": {
+        "actor_key_count": 11,
+        "actor_keys": [
+          "pol/head/action/logits/bias",
+          "pol/head/action/logits/kernel",
+          "pol/mlp/linear0/bias",
+          "pol/mlp/linear0/kernel",
+          "pol/mlp/linear1/bias",
+          "pol/mlp/linear1/kernel",
+          "pol/mlp/linear2/bias",
+          "pol/mlp/linear2/kernel",
+          "pol/mlp/norm0/scale",
+          "pol/mlp/norm1/scale",
+          "pol/mlp/norm2/scale"
+        ],
+        "actor_param_count": 3409912,
+        "actor_relative_l2": 0.6367073879801051,
+        "actor_rms_after_mean": 0.24901034196169808,
+        "actor_rms_before_mean": 0.3251896694823097,
+        "corruption_name": "zero_mask_all_s0p4_seed0",
+        "critic_key_count": 0,
+        "critic_keys": [],
+        "critic_param_count": 0,
+        "critic_relative_l2": 0.0,
+        "critic_rms_after_mean": 0.0,
+        "critic_rms_before_mean": 0.0,
+        "keys": [
+          "pol/head/action/logits/bias",
+          "pol/head/action/logits/kernel",
+          "pol/mlp/linear0/bias",
+          "pol/mlp/linear0/kernel",
+          "pol/mlp/linear1/bias",
+          "pol/mlp/linear1/kernel",
+          "pol/mlp/linear2/bias",
+          "pol/mlp/linear2/kernel",
+          "pol/mlp/norm0/scale",
+          "pol/mlp/norm1/scale",
+          "pol/mlp/norm2/scale"
+        ],
+        "method": "zero_mask",
+        "relative_l2": 0.6367073879801051,
+        "scope": "all",
+        "seed": 0,
+        "severity": "",
+        "slowval_keys_synced": [],
+        "source_checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001250000/checkpoint",
+        "strength": 0.4,
+        "target": "actor"
+      },
+      "name": "zero_mask_all_s0p4_seed0",
+      "qualified": true,
+      "rank_score": 0.025847818310945715,
+      "retention": 0.3513513513513513,
+      "retention_spread": 0.12248233479797188,
+      "success_rate": 0.21666666666666665
+    },
+    {
+      "goal_retention": {
+        "bury_bones": 0.1,
+        "chop_logs": 0.35294117647058826,
+        "kill_goblin": 0.6
+      },
+      "goal_success": {
+        "bury_bones": 0.05,
+        "chop_logs": 0.3,
+        "kill_goblin": 0.3
+      },
+      "improvement_penalty": 0.0,
+      "name": "zero_mask_all_s0p3_seed0",
+      "qualified": true,
+      "rank_score": 0.042177122136104014,
+      "retention": 0.3513513513513513,
+      "retention_spread": 0.20412885392376337,
+      "success_rate": 0.21666666666666665
+    },
+    {
+      "goal_retention": {
+        "bury_bones": 0.1,
+        "chop_logs": 0.23529411764705885,
+        "kill_goblin": 0.6
+      },
+      "goal_success": {
+        "bury_bones": 0.05,
+        "chop_logs": 0.2,
+        "kill_goblin": 0.3
+      },
+      "improvement_penalty": 0.0,
+      "name": "zero_mask_all_s0p5_seed0",
+      "qualified": true,
+      "rank_score": 0.09493564818330708,
+      "retention": 0.2972972972972973,
+      "retention_spread": 0.21116472740302206,
+      "success_rate": 0.18333333333333335
+    },
+    {
+      "goal_retention": {
+        "bury_bones": 0.1,
+        "chop_logs": 0.23529411764705885,
+        "kill_goblin": 0.4
+      },
+      "goal_success": {
+        "bury_bones": 0.05,
+        "chop_logs": 0.2,
+        "kill_goblin": 0.2
+      },
+      "improvement_penalty": 0.0,
+      "name": "zero_mask_all_s0p6_seed0",
+      "qualified": true,
+      "rank_score": 0.13129086235615606,
+      "retention": 0.24324324324324323,
+      "retention_spread": 0.12267052799699649,
+      "success_rate": 0.15
+    },
+    {
+      "goal_retention": {
+        "bury_bones": 0.5,
+        "chop_logs": 0.7647058823529412,
+        "kill_goblin": 1.4
+      },
+      "goal_success": {
+        "bury_bones": 0.25,
+        "chop_logs": 0.65,
+        "kill_goblin": 0.7
+      },
+      "improvement_penalty": 0.19999999999999996,
+      "name": "zero_mask_all_s0p2_seed0",
+      "qualified": false,
+      "rank_score": 10.990397575073215,
+      "retention": 0.8648648648648648,
+      "retention_spread": 0.3776635510417534,
+      "success_rate": 0.5333333333333333
+    },
+    {
+      "goal_retention": {
+        "bury_bones": 0.3,
+        "chop_logs": 1.0,
+        "kill_goblin": 1.4
+      },
+      "goal_success": {
+        "bury_bones": 0.15,
+        "chop_logs": 0.85,
+        "kill_goblin": 0.7
+      },
+      "improvement_penalty": 0.19999999999999996,
+      "name": "zero_mask_all_s0p1_seed0",
+      "qualified": false,
+      "rank_score": 11.059840130232157,
+      "retention": 0.9189189189189189,
+      "retention_spread": 0.4546060565661952,
+      "success_rate": 0.5666666666666667
+    }
+  ],
+  "clean_goal_success": {
+    "bury_bones": 0.5,
+    "chop_logs": 0.85,
+    "kill_goblin": 0.5
+  },
+  "clean_success_rate": 0.6166666666666667,
+  "max_goal_retention": 0.85,
+  "retention_range": [
+    0.1,
+    0.65
+  ],
+  "selected": {
+    "checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage2_actor_recovery/corruptions/zero_mask_all_s0p4_seed0",
+    "goal_retention": {
+      "bury_bones": 0.2,
+      "chop_logs": 0.35294117647058826,
+      "kill_goblin": 0.5
+    },
+    "goal_success": {
+      "bury_bones": 0.1,
+      "chop_logs": 0.3,
+      "kill_goblin": 0.25
+    },
+    "improvement_penalty": 0.0,
+    "manifest": {
+      "actor_key_count": 11,
+      "actor_keys": [
+        "pol/head/action/logits/bias",
+        "pol/head/action/logits/kernel",
+        "pol/mlp/linear0/bias",
+        "pol/mlp/linear0/kernel",
+        "pol/mlp/linear1/bias",
+        "pol/mlp/linear1/kernel",
+        "pol/mlp/linear2/bias",
+        "pol/mlp/linear2/kernel",
+        "pol/mlp/norm0/scale",
+        "pol/mlp/norm1/scale",
+        "pol/mlp/norm2/scale"
+      ],
+      "actor_param_count": 3409912,
+      "actor_relative_l2": 0.6367073879801051,
+      "actor_rms_after_mean": 0.24901034196169808,
+      "actor_rms_before_mean": 0.3251896694823097,
+      "corruption_name": "zero_mask_all_s0p4_seed0",
+      "critic_key_count": 0,
+      "critic_keys": [],
+      "critic_param_count": 0,
+      "critic_relative_l2": 0.0,
+      "critic_rms_after_mean": 0.0,
+      "critic_rms_before_mean": 0.0,
+      "keys": [
+        "pol/head/action/logits/bias",
+        "pol/head/action/logits/kernel",
+        "pol/mlp/linear0/bias",
+        "pol/mlp/linear0/kernel",
+        "pol/mlp/linear1/bias",
+        "pol/mlp/linear1/kernel",
+        "pol/mlp/linear2/bias",
+        "pol/mlp/linear2/kernel",
+        "pol/mlp/norm0/scale",
+        "pol/mlp/norm1/scale",
+        "pol/mlp/norm2/scale"
+      ],
+      "method": "zero_mask",
+      "relative_l2": 0.6367073879801051,
+      "scope": "all",
+      "seed": 0,
+      "severity": "",
+      "slowval_keys_synced": [],
+      "source_checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001250000/checkpoint",
+      "strength": 0.4,
+      "target": "actor"
+    },
+    "name": "zero_mask_all_s0p4_seed0",
+    "qualified": true,
+    "rank_score": 0.025847818310945715,
+    "retention": 0.3513513513513513,
+    "retention_spread": 0.12248233479797188,
+    "success_rate": 0.21666666666666665
+  },
+  "target_retention": 0.35
+}

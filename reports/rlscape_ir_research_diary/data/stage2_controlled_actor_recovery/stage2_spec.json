@@ -1,0 +1,197 @@
+{
+  "adaptation": {
+    "critic_frozen": true,
+    "episode_local": true,
+    "every_k": 1,
+    "lr": 4e-05,
+    "posterior_samples": 128,
+    "steps_per_trigger": 1,
+    "world_model_frozen": true
+  },
+  "conditions": [
+    {
+      "actent": 0.0,
+      "checkpoint": "clean",
+      "enabled": false,
+      "family": "clean",
+      "horizon": 0,
+      "name": "clean_no_adapt",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": false,
+      "family": "corrupt",
+      "horizon": 0,
+      "name": "corrupt_no_adapt",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0003,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "standard_ir",
+      "horizon": 3,
+      "name": "standard_ir_h3",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0003,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "standard_ir",
+      "horizon": 6,
+      "name": "standard_ir_h6",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0003,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "standard_ir",
+      "horizon": 15,
+      "name": "standard_ir_h15",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0003,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "standard_ir",
+      "horizon": 20,
+      "name": "standard_ir_h20",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "entropy_off_ir",
+      "horizon": 3,
+      "name": "entropy_off_ir_h3",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "entropy_off_ir",
+      "horizon": 6,
+      "name": "entropy_off_ir_h6",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "entropy_off_ir",
+      "horizon": 15,
+      "name": "entropy_off_ir_h15",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "entropy_off_ir",
+      "horizon": 20,
+      "name": "entropy_off_ir_h20",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "reward_only_ir",
+      "horizon": 3,
+      "name": "reward_only_ir_h3",
+      "objective": "reward_only"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "reward_only_ir",
+      "horizon": 6,
+      "name": "reward_only_ir_h6",
+      "objective": "reward_only"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "reward_only_ir",
+      "horizon": 15,
+      "name": "reward_only_ir_h15",
+      "objective": "reward_only"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "reward_only_ir",
+      "horizon": 20,
+      "name": "reward_only_ir_h20",
+      "objective": "reward_only"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "corrupt",
+      "enabled": true,
+      "family": "reference_distill",
+      "horizon": 0,
+      "name": "reference_distill",
+      "objective": "distill"
+    }
+  ],
+  "corruption": {
+    "max_goal_retention": 0.85,
+    "method": "zero_mask",
+    "provided_checkpoint": "",
+    "retention_range": [
+      0.1,
+      0.65
+    ],
+    "scope": "all",
+    "seed": 0,
+    "strengths": [
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6
+    ],
+    "target": "actor",
+    "target_retention": 0.35
+  },
+  "episode_length": 200,
+  "episodes": {
+    "calibration": 20,
+    "deterministic": 50,
+    "sampled": 100
+  },
+  "eval_seed": 2000,
+  "experiment_root": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0",
+  "format": 1,
+  "future_conditioning_repair": "counterfactual_goal_training",
+  "goals": [
+    "kill_goblin",
+    "bury_bones",
+    "chop_logs"
+  ],
+  "grid": [
+    28,
+    18
+  ],
+  "horizons": [
+    3,
+    6,
+    15,
+    20
+  ],
+  "pairing": "same_goal_mode_reset_seed_across_all_conditions",
+  "source_checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001250000/checkpoint",
+  "strong_step": 1250000
+}

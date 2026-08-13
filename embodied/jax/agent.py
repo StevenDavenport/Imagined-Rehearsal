@@ -181,6 +181,10 @@ class Agent(embodied.Agent):
         nj.pure(self.model.imagination_audit), self.train_mesh,
         (tp, tm, ts, ts), (ts,), ar, single_output=True,
         static_argnums=(4, 5), **shared_kwargs)
+    self._recorded_imagination_audit = transform.apply(
+        nj.pure(self.model.recorded_imagination_audit), self.train_mesh,
+        (tp, tm, ts, ts, ts), (ts,), ar, single_output=True,
+        static_argnums=(5, 6), **shared_kwargs)
     self._critic_state = transform.apply(
         nj.pure(self.model.critic_state), self.train_mesh,
         (tp, tm, ts), (ts,), ar, single_output=True, **shared_kwargs)
@@ -494,6 +498,19 @@ class Agent(embodied.Agent):
     with self.train_lock:
       outs = self._imagination_audit(
           self.params, seed, start, goal, int(horizon), int(start_batch))
+    return self._take_outs(internal.fetch_async(outs))
+
+  def recorded_imagination_audit(
+      self, start, goal, actions, horizon=6, start_batch=128, seed_index=0):
+    """Run a replay-action control through the frozen IR target path."""
+    start = internal.device_put(start, self.train_sharded)
+    goal = internal.device_put(goal, self.train_sharded)
+    actions = internal.device_put(actions, self.train_sharded)
+    seed = self._seeds(int(seed_index), self.train_mirrored)
+    with self.train_lock:
+      outs = self._recorded_imagination_audit(
+          self.params, seed, start, goal, actions,
+          int(horizon), int(start_batch))
     return self._take_outs(internal.fetch_async(outs))
 
   def critic_rollout(self, carry, horizon=6, start_batch=1, params=None):
