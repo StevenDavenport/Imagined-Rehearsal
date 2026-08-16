@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Generate the figures and compact source tables for the RLScape report.
 
-The numerical arrays below are the audited summaries extracted from the FIFO
-and episode-reservoir run artifacts copied from office-gpu on 2026-08-08. The
-raw JSONL logs remain the authoritative source; these compact arrays make the
-paper package reproducible without bundling roughly 250 MB of logs.
+The numerical arrays and compact tables below are audited summaries extracted
+from the FIFO, episode-reservoir, actor-recovery, and critic-provenance run
+artifacts copied from office-gpu in August 2026. The raw JSONL logs remain the
+authoritative source; these inputs make the paper package reproducible without
+bundling the much larger raw run roots.
 """
 
 from __future__ import annotations
@@ -97,6 +98,19 @@ STAGE2_FAMILIES = {
     "reward_only_ir": ("Reward-only IR", "#54a24b", "^"),
 }
 
+STAGE3B = DATA / "stage3b_natural_forgetting_recovery"
+STAGE3B_FIGURES = "stage3b_natural_forgetting_recovery"
+STAGE3B_CHECKPOINTS = [1_250_000, 1_500_000]
+STAGE3B_CONDITIONS = [
+    "frozen", "standard_ir_h6", "reward_only_ir_h6",
+    "reward_only_ir_h15", "reward_only_ir_h20",
+]
+
+STAGE3A = DATA / "stage3a_critic_provenance_calibration"
+STAGE3A_FIGURES = "stage3a_critic_provenance_calibration"
+STAGE3A_LABELS = ["strong", "weak"]
+STAGE3A_COLORS = {"strong": "#4c78a8", "weak": "#e45756"}
+
 
 def style() -> None:
   mpl.rcParams.update({
@@ -151,7 +165,9 @@ def training_curve() -> None:
 def heat(ax, values, title, cmap="viridis", vmin=0, vmax=1,
          fmt="{:.0%}") -> None:
   masked = np.ma.masked_invalid(values)
-  cm = mpl.colormaps.get_cmap(cmap).copy()
+  # ``matplotlib.colormaps.get_cmap`` is unavailable on the older Matplotlib
+  # release used by one of the report-building hosts.
+  cm = mpl.cm.get_cmap(cmap).copy()
   cm.set_bad("#eeeeee")
   im = ax.imshow(masked, aspect="auto", cmap=cm, vmin=vmin, vmax=vmax)
   ax.set_xticks(np.arange(len(STEPS)), [f"{x/1000:g}M" for x in STEPS])
@@ -344,7 +360,7 @@ def resources() -> None:
 
 def write_tables() -> None:
   with (DATA / "evaluation_matrix.csv").open("w", newline="") as f:
-    out = csv.writer(f)
+    out = csv.writer(f, lineterminator="\n")
     out.writerow(["replay", "policy_mode", "checkpoint_steps", "goal",
                   "frozen_success", "actor_ir_success", "ir_delta"])
     for replay, mode, base, delta in [
@@ -361,11 +377,11 @@ def write_tables() -> None:
           d = "" if np.isnan(delta[i, j]) else delta[i, j]
           out.writerow([replay, mode, step * 1000, goal, base[i, j], ir, d])
   with (DATA / "training_50k_bins.csv").open("w", newline="") as f:
-    out = csv.writer(f)
+    out = csv.writer(f, lineterminator="\n")
     out.writerow(["step", "fifo_success", "reservoir_success"])
     out.writerows(zip(BIN_STEPS * 1000, FIFO_TRAIN, RES_TRAIN))
   with (DATA / "resource_milestones.csv").open("w", newline="") as f:
-    out = csv.writer(f)
+    out = csv.writer(f, lineterminator="\n")
     out.writerow(["step", "fifo_replay_gib", "reservoir_replay_gib",
                   "reservoir_process_gib", "reservoir_transitions"])
     out.writerows(zip(STEPS * 1000, FIFO_RAM, RES_RAM, RES_PROC, RES_ITEMS))
@@ -574,7 +590,7 @@ def write_stage2_aggregate(rows: list[dict[str, str]]) -> None:
     if row["condition"] not in conditions:
       conditions.append(row["condition"])
   with (STAGE2 / "aggregate_success.csv").open("w", newline="") as f:
-    out = csv.writer(f)
+    out = csv.writer(f, lineterminator="\n")
     out.writerow(["condition", "policy_mode", "successes", "episodes",
                   "aggregate_success"])
     for condition in conditions:
@@ -585,6 +601,180 @@ def write_stage2_aggregate(rows: list[dict[str, str]]) -> None:
         episodes = sum(int(row["episodes"]) for row in subset)
         out.writerow([condition, mode, successes, episodes,
                       successes / episodes])
+
+
+def read_stage3b(name: str) -> list[dict[str, str]]:
+  with (STAGE3B / name).open() as f:
+    return list(csv.DictReader(f))
+
+
+def read_stage3a(name: str) -> list[dict[str, str]]:
+  with (STAGE3A / name).open() as f:
+    return list(csv.DictReader(f))
+
+
+def stage3a_real_state_calibration() -> None:
+  rows = read_stage3a("real_state_calibration.csv")
+  x = np.arange(len(STAGE2_GOALS))
+  width = .35
+  fig, axes = plt.subplots(1, 3, figsize=(7.25, 2.8),
+                           constrained_layout=True)
+  for index, label in enumerate(STAGE3A_LABELS):
+    selected = {int(row["goal"]): row for row in rows
+                if row["checkpoint"] == label}
+    offset = (index - .5) * width
+    for axis, field in zip(
+        axes, ["online_bias", "slow_bias", "online_slow_gap_mae"]):
+      axis.bar(x + offset, [float(selected[g][field]) for g in range(3)],
+               width, label=label, color=STAGE3A_COLORS[label])
+  for axis, title, ylabel in zip(
+      axes,
+      ["Online critic", "Slow critic", "Online--slow disagreement"],
+      ["Bias vs realized return", "Bias vs realized return",
+       "Mean absolute gap"]):
+    axis.set_xticks(x, STAGE2_GOAL_LABELS, rotation=25, ha="right")
+    axis.set_title(title)
+    axis.set_ylabel(ylabel)
+  axes[-1].legend(frameon=False)
+  fig.suptitle("Stage 3A: critic calibration on real posterior states",
+               fontsize=11)
+  save(fig, f"{STAGE3A_FIGURES}/real_state_calibration")
+
+
+def stage3a_horizon_decomposition() -> None:
+  rows = read_stage3a("combined_rollout_summary.csv")
+  fig, axes = plt.subplots(1, 3, figsize=(7.25, 2.8),
+                           constrained_layout=True)
+  for label in STAGE3A_LABELS:
+    selected = [row for row in rows
+                if row["checkpoint"] == label
+                and row["proposal"] == "actor"
+                and row["control_scope"] == "all"
+                and row["relationship"] == "factual"]
+    horizons = sorted({int(float(row["horizon"])) for row in selected})
+    for axis, field in zip(
+        axes, ["return_mean", "reward_only_mean", "bootstrap_mean"]):
+      values = [np.mean([float(row[field]) for row in selected
+                         if int(float(row["horizon"])) == horizon])
+                for horizon in horizons]
+      axis.plot(horizons, values, "o-", label=label,
+                color=STAGE3A_COLORS[label])
+  for axis, title in zip(
+      axes, ["Full IR target", "Reward-only component", "Bootstrap component"]):
+    axis.set_title(title)
+    axis.set_xlabel("Imagination horizon H")
+    axis.set_ylabel("Mean target contribution")
+    axis.set_xticks([1, 3, 6, 15, 20])
+  axes[-1].legend(frameon=False)
+  fig.suptitle("Horizon-dependent provenance of the actor-selected IR target",
+               fontsize=11)
+  save(fig, f"{STAGE3A_FIGURES}/horizon_target_decomposition")
+
+
+def stage3a_actor_vs_recorded() -> None:
+  rows = read_stage3a("actor_vs_recorded.csv")
+  fig, axes = plt.subplots(1, 2, figsize=(7.25, 2.8),
+                           constrained_layout=True)
+  for label in STAGE3A_LABELS:
+    selected = [row for row in rows
+                if row["checkpoint"] == label
+                and row["relationship"] == "factual"]
+    horizons = sorted({int(row["horizon"]) for row in selected})
+    for axis, field in zip(
+        axes, ["actor_minus_recorded_return",
+               "actor_minus_recorded_bootstrap"]):
+      values = [np.mean([float(row[field]) for row in selected
+                         if int(row["horizon"]) == horizon])
+                for horizon in horizons]
+      axis.plot(horizons, values, "o-", label=label,
+                color=STAGE3A_COLORS[label])
+  axes[0].set_title("Full return difference")
+  axes[1].set_title("Bootstrap difference")
+  for axis in axes:
+    axis.axhline(0, color="black", lw=1)
+    axis.set_xlabel("Imagination horizon H")
+    axis.set_ylabel("Actor minus recorded proposal")
+    axis.set_xticks([1, 3, 6, 15, 20])
+  axes[-1].legend(frameon=False)
+  fig.suptitle("Does the actor select more optimistic imagined trajectories?",
+               fontsize=11)
+  save(fig, f"{STAGE3A_FIGURES}/actor_vs_recorded_proposal")
+
+
+def stage3b_aggregate_horizon() -> None:
+  rows = read_stage3b("main_results.csv")
+  lookup = {
+      (int(row["checkpoint_step"]), row["condition"], row["goal"],
+       row["policy_mode"]): float(row["success_rate"])
+      for row in rows
+  }
+  horizons = [6, 15, 20]
+  fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.0), constrained_layout=True,
+                           sharex=True, sharey=True)
+  for i, step in enumerate(STAGE3B_CHECKPOINTS):
+    for j, mode in enumerate(["sampled", "deterministic"]):
+      ax = axes[i, j]
+      mean = lambda condition: np.mean([
+          lookup[(step, condition, goal, mode)] for goal in STAGE2_GOALS])
+      frozen = mean("frozen")
+      standard = mean("standard_ir_h6")
+      reward = [mean(f"reward_only_ir_h{h}") for h in horizons]
+      ax.axhline(frozen, color="0.35", ls="--", lw=1.3,
+                 label=f"Frozen ({frozen:.1%})")
+      ax.scatter([6], [standard], marker="s", s=45, color="#4c78a8",
+                 zorder=3, label=f"Standard IR H=6 ({standard:.1%})")
+      ax.plot(horizons, reward, "o-", color="#54a24b", lw=2, ms=5,
+              label="Reward-only IR")
+      ax.set(xticks=horizons, ylim=(0, 1.02),
+             title=f"{step / 1e6:.2f}M checkpoint — {mode}")
+      if i == 1:
+        ax.set_xlabel("Imagination horizon H")
+      if j == 0:
+        ax.set_ylabel("Mean success across goals")
+      ax.legend(frameon=True, fontsize=7, loc="best")
+  fig.suptitle("Natural forgetting: critic-free rehearsal improves aggregate behavior",
+               fontsize=11)
+  save(fig, f"{STAGE3B_FIGURES}/aggregate_horizon_response")
+
+
+def stage3b_paired_effect_matrix() -> None:
+  rows = read_stage3b("comparison_vs_frozen.csv")
+  rows = [row for row in rows if row["condition"] != "frozen"]
+  lookup = {
+      (int(row["checkpoint_step"]), row["condition"], row["goal"],
+       row["policy_mode"]): float(row["paired_delta_vs_frozen"])
+      for row in rows
+  }
+  conditions = STAGE3B_CONDITIONS[1:]
+  labels = ["Standard H=6", "Reward-only H=6", "Reward-only H=15",
+            "Reward-only H=20"]
+  columns = [(step, mode, goal)
+             for step in STAGE3B_CHECKPOINTS
+             for mode in ["sampled", "deterministic"]
+             for goal in STAGE2_GOALS]
+  matrix = np.array([
+      [lookup[(step, condition, goal, mode)]
+       for step, mode, goal in columns]
+      for condition in conditions
+  ])
+  fig, ax = plt.subplots(figsize=(7.25, 2.9), constrained_layout=True)
+  im = ax.imshow(matrix, aspect="auto", cmap="RdYlGn", vmin=-.8, vmax=.8)
+  ax.set_xticks(range(len(columns)), [
+      f"{step / 1e6:.2f}M\n{mode[0].upper()} {goal.split('_')[0].title()}"
+      for step, mode, goal in columns], rotation=45, ha="right", fontsize=7)
+  ax.set_yticks(range(len(labels)), labels)
+  ax.grid(False)
+  for i in range(matrix.shape[0]):
+    for j in range(matrix.shape[1]):
+      value = matrix[i, j]
+      ax.text(j, i, f"{value:+.0%}", ha="center", va="center", fontsize=7,
+              color="white" if abs(value) > .5 else "black")
+  for boundary in [2.5, 5.5, 8.5]:
+    ax.axvline(boundary, color="white", lw=1.5)
+  fig.colorbar(im, ax=ax, shrink=.75,
+               label="Paired success change versus frozen actor")
+  ax.set_title("Stage 3B paired effects across both checkpoints and policy modes")
+  save(fig, f"{STAGE3B_FIGURES}/paired_effect_matrix")
 
 
 def main() -> None:
@@ -606,6 +796,11 @@ def main() -> None:
   stage2_reward_only_by_goal(stage2_rows)
   stage2_paired_effects()
   write_stage2_aggregate(stage2_rows)
+  stage3b_aggregate_horizon()
+  stage3b_paired_effect_matrix()
+  stage3a_real_state_calibration()
+  stage3a_horizon_decomposition()
+  stage3a_actor_vs_recorded()
 
 
 if __name__ == "__main__":

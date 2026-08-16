@@ -118,7 +118,7 @@ def eval_only(make_agent, make_env, make_logger, args):
 
   adapt_cfg = agent.config.eval_adapt
   adapt_objective = str(getattr(adapt_cfg, 'objective', 'standard'))
-  if adapt_objective not in ('standard', 'reward_only', 'distill'):
+  if adapt_objective not in ('standard', 'reward_only', 'bounded', 'distill'):
     raise ValueError(
         f'Unknown eval_adapt.objective: {adapt_objective!r}')
   adapt_params = None

@@ -28,17 +28,19 @@ The machine-readable companion is [`registry.json`](registry.json).
 | **1A** | Same-State Goal-Conditioned Head Audit | Complete | Reward/continuation retained factual event recognition, but counterfactual goal selectivity was weak and the critic was overoptimistic | Study IIa |
 | **1B** | Exact Imagination-Path Audit | Complete | Supported: 94--97% of the six-step IR target came from critic bootstrap | Study IIb |
 | **2** | Controlled Actor Corruption and Recovery | Complete | Supported: critic-free reward-only IR recovered a damaged actor; standard bootstrapped IR did not | Study III |
-| **3A** | Critic Provenance and Calibration Audit | Ready to run | Unresolved: determine whether critic failure originates on real posterior states, during bootstrap propagation, or through actor-selected imagination | Next diagnostic |
-| **3B** | Natural Forgetting Recovery | Ready to run; run first | Unresolved: test reward-only IR on naturally forgotten checkpoint policies | Next intervention |
-| **4** | Counterfactual Goal-Conditioning Repair | Reserved | Train explicit alternative-goal negatives and bounded goal-success values | Future repair |
+| **3A** | Critic Provenance and Calibration Audit | Complete | Supported/refined: severe error is already present on real posterior states and actor-selected imagination amplifies it; horizon growth is not the primary source | Study V |
+| **3B** | Natural Forgetting Recovery | Complete | Supported: reward-only IR improved both natural checkpoints and recovered 1.50M bury from 14% to 91% sampled; standard IR remained unsafe | Study IV |
+| **4A** | Counterfactual Goal-Head Repair | Ready to run | Test matched factual versus counterfactual reward/continuation repair and a bounded factual success-value head | Study VI |
 | **5** | Gated Continual Imagined Rehearsal | Reserved | Combine reward-only/conservative IR with a prespecified gate and trust region | Future algorithm |
 | **6** | Full Continual-Learning Validation | Reserved | Multi-seed/task-order validation with transfer, forgetting, and recurrence | Future validation |
 
-Stages 3A and 3B are sibling experiments, not a forced sequence. Stage 3A
-explains the failed teacher; Stage 3B tests the successful critic-free mechanism
-on natural rather than synthetic damage. Their results jointly determine Stage
-4 and Stage 5. The chosen operational order is **3B before 3A** because 3B is
-the more direct intervention and requires no new diagnostic model path.
+Stages 3A and 3B are sibling experiments, not a forced sequence. Stage 3B
+established that the successful critic-free mechanism transfers from synthetic
+to natural policy damage, while exposing task- and horizon-specific exceptions.
+Stage 3A then localized the failed teacher: critic error is already severe on
+real posterior states, the slow critic copies it, and actor-selected imagination
+amplifies it without a long-horizon explosion. Their completed results jointly
+motivate Stage 4A and Stage 5.
 
 ## Where each layer lives
 
@@ -55,8 +57,11 @@ the more direct intervention and requires no new diagnostic model path.
 The completed reservoir run remains historically named
 `m4_reservoir_3goal_500k_seed0`. Its canonical identity is Stage 0. Its nested
 `head_audit`, `imagination_audit`, and `stage2_actor_recovery` directories are
-the authoritative raw artifacts for Stages 1A, 1B, and 2 respectively. The
-historical `M4` label must not be interpreted as canonical Stage 4.
+the authoritative raw artifacts for Stages 1A, 1B, and 2 respectively, and
+`stage3a_critic_provenance_calibration` and
+`stage3b_natural_forgetting_recovery` are the authoritative raw Stage 3A and
+Stage 3B roots. The historical `M4` label must not be interpreted as canonical
+Stage 4.
 
 ## Maintained protocols
 
@@ -65,6 +70,7 @@ historical `M4` label must not be interpreted as canonical Stage 4.
 - [Stage 2: Controlled Actor Corruption and Recovery](stage2_controlled_actor_recovery.md)
 - [Stage 3A: Critic Provenance and Calibration Audit](stage3a_critic_provenance_calibration.md)
 - [Stage 3B: Natural Forgetting Recovery](stage3b_natural_forgetting_recovery.md)
+- [Stage 4A: Counterfactual Goal-Head Repair](stage4a_counterfactual_head_repair.md)
 
 Stage 0's full methodology and results are preserved as Study I in the
 [research diary](../../reports/rlscape_ir_research_diary/report.pdf). The

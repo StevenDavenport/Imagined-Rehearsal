@@ -194,7 +194,7 @@ def make_figures(output_root: pathlib.Path, labels: list[str]) -> None:
 
   fig, axes = plt.subplots(1, len(GOALS), figsize=(10.5, 3.2),
                            constrained_layout=True, sharex=True, sharey=True)
-  colors = ['#4c78a8', '#e45756']
+  colors = plt.cm.tab10(np.linspace(0, 1, max(1, len(labels))))
   for goal, ax in enumerate(axes):
     for color, label in zip(colors, labels):
       data = datasets[label]

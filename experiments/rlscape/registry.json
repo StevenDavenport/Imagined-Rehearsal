@@ -55,26 +55,36 @@
       "id": "stage3a",
       "slug": "critic_provenance_calibration",
       "name": "Critic Provenance and Calibration Audit",
-      "status": "ready_to_run",
-      "hypothesis_status": "unresolved",
+      "status": "complete",
+      "hypothesis_status": "supported",
       "runner": "scripts/rlscape_stage3a_critic_provenance.py",
-      "protocol": "experiments/rlscape/stage3a_critic_provenance_calibration.md"
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage3a_critic_provenance_calibration",
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/stage3a_critic_provenance_calibration",
+      "protocol": "experiments/rlscape/stage3a_critic_provenance_calibration.md",
+      "report_section": "Study V"
     },
     {
       "id": "stage3b",
       "slug": "natural_forgetting_recovery",
       "name": "Natural Forgetting Recovery",
-      "status": "ready_to_run",
-      "hypothesis_status": "unresolved",
+      "status": "complete",
+      "hypothesis_status": "supported",
       "runner": "scripts/rlscape_stage3b_natural_forgetting.py",
-      "protocol": "experiments/rlscape/stage3b_natural_forgetting_recovery.md"
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage3b_natural_forgetting_recovery",
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/stage3b_natural_forgetting_recovery",
+      "protocol": "experiments/rlscape/stage3b_natural_forgetting_recovery.md",
+      "report_section": "Study IV"
     },
     {
-      "id": "stage4",
-      "slug": "counterfactual_goal_conditioning_repair",
-      "name": "Counterfactual Goal-Conditioning Repair",
-      "status": "reserved",
-      "hypothesis_status": "unresolved"
+      "id": "stage4a",
+      "slug": "counterfactual_head_repair",
+      "name": "Counterfactual Goal-Head Repair",
+      "status": "ready_to_run",
+      "hypothesis_status": "unresolved",
+      "runner": "scripts/rlscape_stage4a_counterfactual_repair.py",
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair",
+      "protocol": "experiments/rlscape/stage4a_counterfactual_head_repair.md",
+      "report_section": "Study VI"
     },
     {
       "id": "stage5",

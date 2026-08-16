@@ -233,6 +233,31 @@ defaults:
     anchors_per_episode: 4
     seed_base: 20260813
 
+  head_repair:
+    enabled: False
+    selection: ''
+    cache: ''
+    output_checkpoint: ''
+    condition: factual_only
+    chunk_length: 32
+    states_per_episode: 24
+    head_updates: 2000
+    value_updates: 2000
+    batch_size: 256
+    event_fraction: 0.5
+    learning_rate: 4e-5
+    seed: 20260816
+
+  agent.bounded_value:
+    enabled: False
+    layers: 3
+    units: 1024
+    act: silu
+    norm: rms
+    output: binary
+    outscale: 0.0
+    winit: trunc_normal_in
+
 size1m: &size1m
   .*\.rssm: {deter: 512, hidden: 64, classes: 4}
   .*\.depth: 4
@@ -454,6 +479,31 @@ rlscape_stage3a_critic_provenance:
   agent.report: False
   eval_adapt.enabled: False
   eval_adapt.actent: 3e-4
+
+rlscape_stage4a_head_repair:
+  <<: *size50m
+  script: head_repair
+  env.rlscape.episode_length: 200
+  batch_size: 8
+  batch_length: 32
+  report_length: 32
+  replay_context: 0
+  jax: {platform: cuda, compute_dtype: bfloat16, prealloc: True, precompile: False}
+  agent.report: False
+  agent.bounded_value.enabled: True
+  head_repair.enabled: True
+  eval_adapt.enabled: False
+
+rlscape_stage4a_bounded_value:
+  <<: *size50m
+  env.rlscape.episode_length: 200
+  batch_size: 8
+  batch_length: 32
+  report_length: 32
+  replay_context: 0
+  jax: {platform: cuda, compute_dtype: bfloat16, prealloc: True, precompile: False}
+  agent.report: False
+  agent.bounded_value.enabled: True
 
 rlscape_kill_goblin:
   task: rlscape_kill_goblin

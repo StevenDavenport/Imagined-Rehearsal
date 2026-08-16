@@ -211,6 +211,19 @@ class Agent(embodied.Agent):
         (dona_sharding, allo_sharding, tm, ts, ts), (tp, ts, tm), ar,
         return_params=True, donate_params=True, first_outnums=(1,),
         **shared_kwargs)
+    self._repair_reward_continuation = None
+    self._repair_bounded_value = None
+    if self.model.head_repair_enabled:
+      self._repair_reward_continuation = transform.apply(
+          nj.pure(self.model.repair_reward_continuation), self.train_mesh,
+          (dona_sharding, allo_sharding, tm, ts), (tp, tm), ar,
+          return_params=True, donate_params=True, first_outnums=(1,),
+          static_argnums=(4,), **shared_kwargs)
+      self._repair_bounded_value = transform.apply(
+          nj.pure(self.model.repair_bounded_value), self.train_mesh,
+          (dona_sharding, allo_sharding, tm, ts), (tp, tm), ar,
+          return_params=True, donate_params=True, first_outnums=(1,),
+          **shared_kwargs)
 
     self.policy_lock = threading.Lock()
     self.train_lock = threading.Lock()
@@ -439,6 +452,34 @@ class Agent(embodied.Agent):
     mets['warmup'] = np.float32(0)
     return params, carry, mets
 
+  def repair_reward_continuation(self, batch, *, counterfactual=False):
+    """Apply one cloned reward/continuation repair update."""
+    if self._repair_reward_continuation is None:
+      raise ValueError('Head repair is disabled for this agent')
+    batch = internal.device_put(batch, self.train_sharded)
+    allo = {k: v for k, v in self.params.items() if k in self.policy_keys}
+    dona = {k: v for k, v in self.params.items() if k not in self.policy_keys}
+    seed = self._seeds(self.n_model_updates, self.train_mirrored)
+    with self.train_lock:
+      self.params, mets = self._repair_reward_continuation(
+          dona, allo, seed, batch, bool(counterfactual))
+    self.n_model_updates.increment()
+    return self._take_outs(internal.fetch_async(mets))
+
+  def repair_bounded_value(self, batch):
+    """Apply one factual bounded-success-value repair update."""
+    if self._repair_bounded_value is None:
+      raise ValueError('Bounded-value repair is disabled for this agent')
+    batch = internal.device_put(batch, self.train_sharded)
+    allo = {k: v for k, v in self.params.items() if k in self.policy_keys}
+    dona = {k: v for k, v in self.params.items() if k not in self.policy_keys}
+    seed = self._seeds(self.n_model_updates, self.train_mirrored)
+    with self.train_lock:
+      self.params, mets = self._repair_bounded_value(
+          dona, allo, seed, batch)
+    self.n_model_updates.increment()
+    return self._take_outs(internal.fetch_async(mets))
+
   def adapt_persistent(
       self, carry, steps=1, warmup=False, freeze_critic=False):
     """Commit actor or critic-first rehearsal updates to the live agent."""
@@ -561,6 +602,9 @@ class Agent(embodied.Agent):
         'all': [],
         'actor': [],
         'critic': [],
+        'bounded_value': [],
+        'reward_continuation': [],
+        'representation': [],
         'world_model': [],
         'normalizers': [],
         'optimizers': [],
@@ -571,13 +615,19 @@ class Agent(embodied.Agent):
         groups['actor'].append(key)
       if key.startswith(('val/', 'slowval/')):
         groups['critic'].append(key)
+      if key.startswith('bval/'):
+        groups['bounded_value'].append(key)
+      if key.startswith(('rew/', 'con/')):
+        groups['reward_continuation'].append(key)
+      if key.startswith(('enc/', 'dyn/', 'dec/')):
+        groups['representation'].append(key)
       if key.startswith(('enc/', 'dyn/', 'dec/', 'rew/', 'con/')):
         groups['world_model'].append(key)
       if key.startswith(('retnorm/', 'valnorm/', 'advnorm/')):
         groups['normalizers'].append(key)
       if '/opt/' in key or key.startswith((
           'opt/', 'model_opt/', 'adapt_opt/', 'adapt_actor_opt/',
-          'adapt_critic_opt/')):
+          'adapt_critic_opt/', 'repair_head_opt/', 'repair_value_opt/')):
         groups['optimizers'].append(key)
     result = {}
     for group, keys in groups.items():

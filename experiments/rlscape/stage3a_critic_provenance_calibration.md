@@ -1,6 +1,22 @@
 # RLScape Stage 3A: Critic Provenance and Calibration Audit
 
-**Status:** Implemented and locally tested; GPU audit pending. No result claimed.
+**Status:** Complete (August 2026). Hypothesis supported and refined: critic
+error is present on real posterior states and amplified by actor-selected
+imagination, but does not progressively inflate with horizon.
+
+## Outcome
+
+Both immutable checkpoints completed the full 384-episode audit with unchanged
+parameter digests. On the same 48,299 factual states, the weighted online-value
+bias grows from +1.184 at 1.25M to +1.595 at 1.50M, while mean rank correlation
+falls sharply. The slow critic reproduces the same bias. Full imagined targets
+plateau by `H=3`--`H=6`, ruling out long-horizon accumulation as the primary
+origin. Actor-selected trajectories nevertheless exceed recorded-action
+targets by approximately 0.13--0.21, almost entirely through larger critic
+bootstrap rather than predicted reward.
+
+The complete analysis and portable aggregate artifacts are in
+[`STAGE3A_FINDINGS.md`](../../results/rlscape/m4_reservoir_3goal_500k_seed0/stage3a_critic_provenance_calibration/STAGE3A_FINDINGS.md).
 
 ## Hypothesis
 

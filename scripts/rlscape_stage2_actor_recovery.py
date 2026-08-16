@@ -98,6 +98,7 @@ def build_command(
     episode_length: int, grid_columns: int, grid_rows: int,
     adapt_steps: int, adapt_lr: float, adapt_every_k: int,
     start_batch: int, mvn_path: str = '', java_home: str = '',
+    extra_configs: tuple[str, ...] = (),
 ) -> list[str]:
   if goal not in GOALS:
     raise ValueError(goal)
@@ -106,7 +107,7 @@ def build_command(
   command = [
       str(python), str(repo_root / 'dreamerv3' / 'main.py'),
       '--configs', 'rlscape', 'rlscape_click_grid', f'rlscape_{goal}',
-      'rlscape_m3_eval',
+      'rlscape_m3_eval', *extra_configs,
       '--seed', str(seed),
       '--logdir', str(logdir),
       '--run.from_checkpoint', str(checkpoint),

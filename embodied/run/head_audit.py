@@ -134,6 +134,102 @@ def create_selection(
   return result
 
 
+def create_split_selections(
+    replay_dir: str | pathlib.Path,
+    train_output: str | pathlib.Path,
+    heldout_output: str | pathlib.Path,
+    *,
+    goals: tuple[int, ...] = (0, 1, 2),
+    train_successes_per_goal: int = 96,
+    train_failures_per_goal: int = 96,
+    heldout_successes_per_goal: int = 64,
+    heldout_failures_per_goal: int = 64,
+    seed: int = 0,
+) -> tuple[dict, dict]:
+  """Create deterministic, exactly sized, episode-disjoint banks.
+
+  Stage 4A deliberately uses one draw per goal/outcome stratum and then
+  partitions that draw. This is stronger than independently constructing two
+  selections, where overlap would otherwise be possible.
+  """
+  replay_dir = pathlib.Path(replay_dir).expanduser().resolve()
+  train_output = pathlib.Path(train_output).expanduser().resolve()
+  heldout_output = pathlib.Path(heldout_output).expanduser().resolve()
+  if train_output == heldout_output:
+    raise ValueError('Train and held-out selection paths must differ')
+  requested = {
+      'train_success': int(train_successes_per_goal),
+      'train_failure': int(train_failures_per_goal),
+      'heldout_success': int(heldout_successes_per_goal),
+      'heldout_failure': int(heldout_failures_per_goal),
+  }
+  if any(amount < 0 for amount in requested.values()):
+    raise ValueError(f'Selection counts must be non-negative: {requested}')
+
+  rng = np.random.default_rng(int(seed))
+  enriched = []
+  for record in replay_records(replay_dir):
+    if record['goal_id'] in goals:
+      enriched.append({
+          **record, **_episode_outcome(pathlib.Path(record['path']))})
+
+  train, heldout, counts = [], [], {}
+  for goal in goals:
+    counts[str(goal)] = {}
+    for outcome, train_amount, heldout_amount in (
+        (True, requested['train_success'], requested['heldout_success']),
+        (False, requested['train_failure'], requested['heldout_failure'])):
+      available = [
+          record for record in enriched
+          if record['goal_id'] == goal and record['success'] == outcome]
+      rng.shuffle(available)
+      total = train_amount + heldout_amount
+      label = 'success' if outcome else 'failure'
+      if len(available) < total:
+        raise RuntimeError(
+            f'Insufficient goal {goal} {label} episodes: need {total}, '
+            f'found {len(available)}')
+      train.extend(available[:train_amount])
+      heldout.extend(available[train_amount:total])
+      counts[str(goal)][f'available_{label}'] = len(available)
+      counts[str(goal)][f'train_{label}'] = train_amount
+      counts[str(goal)][f'heldout_{label}'] = heldout_amount
+
+  train.sort(key=lambda x: (x['goal_id'], not x['success'], x['episode_id']))
+  heldout.sort(
+      key=lambda x: (x['goal_id'], not x['success'], x['episode_id']))
+  train_ids = {record['episode_id'] for record in train}
+  heldout_ids = {record['episode_id'] for record in heldout}
+  overlap = train_ids & heldout_ids
+  if overlap:
+    raise RuntimeError(f'Split selections overlap: {sorted(overlap)[:10]}')
+
+  manifest_path = replay_dir / 'manifest.json'
+  shared = {
+      'format': FORMAT,
+      'kind': 'rlscape_head_audit_selection',
+      'replay_dir': str(replay_dir),
+      'replay_manifest_sha256': _sha256(manifest_path),
+      'goals': list(goals),
+      'seed': int(seed),
+      'split_counts': requested,
+      'counts': counts,
+  }
+  train_result = {
+      **shared, 'split': 'repair_train', 'episodes': train,
+      'successes_per_goal': requested['train_success'],
+      'failures_per_goal': requested['train_failure'],
+  }
+  heldout_result = {
+      **shared, 'split': 'heldout_audit', 'episodes': heldout,
+      'successes_per_goal': requested['heldout_success'],
+      'failures_per_goal': requested['heldout_failure'],
+  }
+  _write_json(train_output, train_result)
+  _write_json(heldout_output, heldout_result)
+  return train_result, heldout_result
+
+
 def load_selection(path: str | pathlib.Path) -> dict:
   path = pathlib.Path(path).expanduser().resolve()
   selection = json.loads(path.read_text())
@@ -314,6 +410,7 @@ def summarize_predictions(arrays: dict, goal_names: list[str]) -> dict:
   continuation = arrays['continuation_prediction']
   value = arrays['value_prediction']
   slowvalue = arrays['slowvalue_prediction']
+  bounded_value = arrays.get('bounded_value_prediction')
   goals = list(range(len(goal_names)))
 
   head_rows = []
@@ -367,6 +464,22 @@ def summarize_predictions(arrays: dict, goal_names: list[str]) -> dict:
             float(prediction[first & ~episode_success].mean())
             if (first & ~episode_success).any() else None),
     }
+    if bounded_value is not None:
+      bounded_prediction = bounded_value[mask, goal]
+      row.update({
+          'bounded_value_inclusive': regression_metrics(
+              inclusive, bounded_prediction),
+          'bounded_value_exclusive': regression_metrics(
+              exclusive, bounded_prediction),
+          'bounded_value_brier': float(np.square(
+              bounded_prediction - inclusive).mean()),
+          'bounded_value_min': float(bounded_prediction.min()),
+          'bounded_value_max': float(bounded_prediction.max()),
+          'bounded_initial_success_auroc': _auc(
+              episode_success[first], bounded_prediction[first]),
+          'bounded_initial_success_ap': _average_precision(
+              episode_success[first], bounded_prediction[first]),
+      })
     value_rows.append(row)
     for target_name, target in [('inclusive', inclusive), ('exclusive', exclusive)]:
       for item in _calibration(target, prediction):
@@ -411,6 +524,10 @@ def summarize_predictions(arrays: dict, goal_names: list[str]) -> dict:
           'continuation_mean': float(continuation[mask, probed_goal].mean()),
           'value_mean': float(value[mask, probed_goal].mean()),
           'slowvalue_mean': float(slowvalue[mask, probed_goal].mean()),
+          **({
+              'bounded_value_mean': float(
+                  bounded_value[mask, probed_goal].mean())}
+             if bounded_value is not None else {}),
       })
 
   correct_reward = reward_pred[np.arange(len(actual)), actual]
@@ -461,6 +578,7 @@ def summarize_predictions(arrays: dict, goal_names: list[str]) -> dict:
               'reward_entropy', 'continuation_entropy',
               'value_entropy', 'slowvalue_entropy')
       },
+      'bounded_value_enabled': bounded_value is not None,
   }
   if complete.any():
     diagonal = reward_pred[complete, actual[complete]]
@@ -565,6 +683,9 @@ def head_audit(make_agent, args):
       'value': 'value_prediction',
       'slowvalue': 'slowvalue_prediction',
   }
+  if getattr(agent.model, 'bounded_value_enabled', False):
+    predicted['bounded_value_prediction'] = []
+    prediction_map['bounded_value'] = 'bounded_value_prediction'
 
   for number, record in enumerate(selection['episodes'], 1):
     path = pathlib.Path(record['path'])

@@ -67,6 +67,7 @@ def main(argv=None):
       critic_provenance=config.critic_provenance,
       head_audit=config.head_audit,
       imagination_audit=config.imagination_audit,
+      head_repair=config.head_repair,
   )
 
   if config.script == 'train':
@@ -108,6 +109,11 @@ def main(argv=None):
 
   elif config.script == 'critic_provenance':
     embodied.run.critic_provenance(
+        bind(make_agent, config),
+      args)
+
+  elif config.script == 'head_repair':
+    embodied.run.head_repair(
         bind(make_agent, config),
         args)
 
@@ -166,6 +172,7 @@ def make_agent(config):
   return Agent(obs_space, act_space, elements.Config(
       **config.agent,
       eval_adapt=config.eval_adapt,
+      head_repair=config.head_repair,
       logdir=config.logdir,
       seed=config.seed,
       jax=config.jax,

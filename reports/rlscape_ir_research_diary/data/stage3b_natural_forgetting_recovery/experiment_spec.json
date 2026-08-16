@@ -1,0 +1,126 @@
+{
+  "adaptation": {
+    "critic_frozen": true,
+    "episode_local": true,
+    "every_k": 1,
+    "lr": 4e-05,
+    "posterior_samples": 128,
+    "steps_per_trigger": 1,
+    "world_model_frozen": true
+  },
+  "canonical_stage": "stage3b",
+  "checkpoints": {
+    "step_0001250000": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001250000/checkpoint",
+    "step_0001500000": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001500000/checkpoint"
+  },
+  "claim_boundary": "checkpoint-local recovery without new training experience; not persistent continual retention",
+  "classification": {
+    "cells": {
+      "step_0001250000": {
+        "bury_bones": {
+          "historical_sampled_success": 0.49,
+          "status": "weak"
+        },
+        "chop_logs": {
+          "historical_sampled_success": 0.88,
+          "status": "competent"
+        },
+        "kill_goblin": {
+          "historical_sampled_success": 0.56,
+          "status": "competent"
+        }
+      },
+      "step_0001500000": {
+        "bury_bones": {
+          "historical_sampled_success": 0.08,
+          "status": "weak"
+        },
+        "chop_logs": {
+          "historical_sampled_success": 0.05,
+          "status": "weak"
+        },
+        "kill_goblin": {
+          "historical_sampled_success": 0.16,
+          "status": "weak"
+        }
+      }
+    },
+    "prespecified": true,
+    "rule": "weak iff historical sampled success < threshold",
+    "source": "Stage 0 frozen sampled-policy evaluation",
+    "threshold": 0.5
+  },
+  "conditions": [
+    {
+      "actent": 0.0,
+      "checkpoint": "natural",
+      "enabled": false,
+      "family": "frozen",
+      "horizon": 0,
+      "name": "frozen",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0003,
+      "checkpoint": "natural",
+      "enabled": true,
+      "family": "standard_ir",
+      "horizon": 6,
+      "name": "standard_ir_h6",
+      "objective": "standard"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "natural",
+      "enabled": true,
+      "family": "reward_only_ir",
+      "horizon": 6,
+      "name": "reward_only_ir_h6",
+      "objective": "reward_only"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "natural",
+      "enabled": true,
+      "family": "reward_only_ir",
+      "horizon": 15,
+      "name": "reward_only_ir_h15",
+      "objective": "reward_only"
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "natural",
+      "enabled": true,
+      "family": "reward_only_ir",
+      "horizon": 20,
+      "name": "reward_only_ir_h20",
+      "objective": "reward_only"
+    }
+  ],
+  "episode_length": 200,
+  "episodes": {
+    "deterministic": 50,
+    "sampled": 100
+  },
+  "eval_seed": 3000,
+  "experiment_root": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0",
+  "format": 1,
+  "git_commit": "f41f48747d225dc2957c2d675aaef9f4a962bc04",
+  "goals": [
+    "kill_goblin",
+    "bury_bones",
+    "chop_logs"
+  ],
+  "grid": [
+    28,
+    18
+  ],
+  "name": "natural_forgetting_recovery",
+  "pairing": "same checkpoint, goal, policy mode, and reset seed across conditions",
+  "policy_modes": [
+    "sampled",
+    "deterministic"
+  ],
+  "python_version": "3.11.15",
+  "rlscape_version": "0.1.6"
+}

@@ -1,8 +1,22 @@
 # RLScape Stage 3B: Natural Forgetting Recovery
 
-**Status:** Implemented and locally tested; GPU run pending. No result claimed.
+**Status:** Complete (14 August 2026). Hypothesis supported with important
+task- and horizon-specific exceptions.
 
 **Execution priority:** Run before Stage 3A.
+
+## Outcome
+
+All 60 evaluation units and 4,500 paired real-environment episodes completed
+without a retry or integrity mismatch. Reward-only IR improved mean success at
+both natural checkpoints. The clearest recovery was 1.50M bury bones at
+`H=15`: sampled success rose from 14% to 91% and deterministic success from 4%
+to 86%. Standard `H=6` IR remained unsafe, reducing the 1.25M sampled mean from
+70.3% to 40.3% even though it helped 1.50M kill goblin.
+
+The complete result matrix, paired intervals, interpretation, compact CSV/JSON
+artifacts, and figures are in
+[`results/rlscape/m4_reservoir_3goal_500k_seed0/stage3b_natural_forgetting_recovery`](../../results/rlscape/m4_reservoir_3goal_500k_seed0/stage3b_natural_forgetting_recovery/STAGE3B_FINDINGS.md).
 
 ## Hypothesis
 

@@ -8,9 +8,13 @@ chronological RLScape continual-learning investigation:
 2. **Stages 1A--1B / Study II:** strong/weak checkpoint head and exact
    imagination-path audits;
 3. **Stage 2 / Study III:** controlled actor corruption and recovery with
-   horizon, entropy, and critic-bootstrap ablations.
+   horizon, entropy, and critic-bootstrap ablations;
+4. **Stage 3B / Study IV:** reward-only rehearsal on naturally forgotten
+   checkpoint policies;
+5. **Stage 3A / Study V:** critic provenance on real posterior states and
+   actor-versus-recorded imagined trajectories.
 
-The canonical experiment names and future Stage 3A--6 reservations are
+The canonical experiment names and remaining Stage 4--6 ladder are
 maintained in the repository at `experiments/rlscape/README.md`.
 
 The original 8 August report remains unchanged in the sibling
@@ -32,6 +36,9 @@ latexmk -pdf report.tex
 ```
 
 The compact Study I tables were extracted on 2026-08-08. Stage II audit
-summaries and Stage III result tables were added on 2026-08-13. They make the
-report portable; the original JSONL logs remain the authoritative raw
-artifacts.
+summaries and Stage III result tables were added on 2026-08-13. Stage IV's 60
+result rows, paired intervals, immutable specification, and figures were added
+on 2026-08-15. Stage V's real-state calibration, horizon decomposition,
+proposal contrasts, and integrity summaries were added after the completed GPU
+audit. They make the report portable; the original JSONL logs remain the
+authoritative raw artifacts.

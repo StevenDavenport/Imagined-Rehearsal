@@ -85,6 +85,13 @@ class Agent(embodied.jax.Agent):
     self.slowval = embodied.jax.SlowModel(
         embodied.jax.MLPHead(scalar, **config.value, name='slowval'),
         source=self.val, **config.slowvalue)
+    self.bounded_value_enabled = bool(config.bounded_value.enabled)
+    self.bval = None
+    if self.bounded_value_enabled:
+      bounded_cfg = config.bounded_value.copy()
+      bounded_cfg.pop('enabled')
+      self.bval = embodied.jax.MLPHead(
+          binary, **bounded_cfg, name='bval')
 
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
@@ -117,6 +124,23 @@ class Agent(embodied.jax.Agent):
     self.adapt_critic_opt = embodied.jax.Optimizer(
         self.val, self._make_opt(**adapt_critic_opt), summary_depth=1,
         name='adapt_critic_opt')
+    self.head_repair_enabled = bool(config.head_repair.enabled)
+    self.repair_head_opt = None
+    self.repair_value_opt = None
+    if self.head_repair_enabled:
+      repair_opt = config.opt.copy()
+      repair_opt.update(
+          lr=config.head_repair.learning_rate, schedule='const',
+          warmup=0, anneal=0)
+      self.repair_head_opt = embodied.jax.Optimizer(
+          [self.rew, self.con], self._make_opt(**repair_opt),
+          summary_depth=1, name='repair_head_opt')
+      if not self.bounded_value_enabled:
+        raise ValueError(
+            'head_repair requires agent.bounded_value.enabled=True')
+      self.repair_value_opt = embodied.jax.Optimizer(
+          self.bval, self._make_opt(**repair_opt),
+          summary_depth=1, name='repair_value_opt')
 
     scales = self.config.loss_scales.copy()
     rec = scales.pop('rec')
@@ -291,7 +315,99 @@ class Agent(embodied.jax.Agent):
         'stoch_rms': jnp.sqrt(
             jnp.mean(jnp.square(feat['stoch']), (-2, -1))),
     }
+    if getattr(self, 'bounded_value_enabled', False):
+      result['bounded_value'] = self.bval(inp, 3).prob(1)
     return (enc_carry, dyn_carry), result
+
+  def repair_reward_continuation(self, batch, counterfactual=False):
+    """Update cloned reward/continuation heads on frozen posterior features."""
+    if not self.head_repair_enabled:
+      raise ValueError('Head repair is disabled')
+    goals = jnp.asarray(batch['actual_goal'], jnp.int32)
+    query_count = self.goal_count
+    if counterfactual:
+      queries = jnp.broadcast_to(
+          jnp.arange(query_count, dtype=jnp.int32),
+          (goals.shape[0], query_count))
+    else:
+      queries = jnp.broadcast_to(goals[:, None], (goals.shape[0], query_count))
+    feat = {
+        key: jnp.broadcast_to(
+            batch[key][:, None],
+            (batch[key].shape[0], query_count, *batch[key].shape[1:]))
+        for key in ('deter', 'stoch')}
+    inp = sg(self._head_input(feat, queries))
+    matching = queries == goals[:, None]
+    reward = jnp.asarray(batch['reward'], f32)[:, None]
+    if counterfactual:
+      reward_target = reward * f32(matching)
+      physical = jnp.asarray(batch['physical_terminal'], bool)[:, None]
+      complete = jnp.asarray(batch['goal_complete'], bool)[:, None]
+      terminal = physical | (complete & matching)
+      continuation_target = f32(~terminal)
+    else:
+      reward_target = jnp.broadcast_to(reward, matching.shape)
+      terminal = jnp.asarray(batch['is_terminal'], bool)[:, None]
+      continuation_target = jnp.broadcast_to(f32(~terminal), matching.shape)
+    if self.config.contdisc:
+      continuation_target *= 1 - 1 / float(self.config.horizon)
+
+    def lossfn(_):
+      reward_dist = self.rew(inp, 2)
+      continuation_dist = self.con(inp, 2)
+      reward_loss = reward_dist.loss(reward_target)
+      continuation_loss = continuation_dist.loss(continuation_target)
+      loss = reward_loss.mean() + continuation_loss.mean()
+      metrics = {
+          'reward_loss': reward_loss.mean(),
+          'continuation_loss': continuation_loss.mean(),
+          'reward_prediction': reward_dist.pred().mean(),
+          'continuation_prediction': continuation_dist.prob(1).mean(),
+          'reward_target': reward_target.mean(),
+          'continuation_target': continuation_target.mean(),
+      }
+      event = jnp.asarray(batch['goal_complete'], bool)
+      event_mask = event[:, None]
+      prediction = reward_dist.pred()
+      metrics['event_reward_matching'] = (
+          (prediction * f32(event_mask & matching)).sum() /
+          jnp.maximum((event_mask & matching).sum(), 1))
+      metrics['event_reward_nonmatching'] = (
+          (prediction * f32(event_mask & ~matching)).sum() /
+          jnp.maximum((event_mask & ~matching).sum(), 1))
+      return loss, metrics
+
+    metrics, mets = self.repair_head_opt(
+        lossfn, batch, has_aux=True)
+    metrics.update(mets)
+    return (metrics,)
+
+  def repair_bounded_value(self, batch):
+    """Fit a Bernoulli success-value head to factual Monte Carlo returns."""
+    if not self.head_repair_enabled or not self.bounded_value_enabled:
+      raise ValueError('Bounded-value repair is disabled')
+    goal = jnp.asarray(batch['actual_goal'], jnp.int32)
+    feat = {key: batch[key] for key in ('deter', 'stoch')}
+    inp = sg(self._head_input(feat, goal))
+    target = jnp.clip(jnp.asarray(batch['value_target'], f32), 0, 1)
+
+    def lossfn(_):
+      dist = self.bval(inp, 1)
+      prediction = dist.prob(1)
+      losses = dist.loss(target)
+      loss = losses.mean()
+      return loss, {
+          'bounded_value_loss': loss,
+          'bounded_value_prediction': prediction.mean(),
+          'bounded_value_target': target.mean(),
+          'bounded_value_mae': jnp.abs(prediction - target).mean(),
+          'bounded_value_min': prediction.min(),
+          'bounded_value_max': prediction.max(),
+      }
+
+    metrics, mets = self.repair_value_opt(lossfn, batch, has_aux=True)
+    metrics.update(mets)
+    return (metrics,)
 
   def imagination_audit(self, start, goal, horizon=6, start_batch=128):
     """Reproduce the actor-IR imagination objective without updating it.
@@ -578,6 +694,44 @@ class Agent(embodied.jax.Agent):
       self.model_opt(
           dummy_model, carry[:3], obs, prevact,
           training=True, has_aux=True)
+      if self.bounded_value_enabled:
+        _, dyn_carry, _, _ = carry
+        # The bounded head is intentionally outside the ordinary Dreamer
+        # optimizer. Materialize it nonetheless so exact audit/evaluation
+        # checkpoint loads have a stable parameter tree.
+        self.bval(self._head_input(dyn_carry), bdims=1).pred()
+      if self.head_repair_enabled:
+        B = obs['is_first'].shape[0]
+        repair_batch = {
+            'deter': jnp.zeros((B, self.dyn.deter), f32),
+            'stoch': jnp.zeros(
+                (B, self.dyn.stoch, self.dyn.classes), f32),
+            'actual_goal': jnp.zeros((B,), i32),
+            'reward': jnp.zeros((B,), f32),
+            'is_terminal': jnp.zeros((B,), bool),
+            'physical_terminal': jnp.zeros((B,), bool),
+            'goal_complete': jnp.zeros((B,), bool),
+            'value_target': jnp.zeros((B,), f32),
+        }
+        repair_inp = self._head_input(
+            {'deter': repair_batch['deter'],
+             'stoch': repair_batch['stoch']},
+            repair_batch['actual_goal'])
+        def dummy_repair(_):
+          loss = (
+              self.rew(repair_inp, 1).loss(
+                  repair_batch['reward']).mean() +
+              self.con(repair_inp, 1).loss(
+                  f32(~repair_batch['is_terminal'])).mean())
+          return 0.0 * loss, {}
+        def dummy_bounded(_):
+          loss = self.bval(repair_inp, 1).loss(
+              repair_batch['value_target']).mean()
+          return 0.0 * loss, {}
+        self.repair_head_opt(
+            dummy_repair, repair_batch, has_aux=True)
+        self.repair_value_opt(
+            dummy_bounded, repair_batch, has_aux=True)
     return carry, outs, metrics
 
   def train_model(self, carry, data):
@@ -1019,6 +1173,41 @@ class Agent(embodied.jax.Agent):
       metrics[f'ent/{key}'] = value.mean()
     return loss.mean(), metrics
 
+  def _adapt_bounded_actor_loss(self, rollout):
+    """Actor IR with learned reward and a bounded success bootstrap."""
+    if not self.bounded_value_enabled:
+      raise ValueError(
+          'bounded IR requires agent.bounded_value.enabled=True')
+    policy = self.pol(rollout['inp'], 2)
+    bounded = self.bval(rollout['inp'], 2).prob(1)
+    disc = 1 if self.config.contdisc else 1 - 1 / self.config.horizon
+    ret = lambda_return(
+        jnp.zeros_like(rollout['con']), 1 - rollout['con'], rollout['rew'],
+        bounded, bounded, disc, self.config.imag_loss.lam)
+    _, rscale = self.retnorm(ret, update=False)
+    advantage = (ret - bounded[:, :-1]) / jnp.maximum(rscale, 1e-8)
+    weight = jnp.cumprod(disc * rollout['con'], 1) / disc
+    logpi = sum([
+        dist.logp(sg(rollout['imgact'][key]))[:, :-1]
+        for key, dist in policy.items()])
+    entropies = {
+        key: dist.entropy()[:, :-1] for key, dist in policy.items()}
+    entropy = sum(entropies.values())
+    actent = float(self.config.eval_adapt.actent)
+    loss = sg(weight[:, :-1]) * -(
+        logpi * sg(advantage) + actent * entropy)
+    return loss.mean(), {
+        'adv': advantage.mean(),
+        'adv_std': advantage.std(),
+        'rew': rollout['rew'].mean(),
+        'con': rollout['con'].mean(),
+        'ret': ret.mean(),
+        'bounded_value': bounded.mean(),
+        'bounded_value_min': bounded.min(),
+        'bounded_value_max': bounded.max(),
+        'weight': weight[:, :-1].mean(),
+    }
+
   def _adapt_actor_objective(self, rollout):
     objective = str(getattr(
         self.config.eval_adapt, 'objective', 'standard'))
@@ -1026,6 +1215,8 @@ class Agent(embodied.jax.Agent):
       return self._adapt_actor_loss(rollout)
     if objective == 'reward_only':
       return self._adapt_reward_only_actor_loss(rollout)
+    if objective == 'bounded':
+      return self._adapt_bounded_actor_loss(rollout)
     if objective == 'distill':
       raise ValueError(
           'Reference distillation uses distill_actor(), not imagination')
