@@ -2,8 +2,9 @@
 """Generate the figures and compact source tables for the RLScape report.
 
 The numerical arrays and compact tables below are audited summaries extracted
-from the FIFO, episode-reservoir, actor-recovery, and critic-provenance run
-artifacts copied from office-gpu in August 2026. The raw JSONL logs remain the
+from the FIFO, episode-reservoir, actor-recovery, critic-provenance, and
+counterfactual-head-repair artifacts copied from office-gpu in August 2026.
+The raw JSONL logs remain the
 authoritative source; these inputs make the paper package reproducible without
 bundling the much larger raw run roots.
 """
@@ -110,6 +111,28 @@ STAGE3A = DATA / "stage3a_critic_provenance_calibration"
 STAGE3A_FIGURES = "stage3a_critic_provenance_calibration"
 STAGE3A_LABELS = ["strong", "weak"]
 STAGE3A_COLORS = {"strong": "#4c78a8", "weak": "#e45756"}
+
+STAGE4A = DATA / "stage4a_counterfactual_head_repair"
+STAGE4A_FIGURES = "stage4a_counterfactual_head_repair"
+STAGE4A_AUDIT_ARMS = [
+    "fifo_original", "reservoir_original", "factual_only",
+    "counterfactual", "counterfactual_bounded",
+]
+STAGE4A_AUDIT_LABELS = [
+    "FIFO", "Reservoir", "Factual-only", "Counterfactual", "CF + bounded",
+]
+STAGE4A_CONDITIONS = [
+    "original_frozen", "original_standard_h6", "original_reward_only_h15",
+    "factual_reward_only_h15", "counterfactual_reward_only_h15",
+    "counterfactual_bounded_reward_only_h15",
+    "counterfactual_bounded_h6", "counterfactual_bounded_h15",
+]
+STAGE4A_CONDITION_LABELS = [
+    "Frozen", "Original standard H=6", "Original reward-only H=15",
+    "Factual reward-only H=15", "CF reward-only H=15",
+    "CF+bdd reward-only H=15", "CF+bdd bootstrap H=6",
+    "CF+bdd bootstrap H=15",
+]
 
 
 def style() -> None:
@@ -777,6 +800,169 @@ def stage3b_paired_effect_matrix() -> None:
   save(fig, f"{STAGE3B_FIGURES}/paired_effect_matrix")
 
 
+def read_stage4a_results() -> list[dict[str, str]]:
+  with (STAGE4A / "main_results.csv").open(newline="") as handle:
+    return list(csv.DictReader(handle))
+
+
+def read_stage4a_audit(arm: str) -> dict:
+  path = STAGE4A / "attempts" / "audit" / arm / "01" / "summary.json"
+  return json.loads(path.read_text())
+
+
+def stage4a_head_selectivity() -> None:
+  summaries = [read_stage4a_audit(arm) for arm in STAGE4A_AUDIT_ARMS]
+  top1 = [entry["completion_selectivity"]["reward_top1_accuracy"]
+          for entry in summaries]
+  margins = [entry["completion_selectivity"]["reward_margin"]
+             for entry in summaries]
+  con_match = [entry["completion_selectivity"]["continuation_matching_mean"]
+               for entry in summaries]
+  con_other = [entry["completion_selectivity"]["continuation_nonmatching_mean"]
+               for entry in summaries]
+  x = np.arange(len(summaries))
+  colors = ["#4c78a8", "#f58518", "#b279a2", "#54a24b", "#2f855a"]
+  fig, axes = plt.subplots(1, 3, figsize=(7.55, 3.2),
+                           constrained_layout=True)
+  axes[0].bar(x, top1, color=colors)
+  axes[0].axhline(.2, color="0.25", ls="--", lw=1, label="5-goal chance")
+  axes[0].set(ylabel="Completion-goal top-1 accuracy", ylim=(0, 1.05),
+              title="Goal identification")
+  axes[0].legend(frameon=False, fontsize=7)
+  axes[1].bar(x, margins, color=colors)
+  axes[1].axhline(0, color="0.25", lw=1)
+  axes[1].set(ylabel="Matching − nonmatching reward", ylim=(-.08, .64),
+              title="Reward selectivity")
+  width = .36
+  axes[2].bar(x - width / 2, con_match, width, color="#e45756",
+              label="Completed goal")
+  axes[2].bar(x + width / 2, con_other, width, color="#72b7b2",
+              label="Other goals")
+  axes[2].set(ylabel="Predicted continuation", ylim=(0, 1.05),
+              title="Goal-specific stopping")
+  axes[2].legend(frameon=False, fontsize=7)
+  for ax in axes:
+    ax.set_xticks(x, STAGE4A_AUDIT_LABELS, rotation=36, ha="right",
+                  fontsize=6.5)
+    ax.grid(axis="x", visible=False)
+  fig.suptitle("Stage 4A: counterfactual labels repair held-out goal semantics",
+               fontsize=11)
+  save(fig, f"{STAGE4A_FIGURES}/head_selectivity")
+
+
+def stage4a_bounded_value() -> None:
+  summary = read_stage4a_audit("counterfactual_bounded")
+  values = summary["value"]
+  targets = np.array([x["value_inclusive"]["target_mean"] for x in values])
+  original = np.array([x["value_inclusive"]["prediction_mean"] for x in values])
+  bounded = np.array([x["bounded_value_inclusive"]["prediction_mean"]
+                      for x in values])
+  original_auc = np.array([x["initial_value_success_auroc"] for x in values])
+  bounded_auc = np.array([x["bounded_initial_success_auroc"] for x in values])
+  x = np.arange(3)
+  width = .25
+  fig, axes = plt.subplots(1, 2, figsize=(7.15, 3.0),
+                           constrained_layout=True)
+  axes[0].bar(x - width, targets, width, label="Realized target", color="0.55")
+  axes[0].bar(x, original, width, label="Original critic", color="#e45756")
+  axes[0].bar(x + width, bounded, width, label="Bounded head", color="#54a24b")
+  axes[0].set(ylabel="Mean value on held-out states", ylim=(0, 1.85),
+              title="Scale calibration")
+  axes[0].legend(frameon=False, fontsize=7)
+  axes[1].bar(x - width / 2, original_auc, width, label="Original critic",
+              color="#e45756")
+  axes[1].bar(x + width / 2, bounded_auc, width, label="Bounded head",
+              color="#54a24b")
+  axes[1].axhline(.5, color="0.25", ls="--", lw=1, label="Chance")
+  axes[1].set(ylabel="Initial-state success AUROC", ylim=(0, 1),
+              title="Success ranking")
+  axes[1].legend(frameon=False, fontsize=7)
+  for ax in axes:
+    ax.set_xticks(x, STAGE2_GOAL_LABELS, rotation=18, ha="right")
+    ax.grid(axis="x", visible=False)
+  fig.suptitle("A separate bounded success head repairs scale and improves ranking",
+               fontsize=11)
+  save(fig, f"{STAGE4A_FIGURES}/bounded_value_calibration")
+
+
+def stage4a_success_matrix() -> None:
+  rows = read_stage4a_results()
+  lookup = {(row["condition"], row["policy_mode"], row["goal"]):
+            float(row["success_rate"]) for row in rows}
+  fig, axes = plt.subplots(1, 2, figsize=(7.45, 4.8),
+                           constrained_layout=True, sharey=True)
+  for ax, mode in zip(axes, ["sampled", "deterministic"]):
+    matrix = np.array([[lookup[(condition, mode, goal)]
+                        for goal in STAGE2_GOALS]
+                       for condition in STAGE4A_CONDITIONS])
+    im = ax.imshow(matrix, aspect="auto", cmap="viridis", vmin=0, vmax=1)
+    ax.set_xticks(range(3), STAGE2_GOAL_LABELS, rotation=20, ha="right")
+    ax.set_yticks(range(len(STAGE4A_CONDITION_LABELS)),
+                  STAGE4A_CONDITION_LABELS, fontsize=7)
+    ax.set_title(f"{mode.title()} policy")
+    ax.grid(False)
+    for i in range(matrix.shape[0]):
+      for j in range(matrix.shape[1]):
+        value = matrix[i, j]
+        ax.text(j, i, f"{value:.0%}", ha="center", va="center", fontsize=7,
+                color="white" if value < .35 or value > .78 else "black")
+  fig.colorbar(im, ax=axes, shrink=.78, label="Real-environment success rate")
+  fig.suptitle("Stage 4A paired actor-adaptation assay", fontsize=11)
+  save(fig, f"{STAGE4A_FIGURES}/success_matrix")
+
+
+def stage4a_paired_effects() -> None:
+  rows = read_stage4a_results()
+  adapted = STAGE4A_CONDITIONS[1:]
+  lookup = {(row["condition"], row["policy_mode"], row["goal"]):
+            float(row["paired_delta_vs_original_frozen"]) for row in rows}
+  columns = [(mode, goal) for mode in ["sampled", "deterministic"]
+             for goal in STAGE2_GOALS]
+  matrix = np.array([[lookup[(condition, mode, goal)]
+                      for mode, goal in columns] for condition in adapted])
+  fig, ax = plt.subplots(figsize=(7.35, 3.8), constrained_layout=True)
+  im = ax.imshow(matrix, aspect="auto", cmap="RdYlGn", vmin=-.65, vmax=.65)
+  ax.set_xticks(range(6), [
+      f"{mode[0].upper()}\n{goal.split('_')[0].title()}"
+      for mode, goal in columns])
+  ax.set_yticks(range(len(adapted)), STAGE4A_CONDITION_LABELS[1:], fontsize=7)
+  ax.axvline(2.5, color="white", lw=2)
+  ax.grid(False)
+  for i in range(matrix.shape[0]):
+    for j in range(matrix.shape[1]):
+      value = matrix[i, j]
+      ax.text(j, i, f"{value:+.0%}", ha="center", va="center", fontsize=7,
+              color="white" if abs(value) > .40 else "black")
+  fig.colorbar(im, ax=ax, shrink=.8,
+               label="Paired success change versus frozen actor")
+  ax.set_title("Reward-only objectives improve broadly; original standard IR is unsafe")
+  save(fig, f"{STAGE4A_FIGURES}/paired_effects")
+
+
+def stage4a_mean_worst() -> None:
+  rows = read_stage4a_results()
+  lookup = {(row["condition"], row["policy_mode"], row["goal"]):
+            float(row["success_rate"]) for row in rows}
+  fig, axes = plt.subplots(1, 2, figsize=(7.35, 4.3), sharey=True)
+  colors = mpl.cm.tab10(np.linspace(0, .9, len(STAGE4A_CONDITIONS)))
+  for ax, mode in zip(axes, ["sampled", "deterministic"]):
+    for condition, label, color in zip(
+        STAGE4A_CONDITIONS, STAGE4A_CONDITION_LABELS, colors):
+      vals = np.array([lookup[(condition, mode, goal)] for goal in STAGE2_GOALS])
+      ax.scatter(vals.mean(), vals.min(), s=43, color=color, label=label,
+                 edgecolor="white", linewidth=.4)
+    ax.plot([0, 1], [0, 1], color="0.75", lw=1)
+    ax.set(xlim=(.28, .93), ylim=(0, .93), xlabel="Mean success across goals",
+           title=mode.title())
+  axes[0].set_ylabel("Worst-goal success")
+  handles, labels = axes[1].get_legend_handles_labels()
+  fig.legend(handles, labels, loc="lower center", ncol=2, frameon=False,
+             fontsize=7, bbox_to_anchor=(.5, .01))
+  fig.suptitle("Aggregate performance and weakest-task safety", fontsize=11)
+  fig.subplots_adjust(left=.09, right=.99, top=.84, bottom=.37, wspace=.10)
+  save(fig, f"{STAGE4A_FIGURES}/mean_worst_task")
+
+
 def main() -> None:
   style()
   training_curve()
@@ -801,6 +987,11 @@ def main() -> None:
   stage3a_real_state_calibration()
   stage3a_horizon_decomposition()
   stage3a_actor_vs_recorded()
+  stage4a_head_selectivity()
+  stage4a_bounded_value()
+  stage4a_success_matrix()
+  stage4a_paired_effects()
+  stage4a_mean_worst()
 
 
 if __name__ == "__main__":

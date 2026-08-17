@@ -123,6 +123,24 @@ def clip_by_agc(clip=0.3, pmin=1e-3):
   return optax.GradientTransformation(init_fn, update_fn)
 
 
+def clip_by_rms(clip=0.0):
+  """Cap the RMS of the final parameter update without changing direction."""
+
+  def init_fn(params):
+    del params
+    return ()
+
+  def update_fn(updates, state, params=None):
+    del params
+    if not clip:
+      return updates, state
+    update_rms = nets.rms(updates)
+    scale = jnp.minimum(1.0, f32(clip) / jnp.maximum(update_rms, 1e-20))
+    return jax.tree.map(lambda update: update * scale, updates), state
+
+  return optax.GradientTransformation(init_fn, update_fn)
+
+
 def scale_by_rms(beta=0.999, eps=1e-8):
 
   def init_fn(params):

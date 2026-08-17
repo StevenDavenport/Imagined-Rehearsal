@@ -118,7 +118,8 @@ def eval_only(make_agent, make_env, make_logger, args):
 
   adapt_cfg = agent.config.eval_adapt
   adapt_objective = str(getattr(adapt_cfg, 'objective', 'standard'))
-  if adapt_objective not in ('standard', 'reward_only', 'bounded', 'distill'):
+  if adapt_objective not in (
+      'standard', 'reward_only', 'bounded', 'mixed_bounded', 'distill'):
     raise ValueError(
         f'Unknown eval_adapt.objective: {adapt_objective!r}')
   adapt_params = None
@@ -126,6 +127,15 @@ def eval_only(make_agent, make_env, make_logger, args):
   reference_actor_params = None
   adapt_every_k = int(getattr(adapt_cfg, 'every_k', 0))
   steps_since_adapt = 0
+  paired_rng = bool(getattr(adapt_cfg, 'paired_rng', False))
+  paired_rng_seed = int(getattr(adapt_cfg, 'paired_rng_seed', 0))
+  paired_rng_stride = int(getattr(adapt_cfg, 'paired_rng_stride', 1000))
+  paired_episode = -1
+  paired_step = 0
+  if paired_rng_stride < 2:
+    raise ValueError('eval_adapt.paired_rng_stride must be at least 2')
+  if paired_rng and adapt_objective == 'distill':
+    raise ValueError('Paired RNG is not implemented for distillation')
   requested_mode = str(getattr(
       args, 'eval_policy_mode', 'deterministic')).lower()
   policy_modes = {'deterministic': 'eval', 'sampled': 'train'}
@@ -145,7 +155,7 @@ def eval_only(make_agent, make_env, make_logger, args):
     adapt_policy_params = None
     steps_since_adapt = 0
 
-  def maybe_adapt(carry, acts, outs, batch_shape):
+  def maybe_adapt(carry, acts, outs, batch_shape, rng_index=None):
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
     first_trigger = adapt_params is None
     if adapt_params is None:
@@ -161,14 +171,22 @@ def eval_only(make_agent, make_env, make_logger, args):
       adapt_params, carry, mets = agent.adapt(
           adapt_params, carry, adapt_cfg.steps,
           warmup=(first_trigger and bool(adapt_cfg.train_critic)),
-          freeze_critic=not bool(adapt_cfg.train_critic))
+          freeze_critic=not bool(adapt_cfg.train_critic),
+          **({
+              'seed_index': int(rng_index) * max(1, int(adapt_cfg.steps)),
+              'seed_base': paired_rng_seed + 2,
+          } if paired_rng else {}))
     if adapt_policy_params is not None:
       discard = getattr(agent, 'discard_params', None)
       if discard:
         discard(adapt_policy_params)
     adapt_policy_params = agent.extract_policy_params(adapt_params)
     carry, acts, _ = agent.policy_latent(
-        carry, params=adapt_policy_params, mode=agent_policy_mode)
+        carry, params=adapt_policy_params, mode=agent_policy_mode,
+        **({
+            'seed_index': int(rng_index),
+            'seed_base': paired_rng_seed,
+        } if paired_rng else {}))
     steps_since_adapt = 0
     outs['log/eval_adapt/trigger'] = np.full(batch_shape, 1.0, np.float32)
     outs['log/eval_adapt/steps'] = np.full(
@@ -182,8 +200,27 @@ def eval_only(make_agent, make_env, make_logger, args):
 
   def policy(carry, obs, **kwargs):
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
+    nonlocal paired_episode, paired_step
+    if paired_rng:
+      if obs['is_first'].shape[0] != 1:
+        raise ValueError('eval_adapt.paired_rng requires eval envs=1')
+      if obs['is_first'].any():
+        paired_episode += 1
+        paired_step = 0
+      else:
+        paired_step += 1
+      if paired_step >= paired_rng_stride:
+        raise RuntimeError(
+            'Episode exceeded eval_adapt.paired_rng_stride; increase it')
+      rng_index = paired_episode * paired_rng_stride + paired_step
+    else:
+      rng_index = None
     carry, acts, outs = agent.policy(
-        carry, obs, mode=agent_policy_mode, params=adapt_policy_params)
+        carry, obs, mode=agent_policy_mode, params=adapt_policy_params,
+        **({
+            'seed_index': int(rng_index),
+            'seed_base': paired_rng_seed,
+        } if paired_rng else {}))
     if adapt_cfg.enabled:
       if obs['is_first'].shape[0] != 1:
         raise ValueError('eval_adapt requires eval envs=1')
@@ -197,12 +234,13 @@ def eval_only(make_agent, make_env, make_logger, args):
             adapt_policy_params is None and
             steps_since_adapt == 0
         ), 'eval_adapt state leaked across episode boundary'
-        carry, acts = maybe_adapt(carry, acts, outs, obs['is_first'].shape)
+        carry, acts = maybe_adapt(
+            carry, acts, outs, obs['is_first'].shape, rng_index)
       else:
         steps_since_adapt += 1
         if adapt_every_k > 0 and steps_since_adapt >= adapt_every_k:
           carry, acts = maybe_adapt(
-              carry, acts, outs, obs['is_first'].shape)
+              carry, acts, outs, obs['is_first'].shape, rng_index)
     return carry, acts, outs
 
   def write_metrics():
@@ -255,6 +293,9 @@ def eval_only(make_agent, make_env, make_logger, args):
         'policy_mode': requested_mode,
         'adapt_enabled': bool(adapt_cfg.enabled),
         'adapt_objective': adapt_objective,
+        'paired_rng': paired_rng,
+        'paired_rng_seed': paired_rng_seed if paired_rng else None,
+        'paired_rng_stride': paired_rng_stride if paired_rng else None,
         'reference_checkpoint': str(getattr(
             adapt_cfg, 'reference_checkpoint', '')),
         'before': integrity_before,

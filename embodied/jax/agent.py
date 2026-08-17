@@ -163,9 +163,17 @@ class Agent(embodied.Agent):
         nj.pure(self.model.policy), self.policy_mesh,
         (pp, pm, ps, ps), (ps, ps, ps), ar,
         static_argnums=(4,), **shared_kwargs)
+    self._policy_paired = transform.apply(
+        nj.pure(self.model.policy_paired), self.policy_mesh,
+        (pp, pm, ps, ps, pm), (ps, ps, ps), ar,
+        static_argnums=(5,), **shared_kwargs)
     self._policy_latent = transform.apply(
         nj.pure(self.model.policy_latent), self.policy_mesh,
         (pp, pm, ps), (ps, ps, ps), ar, static_argnums=(3,),
+        **shared_kwargs)
+    self._policy_latent_paired = transform.apply(
+        nj.pure(self.model.policy_latent_paired), self.policy_mesh,
+        (pp, pm, ps, pm), (ps, ps, ps), ar, static_argnums=(4,),
         **shared_kwargs)
     self._policy_stats = transform.apply(
         nj.pure(self.model.policy_stats), self.train_mesh,
@@ -291,7 +299,9 @@ class Agent(embodied.Agent):
         self.params, self._seeds(0, self.train_mirrored), batch_size)
 
   @elements.timer.section('jaxagent_policy')
-  def policy(self, carry, obs, mode='train', params=None):
+  def policy(
+      self, carry, obs, mode='train', params=None,
+      seed_index=None, seed_base=None):
     if not self.jaxcfg.enable_policy:
       raise Exception('Policy not available when enable_policy=False')
     assert not any(k.startswith('log/') for k in obs), obs.keys()
@@ -302,16 +312,30 @@ class Agent(embodied.Agent):
 
     with self.policy_lock:
       obs = internal.device_put(obs, self.policy_sharded)
-      with self.n_actions.lock:
-        counter = self.n_actions.value
-        self.n_actions.value += 1
-      seed = self._seeds(counter, self.policy_mirrored)
+      if seed_index is None:
+        with self.n_actions.lock:
+          counter = self.n_actions.value
+          self.n_actions.value += 1
+        seed = self._seeds(counter, self.policy_mirrored)
+        action_seed = None
+      else:
+        counter = int(seed_index)
+        paired_base = self.config.seed if seed_base is None else int(seed_base)
+        seed = self._seeds(
+            counter, self.policy_mirrored, base_seed=paired_base)
+        action_seed = self._seeds(
+            counter, self.policy_mirrored,
+            base_seed=paired_base + 1)
       carry = internal.to_global(self._stack(carry), self.policy_sharded)
 
     with self.policy_lock:
       params = params or self.policy_params
-      carry, acts, outs = self._policy(
-          params, seed, carry, obs, mode)
+      if action_seed is None:
+        carry, acts, outs = self._policy(
+            params, seed, carry, obs, mode)
+      else:
+        carry, acts, outs = self._policy_paired(
+            params, seed, carry, obs, action_seed, mode)
 
     if self.jaxcfg.enable_policy:
       with self.policy_lock:
@@ -336,20 +360,37 @@ class Agent(embodied.Agent):
     return carry, acts, outs
 
   @elements.timer.section('jaxagent_policy_latent')
-  def policy_latent(self, carry, params=None, mode='train'):
+  def policy_latent(
+      self, carry, params=None, mode='train',
+      seed_index=None, seed_base=None):
     if not self.jaxcfg.enable_policy:
       raise Exception('Policy not available when enable_policy=False')
 
     with self.policy_lock:
-      with self.n_actions.lock:
-        counter = self.n_actions.value
-        self.n_actions.value += 1
-      seed = self._seeds(counter, self.policy_mirrored)
+      if seed_index is None:
+        with self.n_actions.lock:
+          counter = self.n_actions.value
+          self.n_actions.value += 1
+        seed = self._seeds(counter, self.policy_mirrored)
+        action_seed = None
+      else:
+        counter = int(seed_index)
+        paired_base = self.config.seed if seed_base is None else int(seed_base)
+        seed = self._seeds(
+            counter, self.policy_mirrored, base_seed=paired_base)
+        action_seed = self._seeds(
+            counter, self.policy_mirrored,
+            base_seed=paired_base + 1)
       carry = internal.to_global(self._stack(carry), self.policy_sharded)
 
     with self.policy_lock:
       params = params or self.policy_params
-      carry, acts, outs = self._policy_latent(params, seed, carry, mode)
+      if action_seed is None:
+        carry, acts, outs = self._policy_latent(
+            params, seed, carry, mode)
+      else:
+        carry, acts, outs = self._policy_latent_paired(
+            params, seed, carry, action_seed, mode)
 
     if self.jaxcfg.enable_policy:
       with self.policy_lock:
@@ -373,7 +414,9 @@ class Agent(embodied.Agent):
 
     return carry, acts, outs
 
-  def adapt(self, params, carry, steps=1, warmup=False, freeze_critic=False):
+  def adapt(
+      self, params, carry, steps=1, warmup=False, freeze_critic=False,
+      seed_index=None, seed_base=None):
     if steps < 1:
       return params, carry, {}
     carry = internal.to_global(self._stack(carry), self.train_sharded)
@@ -381,11 +424,16 @@ class Agent(embodied.Agent):
     critic_enabled = (
         bool(self.config.eval_adapt.train_critic) and not freeze_critic)
     modes = ([True] if warmup and critic_enabled else []) + [False] * steps
-    for critic_only in modes:
+    for update_index, critic_only in enumerate(modes):
       allo = {k: v for k, v in params.items() if k in self.policy_keys}
       dona = {k: v for k, v in params.items() if k not in self.policy_keys}
-      seed = self._seeds(self.n_adapt, self.train_mirrored)
-      self.n_adapt.increment()
+      if seed_index is None:
+        seed = self._seeds(self.n_adapt, self.train_mirrored)
+        self.n_adapt.increment()
+      else:
+        seed = self._seeds(
+            int(seed_index) + update_index, self.train_mirrored,
+            base_seed=seed_base)
       with self.train_lock:
         params, carry, mets = self._adapt(
             dona, allo, seed, carry, critic_only, freeze_critic)
@@ -829,8 +877,9 @@ class Agent(embodied.Agent):
         lambda x: np.float32(x) if x.dtype == jnp.bfloat16 else x, outs)
     return outs
 
-  def _seeds(self, counter, sharding):
-    rng = np.random.default_rng(seed=[self.config.seed, int(counter)])
+  def _seeds(self, counter, sharding, base_seed=None):
+    base_seed = self.config.seed if base_seed is None else int(base_seed)
+    rng = np.random.default_rng(seed=[base_seed, int(counter)])
     seeds = rng.integers(0, np.iinfo(np.uint32).max, (2,), np.uint32)
     return internal.device_put(seeds, sharding)
 

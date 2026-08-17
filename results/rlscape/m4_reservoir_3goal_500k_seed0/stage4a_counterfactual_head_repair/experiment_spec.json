@@ -1,0 +1,113 @@
+{
+  "canonical_stage": "stage4a",
+  "checkpoint_step": 1250000,
+  "digest": "5a8d39b2bf3ce957a77c935178ff0bd4ceb5a75f609028ded0a919e3dc69ee28",
+  "evaluation": {
+    "conditions": [
+      {
+        "actent": 0.0,
+        "bounded": false,
+        "checkpoint": "original",
+        "enabled": false,
+        "family": "original",
+        "horizon": 0,
+        "name": "original_frozen",
+        "objective": "standard"
+      },
+      {
+        "actent": 0.0003,
+        "bounded": false,
+        "checkpoint": "original",
+        "enabled": true,
+        "family": "original_standard",
+        "horizon": 6,
+        "name": "original_standard_h6",
+        "objective": "standard"
+      },
+      {
+        "actent": 0.0,
+        "bounded": false,
+        "checkpoint": "original",
+        "enabled": true,
+        "family": "original_reward_only",
+        "horizon": 15,
+        "name": "original_reward_only_h15",
+        "objective": "reward_only"
+      },
+      {
+        "actent": 0.0,
+        "bounded": false,
+        "checkpoint": "factual_only",
+        "enabled": true,
+        "family": "factual_reward_only",
+        "horizon": 15,
+        "name": "factual_reward_only_h15",
+        "objective": "reward_only"
+      },
+      {
+        "actent": 0.0,
+        "bounded": false,
+        "checkpoint": "counterfactual",
+        "enabled": true,
+        "family": "counterfactual_reward_only",
+        "horizon": 15,
+        "name": "counterfactual_reward_only_h15",
+        "objective": "reward_only"
+      },
+      {
+        "actent": 0.0,
+        "bounded": true,
+        "checkpoint": "counterfactual_bounded",
+        "enabled": true,
+        "family": "counterfactual_bounded_reward_only",
+        "horizon": 15,
+        "name": "counterfactual_bounded_reward_only_h15",
+        "objective": "reward_only"
+      },
+      {
+        "actent": 0.0,
+        "bounded": true,
+        "checkpoint": "counterfactual_bounded",
+        "enabled": true,
+        "family": "bounded_ir",
+        "horizon": 6,
+        "name": "counterfactual_bounded_h6",
+        "objective": "bounded"
+      },
+      {
+        "actent": 0.0,
+        "bounded": true,
+        "checkpoint": "counterfactual_bounded",
+        "enabled": true,
+        "family": "bounded_ir",
+        "horizon": 15,
+        "name": "counterfactual_bounded_h15",
+        "objective": "bounded"
+      }
+    ],
+    "deterministic_episodes": 50,
+    "sampled_episodes": 100,
+    "seed": 3000
+  },
+  "fifo_checkpoint": "/home/cm150user/crl_ir/logs/rlscape/e1_fifo_seq_actor_ir_seed0/milestones/step_000001250000/checkpoint",
+  "fifo_root": "/home/cm150user/crl_ir/logs/rlscape/e1_fifo_seq_actor_ir_seed0",
+  "format": 1,
+  "git_commit": "9aa45a70d975cc79c430353480e451dfe504597d",
+  "heldout_selection": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/banks/heldout_audit.json",
+  "heldout_selection_sha256": "dd136d72e25702325b82aafe39bfd555195e1849939554923c63a4adeb4657cf",
+  "python_version": "3.11.15",
+  "repair": {
+    "batch_size": 256,
+    "event_fraction": 0.5,
+    "head_updates": 2000,
+    "lr": 4e-05,
+    "seed": 20260816,
+    "states_per_episode": 24,
+    "value_updates": 2000
+  },
+  "reservoir_checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001250000/checkpoint",
+  "reservoir_root": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0",
+  "rlscape_version": "0.1.6",
+  "train_selection": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/banks/repair_train.json",
+  "train_selection_sha256": "646d6da9a0bbdafaecaa28f9b9a936c965805599435c77452e37c6d34238d17e"
+}

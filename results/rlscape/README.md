@@ -20,6 +20,10 @@ name. Canonical experiment identities are defined in
   portable evidence package: real-state critic calibration, exact horizon
   target decomposition, actor-versus-recorded proposal contrasts, integrity
   summaries, figures, and the findings narrative.
+- `stage4a_counterfactual_head_repair/` is the compact **Stage 4A** evidence
+  package: immutable specification, held-out FIFO/reservoir/repaired head
+  audits, all 48 paired evaluation cells, repair-integrity manifests, and the
+  findings narrative.
 
 Stage 3B completed all 4,500 episodes without retry or pairing failure. Its
 principal result is that reward-only IR transfers from synthetic actor
@@ -31,6 +35,12 @@ Stage 3A shows that critic overoptimism is already severe on real posterior
 states, worsens at the collapsed checkpoint, and is amplified by actor-selected
 imagination rather than created by increasing horizon. See
 [`STAGE3A_FINDINGS.md`](m4_reservoir_3goal_500k_seed0/stage3a_critic_provenance_calibration/STAGE3A_FINDINGS.md).
+
+Stage 4A shows that counterfactual event labels repair completion-goal
+selectivity from 33.3% to 97.4% and that a bounded success head repairs value
+scale, but neither change automatically outperforms factual reward-only IR in
+the real environment. See
+[`STAGE4A_FINDINGS.md`](m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/STAGE4A_FINDINGS.md).
 
 Historical paths are intentionally not rewritten inside CSV/JSON extracts.
 They identify the exact source host and run from which each result was derived.

@@ -1,4 +1,5 @@
 import importlib
+import json
 from types import SimpleNamespace
 
 import elements
@@ -84,6 +85,38 @@ class EvalEnv(Dummy):
     self.closed = True
 
 
+class PairedAdaptiveEvalAgent(AdaptiveEvalAgent):
+
+  def __init__(self, act_space):
+    super().__init__(act_space)
+    self.config.eval_adapt.paired_rng = True
+    self.config.eval_adapt.paired_rng_seed = 700
+    self.config.eval_adapt.paired_rng_stride = 1000
+    self.policy_seeds = []
+    self.adapt_seeds = []
+    self.latent_seeds = []
+
+  def policy(
+      self, carry, obs, mode='eval', params=None,
+      seed_index=None, seed_base=None):
+    self.policy_seeds.append((seed_index, seed_base))
+    return super().policy(carry, obs, mode=mode, params=params)
+
+  def adapt(
+      self, params, carry, steps=1, warmup=False, freeze_critic=False,
+      seed_index=None, seed_base=None):
+    self.adapt_seeds.append((seed_index, seed_base))
+    return super().adapt(
+        params, carry, steps=steps, warmup=warmup,
+        freeze_critic=freeze_critic)
+
+  def policy_latent(
+      self, carry, params=None, mode='train',
+      seed_index=None, seed_base=None):
+    self.latent_seeds.append((seed_index, seed_base))
+    return super().policy_latent(carry, params=params, mode=mode)
+
+
 class EvalLogger:
 
   def __init__(self):
@@ -159,3 +192,30 @@ def test_eval_only_actor_ir_is_sampled_actor_only_and_episode_local(
   assert agent.discarded >= 4
   integrity = (tmp_path / 'eval_integrity.json').read_text()
   assert '"equal": true' in integrity
+
+
+def test_eval_only_paired_rng_restarts_by_episode_and_separates_streams(
+    tmp_path, monkeypatch):
+  module = importlib.import_module('embodied.run.eval_only')
+  monkeypatch.setattr(module.elements.checkpoint, 'load', lambda *args: None)
+  env = EvalEnv()
+  agent = PairedAdaptiveEvalAgent(env.act_space)
+  logger = EvalLogger()
+  args = SimpleNamespace(
+      from_checkpoint='unused', logdir=str(tmp_path), envs=1, debug=True,
+      usage={}, log_every=1000, eval_episodes=2,
+      eval_policy_mode='sampled', steps=999)
+
+  module.eval_only(
+      lambda: agent, lambda index: env, lambda: logger, args)
+
+  assert agent.policy_seeds[:3] == [(0, 700), (1, 700), (2, 700)]
+  assert agent.policy_seeds[3:6] == [
+      (1000, 700), (1001, 700), (1002, 700)]
+  assert agent.adapt_seeds == [
+      (0, 702), (1, 702), (1000, 702), (1001, 702)]
+  assert agent.latent_seeds == [
+      (0, 700), (1, 700), (1000, 700), (1001, 700)]
+  integrity = json.loads((tmp_path / 'eval_integrity.json').read_text())
+  assert integrity['paired_rng'] is True
+  assert integrity['paired_rng_seed'] == 700

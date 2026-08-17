@@ -509,7 +509,7 @@ def make_head_repair_figures(
       for x, y, count in zip(xs, ys, counts):
         axis.annotate(str(count), (x, y), xytext=(3, 3),
                       textcoords='offset points', fontsize=7)
-      axis.set_title(goal.replace('_', ' '))
+      axis.set_title(GOALS[goal].replace('_', ' '))
       axis.set_xlabel('Predicted bounded value')
     axes[0, 0].set_ylabel('Empirical discounted completion return')
     fig.suptitle('Held-out bounded success-value calibration')

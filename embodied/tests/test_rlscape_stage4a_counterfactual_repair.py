@@ -189,6 +189,29 @@ def test_stage4a_condition_matrix_and_bounded_config_layering(tmp_path):
   assert configs[-1] == 'rlscape_stage4a_bounded_value'
 
 
+def test_stage4a_bounded_value_figure_accepts_integer_goal_indices(tmp_path):
+  label = 'counterfactual_bounded'
+  audit = tmp_path / label
+  audit.mkdir()
+  actual_goal = np.repeat(np.arange(3, dtype=np.int32), 2)
+  bounded = np.linspace(.1, .9, len(actual_goal) * 5).reshape(-1, 5)
+  np.savez_compressed(
+      audit / 'predictions.npz', actual_goal=actual_goal,
+      bounded_value_prediction=bounded,
+      return_inclusive=np.asarray([0, 1, 0, 1, 0, 1], np.float32))
+  (audit / 'summary.json').write_text(json.dumps({
+      'completion_selectivity': {
+          'reward_top1_accuracy': .75,
+          'reward_margin': .5,
+      },
+  }))
+
+  stage4a.make_head_repair_figures(tmp_path, [label])
+
+  assert (tmp_path / 'figures' / 'counterfactual_selectivity.pdf').is_file()
+  assert (tmp_path / 'figures' / 'bounded_value_calibration.pdf').is_file()
+
+
 class _PolicyDistribution:
 
   def __init__(self, shape):

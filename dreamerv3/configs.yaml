@@ -171,6 +171,12 @@ defaults:
     train_critic: False
     objective: standard
     reference_checkpoint: ''
+    mix_beta: 0.0
+    value_correction_clip: 0.0
+    update_rms_clip: 0.0
+    paired_rng: False
+    paired_rng_seed: 0
+    paired_rng_stride: 1000
     steps: 3
     imag_length: 10
     lr: 1e-4

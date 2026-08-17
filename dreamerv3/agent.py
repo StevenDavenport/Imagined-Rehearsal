@@ -21,8 +21,14 @@ concat = lambda xs, a: jax.tree.map(lambda *x: jnp.concatenate(x, a), *xs)
 isimage = lambda s: s.dtype == np.uint8 and len(s.shape) == 3
 
 
-def select_policy_action(policy, mode):
+def select_policy_action(policy, mode, seed=None):
   if mode == 'train':
+    if seed is not None:
+      keys = sorted(policy)
+      seeds = jax.random.split(seed, len(keys))
+      return {
+          key: policy[key].sample(action_seed)
+          for key, action_seed in zip(keys, seeds)}
     return sample(policy)
   if mode == 'eval':
     return jax.tree.map(lambda dist: dist.pred(), policy)
@@ -114,7 +120,9 @@ class Agent(embodied.jax.Agent):
         name='adapt_opt')
     adapt_actor_opt = config.opt.copy()
     adapt_actor_opt.update(
-        lr=config.eval_adapt.lr, schedule='const', warmup=0, anneal=0)
+        lr=config.eval_adapt.lr, schedule='const', warmup=0, anneal=0,
+        update_rms_clip=float(getattr(
+            config.eval_adapt, 'update_rms_clip', 0.0)))
     self.adapt_actor_opt = embodied.jax.Optimizer(
         self.pol, self._make_opt(**adapt_actor_opt), summary_depth=1,
         name='adapt_actor_opt')
@@ -190,6 +198,13 @@ class Agent(embodied.jax.Agent):
     return self.init_train(batch_size)
 
   def policy(self, carry, obs, mode='train'):
+    return self._policy(carry, obs, mode=mode, action_seed=None)
+
+  def policy_paired(self, carry, obs, action_seed, mode='train'):
+    """Policy step with an explicit action-sampling key for paired assays."""
+    return self._policy(carry, obs, mode=mode, action_seed=action_seed)
+
+  def _policy(self, carry, obs, mode='train', action_seed=None):
     (enc_carry, dyn_carry, dec_carry, prevact) = carry
     kw = dict(training=False, single=True)
     reset = obs['is_first']
@@ -205,7 +220,8 @@ class Agent(embodied.jax.Agent):
     if dec_carry:
       dec_carry, dec_entry, recons = self.dec(dec_carry, feat, reset, **kw)
     policy = self.pol(self._head_input(feat, goal), bdims=1)
-    act = self._canonical_action(select_policy_action(policy, mode))
+    act = self._canonical_action(
+        select_policy_action(policy, mode, action_seed))
     out = {}
     out['finite'] = elements.tree.flatdict(jax.tree.map(
         lambda x: jnp.isfinite(x).all(range(1, x.ndim)),
@@ -217,9 +233,17 @@ class Agent(embodied.jax.Agent):
     return carry, act, out
 
   def policy_latent(self, carry, mode='train'):
+    return self._policy_latent(carry, mode=mode, action_seed=None)
+
+  def policy_latent_paired(self, carry, action_seed, mode='train'):
+    """Latent policy step sharing the paired action key with policy_paired."""
+    return self._policy_latent(carry, mode=mode, action_seed=action_seed)
+
+  def _policy_latent(self, carry, mode='train', action_seed=None):
     enc_carry, dyn_carry, dec_carry, _ = carry
     policy = self.pol(self._head_input(dyn_carry), bdims=1)
-    act = self._canonical_action(select_policy_action(policy, mode))
+    act = self._canonical_action(
+        select_policy_action(policy, mode, action_seed))
     out = {}
     out['finite'] = elements.tree.flatdict(jax.tree.map(
         lambda x: jnp.isfinite(x).all(range(1, x.ndim)),
@@ -1208,6 +1232,74 @@ class Agent(embodied.jax.Agent):
         'weight': weight[:, :-1].mean(),
     }
 
+  def _adapt_mixed_bounded_actor_loss(self, rollout):
+    """Interpolate reward-only IR toward bounded-value IR.
+
+    ``mix_beta=0`` is exactly reward-only IR and ``mix_beta=1`` is exactly
+    bounded-value IR when correction clipping is disabled. Intermediate doses
+    add only the bounded head's incremental advantage, avoiding an accidental
+    second copy of the imagined reward signal.
+    """
+    if not self.bounded_value_enabled:
+      raise ValueError(
+          'mixed bounded IR requires agent.bounded_value.enabled=True')
+    policy = self.pol(rollout['inp'], 2)
+    bounded = self.bval(rollout['inp'], 2).prob(1)
+    disc = 1 if self.config.contdisc else 1 - 1 / self.config.horizon
+    zeros = jnp.zeros_like(rollout['rew'])
+    reward_ret = lambda_return(
+        zeros, 1 - rollout['con'], rollout['rew'], zeros, zeros,
+        disc, self.config.imag_loss.lam)
+    bounded_ret = lambda_return(
+        zeros, 1 - rollout['con'], rollout['rew'], bounded, bounded,
+        disc, self.config.imag_loss.lam)
+    _, rscale = self.retnorm(reward_ret, update=False)
+    rscale = jnp.maximum(rscale, 1e-8)
+    reward_advantage = reward_ret / rscale
+    bounded_advantage = (bounded_ret - bounded[:, :-1]) / rscale
+    value_correction = bounded_advantage - reward_advantage
+    clip = float(getattr(
+        self.config.eval_adapt, 'value_correction_clip', 0.0))
+    if clip > 0:
+      value_correction_used = jnp.clip(value_correction, -clip, clip)
+    else:
+      value_correction_used = value_correction
+    beta = float(getattr(self.config.eval_adapt, 'mix_beta', 0.0))
+    advantage = reward_advantage + beta * value_correction_used
+    weight = jnp.cumprod(disc * rollout['con'], 1) / disc
+    logpi = sum([
+        dist.logp(sg(rollout['imgact'][key]))[:, :-1]
+        for key, dist in policy.items()])
+    entropies = {
+        key: dist.entropy()[:, :-1] for key, dist in policy.items()}
+    entropy = sum(entropies.values())
+    actent = float(self.config.eval_adapt.actent)
+    loss = sg(weight[:, :-1]) * -(
+        logpi * sg(advantage) + actent * entropy)
+    metrics = {
+        'adv': advantage.mean(),
+        'adv_std': advantage.std(),
+        'rew': rollout['rew'].mean(),
+        'con': rollout['con'].mean(),
+        'ret': reward_ret.mean(),
+        'reward_only': reward_ret.mean(),
+        'bounded_ret': bounded_ret.mean(),
+        'bounded_value': bounded.mean(),
+        'bounded_value_min': bounded.min(),
+        'bounded_value_max': bounded.max(),
+        'value_correction': value_correction.mean(),
+        'value_correction_abs': jnp.abs(value_correction).mean(),
+        'value_correction_used_abs': jnp.abs(value_correction_used).mean(),
+        'value_correction_clip_rate': (
+            (jnp.abs(value_correction) > clip).mean()
+            if clip > 0 else jnp.asarray(0.0, f32)),
+        'mix_beta': jnp.asarray(beta, f32),
+        'weight': weight[:, :-1].mean(),
+    }
+    for key, value in entropies.items():
+      metrics[f'ent/{key}'] = value.mean()
+    return loss.mean(), metrics
+
   def _adapt_actor_objective(self, rollout):
     objective = str(getattr(
         self.config.eval_adapt, 'objective', 'standard'))
@@ -1217,6 +1309,8 @@ class Agent(embodied.jax.Agent):
       return self._adapt_reward_only_actor_loss(rollout)
     if objective == 'bounded':
       return self._adapt_bounded_actor_loss(rollout)
+    if objective == 'mixed_bounded':
+      return self._adapt_mixed_bounded_actor_loss(rollout)
     if objective == 'distill':
       raise ValueError(
           'Reference distillation uses distill_actor(), not imagination')
@@ -1372,6 +1466,7 @@ class Agent(embodied.jax.Agent):
       schedule: str = 'const',
       warmup: int = 1000,
       anneal: int = 0,
+      update_rms_clip: float = 0.0,
   ):
     chain = []
     chain.append(embodied.jax.opt.clip_by_agc(agc))
@@ -1395,6 +1490,7 @@ class Agent(embodied.jax.Agent):
       ramp = optax.linear_schedule(0.0, lr, warmup)
       sched = optax.join_schedules([ramp, sched], [warmup])
     chain.append(optax.scale_by_learning_rate(sched))
+    chain.append(embodied.jax.opt.clip_by_rms(update_rms_clip))
     return optax.chain(*chain)
 
 

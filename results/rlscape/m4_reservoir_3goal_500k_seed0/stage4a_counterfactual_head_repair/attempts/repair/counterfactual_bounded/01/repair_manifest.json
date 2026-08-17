@@ -1,0 +1,180 @@
+{
+  "batch_size": 256,
+  "bounded_value": true,
+  "cache": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/banks/repair_latents.npz",
+  "cache_spec": {
+    "cache_bytes": 94890031,
+    "cache_sha256": "913ada3a7d5f646cf9be28cc75b6e2dea7785fdf898b1516c44edbd2b62b674b",
+    "checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001250000/checkpoint",
+    "chunk_length": 32,
+    "completion_states": 288,
+    "counts_by_goal_and_success": {
+      "0": {
+        "0": 2304,
+        "1": 1979
+      },
+      "1": {
+        "0": 2304,
+        "1": 923
+      },
+      "2": {
+        "0": 2304,
+        "1": 2183
+      }
+    },
+    "episodes": 576,
+    "format": 1,
+    "representation_sha256": "e7e53ef60c47936be475e2af0e11ea316c6f5b5a04c04b350f3e16b5bfe0fb04",
+    "seed": 20260816,
+    "selection_sha256": "646d6da9a0bbdafaecaa28f9b9a936c965805599435c77452e37c6d34238d17e",
+    "states": 11997,
+    "states_per_episode": 24
+  },
+  "canonical_stage": "stage4a",
+  "checkpoint": {
+    "agent_bytes": 1599632563,
+    "agent_sha256": "3130286b0d827d5cd4f32b552d59f20aa4ce305b8247e4d97e310bc5f0ab40f7",
+    "parameter_arrays": 517,
+    "removed_arrays": [
+      "repair_head_opt/state/1/0",
+      "repair_head_opt/state/1/1/con/head/logit/bias",
+      "repair_head_opt/state/1/1/con/head/logit/kernel",
+      "repair_head_opt/state/1/1/con/mlp/linear0/bias",
+      "repair_head_opt/state/1/1/con/mlp/linear0/kernel",
+      "repair_head_opt/state/1/1/con/mlp/norm0/scale",
+      "repair_head_opt/state/1/1/rew/head/logits/bias",
+      "repair_head_opt/state/1/1/rew/head/logits/kernel",
+      "repair_head_opt/state/1/1/rew/mlp/linear0/bias",
+      "repair_head_opt/state/1/1/rew/mlp/linear0/kernel",
+      "repair_head_opt/state/1/1/rew/mlp/norm0/scale",
+      "repair_head_opt/state/2/0",
+      "repair_head_opt/state/2/1/con/head/logit/bias",
+      "repair_head_opt/state/2/1/con/head/logit/kernel",
+      "repair_head_opt/state/2/1/con/mlp/linear0/bias",
+      "repair_head_opt/state/2/1/con/mlp/linear0/kernel",
+      "repair_head_opt/state/2/1/con/mlp/norm0/scale",
+      "repair_head_opt/state/2/1/rew/head/logits/bias",
+      "repair_head_opt/state/2/1/rew/head/logits/kernel",
+      "repair_head_opt/state/2/1/rew/mlp/linear0/bias",
+      "repair_head_opt/state/2/1/rew/mlp/linear0/kernel",
+      "repair_head_opt/state/2/1/rew/mlp/norm0/scale",
+      "repair_head_opt/state/3/count",
+      "repair_head_opt/step/value",
+      "repair_value_opt/state/1/0",
+      "repair_value_opt/state/1/1/bval/head/logit/bias",
+      "repair_value_opt/state/1/1/bval/head/logit/kernel",
+      "repair_value_opt/state/1/1/bval/mlp/linear0/bias",
+      "repair_value_opt/state/1/1/bval/mlp/linear0/kernel",
+      "repair_value_opt/state/1/1/bval/mlp/linear1/bias",
+      "repair_value_opt/state/1/1/bval/mlp/linear1/kernel",
+      "repair_value_opt/state/1/1/bval/mlp/linear2/bias",
+      "repair_value_opt/state/1/1/bval/mlp/linear2/kernel",
+      "repair_value_opt/state/1/1/bval/mlp/norm0/scale",
+      "repair_value_opt/state/1/1/bval/mlp/norm1/scale",
+      "repair_value_opt/state/1/1/bval/mlp/norm2/scale",
+      "repair_value_opt/state/2/0",
+      "repair_value_opt/state/2/1/bval/head/logit/bias",
+      "repair_value_opt/state/2/1/bval/head/logit/kernel",
+      "repair_value_opt/state/2/1/bval/mlp/linear0/bias",
+      "repair_value_opt/state/2/1/bval/mlp/linear0/kernel",
+      "repair_value_opt/state/2/1/bval/mlp/linear1/bias",
+      "repair_value_opt/state/2/1/bval/mlp/linear1/kernel",
+      "repair_value_opt/state/2/1/bval/mlp/linear2/bias",
+      "repair_value_opt/state/2/1/bval/mlp/linear2/kernel",
+      "repair_value_opt/state/2/1/bval/mlp/norm0/scale",
+      "repair_value_opt/state/2/1/bval/mlp/norm1/scale",
+      "repair_value_opt/state/2/1/bval/mlp/norm2/scale",
+      "repair_value_opt/state/3/count",
+      "repair_value_opt/step/value"
+    ]
+  },
+  "completed_unix": 1786878069.4846506,
+  "condition": "counterfactual_bounded",
+  "counterfactual_reward_continuation": true,
+  "counterfactual_value_targets": false,
+  "event_fraction": 0.5,
+  "format": 1,
+  "frozen_component_violations": {},
+  "head_updates": 2000,
+  "integrity_after": {
+    "actor": {
+      "arrays": 11,
+      "sha256": "0d954625d759a58ab997d0446cb6e8568ee458656076be4eb647825c51473975"
+    },
+    "all": {
+      "arrays": 567,
+      "sha256": "518ab0778804776b3aabc031410cb3972c3fff52f57dbe704a5a284b069c0e7f"
+    },
+    "bounded_value": {
+      "arrays": 11,
+      "sha256": "b4a63412e31565d0b547aac6e2f32b9aca3c54e6d4d47ab508b8c2e22b788a34"
+    },
+    "critic": {
+      "arrays": 22,
+      "sha256": "815deba330a8f722f863a6284aa928a60224ed0c57e07a1e1133931bfbbe056b"
+    },
+    "normalizers": {
+      "arrays": 2,
+      "sha256": "0d23d845944a38dc26384ab3b3895627d9e9b073c912eb33cc55d1f4d0c308d9"
+    },
+    "optimizers": {
+      "arrays": 452,
+      "sha256": "af027f0d557bb3e9a0c08052c48486ebadf52ebca77bedade17923d25231f26f"
+    },
+    "representation": {
+      "arrays": 58,
+      "sha256": "e7e53ef60c47936be475e2af0e11ea316c6f5b5a04c04b350f3e16b5bfe0fb04"
+    },
+    "reward_continuation": {
+      "arrays": 10,
+      "sha256": "446c944f9afc053efe7ccfd15d251e5958995193a0388104eab73edb6788a6b9"
+    },
+    "world_model": {
+      "arrays": 68,
+      "sha256": "a31787dafadb24956a5aa9c8f7bc9bd52246be740c0977f778c8d93113992207"
+    }
+  },
+  "integrity_before": {
+    "actor": {
+      "arrays": 11,
+      "sha256": "0d954625d759a58ab997d0446cb6e8568ee458656076be4eb647825c51473975"
+    },
+    "all": {
+      "arrays": 567,
+      "sha256": "2e84f7c4a1d417779421afa5b3d0751cc26f036cf290aa8bf9955cb546540d7c"
+    },
+    "bounded_value": {
+      "arrays": 11,
+      "sha256": "7abcd71490b0267dfd600cf0bcf53942077a84c461b6df1b5dac569e9e515c57"
+    },
+    "critic": {
+      "arrays": 22,
+      "sha256": "815deba330a8f722f863a6284aa928a60224ed0c57e07a1e1133931bfbbe056b"
+    },
+    "normalizers": {
+      "arrays": 2,
+      "sha256": "0d23d845944a38dc26384ab3b3895627d9e9b073c912eb33cc55d1f4d0c308d9"
+    },
+    "optimizers": {
+      "arrays": 452,
+      "sha256": "7b214bf11748bf1312aceb258cc9fd95107eeb62c523c2dc41d27f36c1f76317"
+    },
+    "representation": {
+      "arrays": 58,
+      "sha256": "e7e53ef60c47936be475e2af0e11ea316c6f5b5a04c04b350f3e16b5bfe0fb04"
+    },
+    "reward_continuation": {
+      "arrays": 10,
+      "sha256": "31475cf9df72acfa5e32fb86b0caaa34d7e3fd85580cc657bcd06c809d08b546"
+    },
+    "world_model": {
+      "arrays": 68,
+      "sha256": "829328e2ce941d6a2f7d0d5fd7f2cfb7c04181a419904c2d095d0c66f4f2c049"
+    }
+  },
+  "output_checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/checkpoints/counterfactual_bounded",
+  "selection": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/banks/repair_train.json",
+  "selection_sha256": "646d6da9a0bbdafaecaa28f9b9a936c965805599435c77452e37c6d34238d17e",
+  "source_checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/milestones/step_000001250000/checkpoint",
+  "value_updates": 2000
+}

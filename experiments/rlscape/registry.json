@@ -79,12 +79,23 @@
       "id": "stage4a",
       "slug": "counterfactual_head_repair",
       "name": "Counterfactual Goal-Head Repair",
-      "status": "ready_to_run",
-      "hypothesis_status": "unresolved",
+      "status": "complete",
+      "hypothesis_status": "mixed",
       "runner": "scripts/rlscape_stage4a_counterfactual_repair.py",
       "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair",
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair",
       "protocol": "experiments/rlscape/stage4a_counterfactual_head_repair.md",
       "report_section": "Study VI"
+    },
+    {
+      "id": "stage4b",
+      "slug": "conservative_value_dose_stability",
+      "name": "Conservative Bounded-Value Dose and Stability",
+      "status": "ready_to_run",
+      "hypothesis_status": "unresolved",
+      "runner": "scripts/rlscape_stage4b_conservative_value.py",
+      "protocol": "experiments/rlscape/stage4b_conservative_value_dose.md",
+      "planned_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4b_conservative_value"
     },
     {
       "id": "stage5",

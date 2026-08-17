@@ -1,6 +1,14 @@
 # RLScape Stage 4A: Counterfactual Head Repair
 
-**Status:** Implemented; GPU execution pending. No result claimed.
+**Status:** Complete. Hypothesis result: mixed.
+
+All five audits, three repair arms, 48 evaluation cells, and 3,600 requested
+episodes completed without a failed child attempt. The authoritative compact
+artifacts and detailed findings are archived at
+`results/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/`.
+The original supervisor stopped during final plotting because an integer goal
+index was treated as a string; this post-processing typo occurred after the
+result CSV/JSON was written and is fixed in the maintained launcher.
 
 ## Purpose
 
@@ -147,6 +155,36 @@ Stage 4A can establish whether explicit goal supervision repairs head semantics
 and improves episode-local IR. It cannot establish safe persistent adaptation,
 learned gating, or population-level robustness from one training seed. Those
 belong to Stages 4B and 5 after this mechanism test succeeds.
+
+## Results
+
+Counterfactual supervision succeeded as a semantic intervention. On held-out
+completion events, reward top-1 goal accuracy increased from 33.3% in the
+reservoir original and 34.4% after matched factual-only training to 97.4%.
+Matching-minus-nonmatching reward margin increased from 0.004 and 0.020 to
+0.567, and continuation became goal-specific (0.108 for the completed goal
+versus 0.698 for other goals).
+
+The bounded success head also repaired the primary value-scale defect. Its
+mean predictions 0.180/0.069/0.226 closely matched realized kill/bury/chop
+targets 0.194/0.078/0.224, whereas the original critic predicted
+1.623/1.694/0.819. Initial-state success AUROC improved from
+0.400/0.109/0.570 to 0.568/0.848/0.632.
+
+Behavioral transfer was mixed. Factual-only reward IR produced the strongest
+sampled mean (88.0%) and worst-goal result (82%), compared with 69.7% for the
+frozen actor. Counterfactual reward-only reached 81.7%; original reward-only
+reached 80.3%. The original standard critic-backed objective again failed
+(34.0%). Bounded-bootstrap IR was safer in aggregate than the original critic,
+but remained goal- and horizon-dependent: H=6 reached 73.3% sampled and 68.7%
+deterministic while reducing sampled chop by 24 percentage points; H=15
+reached 78.3% sampled but only 56.0% deterministic.
+
+Thus explicit labels repaired the measured goal semantics, and bounding
+repaired critic scale, but neither was sufficient to make value-backed IR
+uniformly safe or to outperform the simpler factual reward-only teacher. The
+next experiment should isolate conservative value dose and adaptation RNG
+variance before persistent gating.
 
 ## Canonical execution
 

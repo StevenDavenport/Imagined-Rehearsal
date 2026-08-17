@@ -30,7 +30,8 @@ The machine-readable companion is [`registry.json`](registry.json).
 | **2** | Controlled Actor Corruption and Recovery | Complete | Supported: critic-free reward-only IR recovered a damaged actor; standard bootstrapped IR did not | Study III |
 | **3A** | Critic Provenance and Calibration Audit | Complete | Supported/refined: severe error is already present on real posterior states and actor-selected imagination amplifies it; horizon growth is not the primary source | Study V |
 | **3B** | Natural Forgetting Recovery | Complete | Supported: reward-only IR improved both natural checkpoints and recovered 1.50M bury from 14% to 91% sampled; standard IR remained unsafe | Study IV |
-| **4A** | Counterfactual Goal-Head Repair | Ready to run | Test matched factual versus counterfactual reward/continuation repair and a bounded factual success-value head | Study VI |
+| **4A** | Counterfactual Goal-Head Repair | Complete | Mixed: counterfactual labels repaired held-out goal semantics and bounded value repaired scale, but factual reward-only IR remained the strongest sampled teacher and bounded IR was still task-dependent | Study VI |
+| **4B** | Conservative Bounded-Value Dose and Stability | Ready to run | Test whether a small, clipped bounded-value correction can improve reward-only IR without lowering worst-goal performance | Planned Study VII |
 | **5** | Gated Continual Imagined Rehearsal | Reserved | Combine reward-only/conservative IR with a prespecified gate and trust region | Future algorithm |
 | **6** | Full Continual-Learning Validation | Reserved | Multi-seed/task-order validation with transfer, forgetting, and recurrence | Future validation |
 
@@ -41,6 +42,22 @@ Stage 3A then localized the failed teacher: critic error is already severe on
 real posterior states, the slow critic copies it, and actor-selected imagination
 amplifies it without a long-horizon explosion. Their completed results jointly
 motivate Stage 4A and Stage 5.
+
+Stage 4A then intervened directly. Counterfactual labels raised held-out
+completion-goal top-1 accuracy from 33.3% to 97.4%, and a separate bounded
+success head removed gross value-scale bias. In real RLScape, however,
+factual-only reward IR achieved the best sampled aggregate, while bounded IR
+still damaged chop. The next stage must therefore test conservative value dose
+and adaptation stability rather than assuming semantic calibration alone is a
+sufficient actor-teaching objective.
+
+Stage 4B makes that test directly on the repaired Stage 4A checkpoint. Its
+mixed objective is anchored exactly at reward-only (`beta=0`) and full bounded
+IR (`beta=1`), with small prespecified doses, a correction-clipping control, and
+an H=6 horizon control. Three replicates share explicit episode-step posterior
+and action random keys as well as identical RLScape reset schedules. Advancement
+depends on both macro improvement and worst-goal safety; a good mean cannot hide
+a damaged task.
 
 ## Where each layer lives
 
@@ -71,6 +88,7 @@ Stage 4.
 - [Stage 3A: Critic Provenance and Calibration Audit](stage3a_critic_provenance_calibration.md)
 - [Stage 3B: Natural Forgetting Recovery](stage3b_natural_forgetting_recovery.md)
 - [Stage 4A: Counterfactual Goal-Head Repair](stage4a_counterfactual_head_repair.md)
+- [Stage 4B: Conservative Bounded-Value Dose and Stability](stage4b_conservative_value_dose.md)
 
 Stage 0's full methodology and results are preserved as Study I in the
 [research diary](../../reports/rlscape_ir_research_diary/report.pdf). The

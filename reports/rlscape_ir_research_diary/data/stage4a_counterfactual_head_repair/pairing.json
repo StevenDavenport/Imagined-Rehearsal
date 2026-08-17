@@ -1,0 +1,20 @@
+{
+  "conditions": [
+    "original_frozen",
+    "original_standard_h6",
+    "original_reward_only_h15",
+    "factual_reward_only_h15",
+    "counterfactual_reward_only_h15",
+    "counterfactual_bounded_reward_only_h15",
+    "counterfactual_bounded_h6",
+    "counterfactual_bounded_h15"
+  ],
+  "equal": true,
+  "format": 1,
+  "keys": [
+    "goal",
+    "policy_mode",
+    "reset_seed"
+  ],
+  "note": "All reset identity lists matched original_frozen."
+}

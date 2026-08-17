@@ -1,0 +1,11 @@
+{
+  "counterfactual_reward_continuation_equal": true,
+  "exported_actor_equal": true,
+  "format": 1,
+  "manifests": {
+    "counterfactual": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/checkpoints/counterfactual/repair_manifest.json",
+    "counterfactual_bounded": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/checkpoints/counterfactual_bounded/repair_manifest.json",
+    "factual_only": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/checkpoints/factual_only/repair_manifest.json"
+  },
+  "source_actor_equal": true
+}
