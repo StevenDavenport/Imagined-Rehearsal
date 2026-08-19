@@ -2,7 +2,7 @@
 
 ## Status and question
 
-Status: **ready to run**.
+Status: **complete** (19 August 2026).
 
 Stage 4A repaired counterfactual reward semantics and learned a bounded
 success-value head, but full bounded-value IR remained task-dependent and was
@@ -112,14 +112,55 @@ reward-only IR remains the teaching signal for later gating experiments.
 
 ## Artifacts
 
-The canonical run root contains the immutable specification, restart queue,
-exact child commands, raw evaluation logs, pairing audit, raw and aggregated
-CSV/JSON tables, four figure families, and `stage4b_complete`. The status helper
-is `scripts/rlscape_stage4b_status.py`.
+The authoritative run root is
+`logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4b_conservative_value` on the
+execution host. It contains the immutable specification, restart queue, exact
+child commands, raw evaluation logs, pairing audit, raw and aggregated
+CSV/JSON tables, five figure families, and `stage4b_complete`. The compact
+audited package is
+`results/rlscape/m4_reservoir_3goal_500k_seed0/stage4b_conservative_value`.
+The status helper is `scripts/rlscape_stage4b_status.py`.
+
+## Completed result
+
+All 162 units and all 6,075 requested episodes completed with zero failed
+child attempts. The pairing audit passed for environment reset identities and
+episode-step-indexed agent random keys.
+
+For sampled control, reward-only IR reached 0.738 mean and 0.513 worst-goal
+success, compared with 0.620/0.500 for the frozen actor. Adding a very small
+bounded-value dose (`beta=.05`) raised these to **0.876 mean** and **0.787
+worst-goal**. Its paired macro gain over reward-only was +0.138 and was positive
+in all three replicates. The per-goal paired gains were +0.273 kill goblin,
++0.040 bury bones, and +0.100 chop logs. `beta=.10` and `beta=.25` also improved
+the sampled macro by +0.087 and +0.102, while pure bounded-value teaching
+(`beta=1`) fell below reward-only by -0.016. Useful value information therefore
+exists, but the dose response is non-monotonic and the head is not safe as a
+replacement teacher.
+
+The deterministic endpoint gives the essential qualification. Reward-only
+was best at 0.813 mean and 0.760 worst-goal success. `beta=.05` reached
+0.796/0.627 and `beta=.10` 0.796/0.667. Their worst-goal changes from
+reward-only were -0.133 and -0.093, respectively, both below the prespecified
+-0.05 safety floor. Every other mixed condition also violated at least one
+safety clause. Thus **no mixed condition passed the complete advancement
+rule**, despite the large and replicated sampled-policy benefit; reward-only
+H=15 remains the approved base teacher for Stage 5.
+
+The controls did not remove this divergence. At `beta=.25`, H=6 was worse than
+H=15 in both modes; correction clipping preserved sampled performance but did
+not protect deterministic worst-goal success; and the post-Adam update cap did
+not restore deterministic safety. The Stage 4B finding is therefore not
+"bounded value is safe." It is that a small bounded correction carries useful
+behavioral information while still requiring a gate, trust region, or better
+training-time critic regularisation before persistent use.
 
 ## Claim boundary
 
-A positive result would establish a conservative episode-local actor teaching
-objective suitable for a later gate. It would not establish that the same
-objective remains safe under persistent updates, changing world models, longer
-task sequences, or multiple task orders. Those claims belong to Stages 5 and 6.
+The result establishes an episode-local sampled-policy benefit from a small
+value correction, not a uniformly safe actor teacher. It does not establish
+that the same objective remains safe under persistent updates, changing world
+models, longer task sequences, independent training seeds, or multiple task
+orders. Those claims belong to Stages 5 and 6. Full numerical results and the
+prespecified decision are recorded in the portable package's
+`STAGE4B_FINDINGS.md`.

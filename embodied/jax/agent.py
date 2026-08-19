@@ -179,6 +179,10 @@ class Agent(embodied.Agent):
         nj.pure(self.model.policy_stats), self.train_mesh,
         (self.actor_params_sharding, tm, ts), (ts,), ar,
         single_output=True, **shared_kwargs)
+    self._gate_features = transform.apply(
+        nj.pure(self.model.gate_features), self.train_mesh,
+        (tp, tm, ts), (ts, tm), ar,
+        static_argnums=(3, 4, 5), **shared_kwargs)
     self._posterior_chunk = transform.apply(
         nj.pure(self.model.posterior_chunk), self.train_mesh,
         (tp, tm, ts, ts, ts), (ts, ts), ar, **shared_kwargs)
@@ -208,6 +212,11 @@ class Agent(embodied.Agent):
         (dona_sharding, allo_sharding, tm, ts), (tp, ts, tm), ar,
         return_params=True, donate_params=True, first_outnums=(1,),
         static_argnums=(4, 5),
+        **shared_kwargs)
+    self._adapt_prepared = transform.apply(
+        nj.pure(self.model.adapt_prepared), self.train_mesh,
+        (dona_sharding, allo_sharding, tm, ts, ts), (tp, ts, tm), ar,
+        return_params=True, donate_params=True, first_outnums=(1,),
         **shared_kwargs)
     self._adapt_critic_horizon = transform.apply(
         nj.pure(self.model.adapt_critic_horizon), self.train_mesh,
@@ -450,6 +459,52 @@ class Agent(embodied.Agent):
         if critic_enabled else np.float32(0))
     mets['warmup'] = np.float32(bool(warmup) and critic_enabled)
     return params, carry, mets
+
+  def gate_features(
+      self, carry, params=None, horizon=15, start_batch=128,
+      consequence=False, seed_index=None, seed_base=None):
+    """Return Stage 5A gate features and an optional device-side rollout."""
+    params = self.params if params is None else params
+    carry = internal.to_global(self._stack(carry), self.train_sharded)
+    if seed_index is None:
+      seed = self._seeds(self.n_probes, self.train_mirrored)
+      self.n_probes.increment()
+    else:
+      seed = self._seeds(
+          int(seed_index), self.train_mirrored, base_seed=seed_base)
+    with self.train_lock:
+      rollout, metrics = self._gate_features(
+          params, seed, carry, int(horizon), int(start_batch),
+          bool(consequence))
+    metrics = self._take_outs(internal.fetch_async(metrics))
+    return rollout, metrics
+
+  def adapt_prepared(
+      self, params, carry, rollout, steps=1,
+      seed_index=None, seed_base=None):
+    """Actor-only adaptation that reuses a Stage 5A consequence rollout."""
+    if steps < 1:
+      return params, carry, {}
+    carry = internal.to_global(self._stack(carry), self.train_sharded)
+    for update_index in range(steps):
+      allo = {k: v for k, v in params.items() if k in self.policy_keys}
+      dona = {k: v for k, v in params.items() if k not in self.policy_keys}
+      if seed_index is None:
+        seed = self._seeds(self.n_adapt, self.train_mirrored)
+        self.n_adapt.increment()
+      else:
+        seed = self._seeds(
+            int(seed_index) + update_index, self.train_mirrored,
+            base_seed=seed_base)
+      with self.train_lock:
+        params, carry, metrics = self._adapt_prepared(
+            dona, allo, seed, carry, rollout)
+    carry = self._split(internal.to_local(carry))
+    metrics = self._take_outs(internal.fetch_async(metrics))
+    metrics['actor_steps'] = np.float32(steps)
+    metrics['critic_steps'] = np.float32(0)
+    metrics['warmup'] = np.float32(0)
+    return params, carry, metrics
 
   def adapt_critic(
       self, params, carry, steps=1, horizon=None, start_batch=None):

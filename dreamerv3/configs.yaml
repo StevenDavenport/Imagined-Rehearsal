@@ -89,6 +89,7 @@ defaults:
     eval_envs: 4
     eval_eps: 1
     eval_episodes: 0
+    eval_warmup_episodes: 0
     eval_policy_mode: deterministic
     milestone_every: 0
     milestone_dir: ''
@@ -187,6 +188,15 @@ defaults:
     trace:
       enabled: False
       filename: trace.jsonl
+    gate:
+      enabled: False
+      kind: none
+      audit: False
+      entropy_threshold: 1.0
+      js_threshold: 1.0
+      min_success_rate: 0.03125
+      direction_threshold: 1.0
+      reward_threshold: 0.5
     viewer:
       enabled: False
       traj_index: 0

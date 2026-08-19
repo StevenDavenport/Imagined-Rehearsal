@@ -1,0 +1,159 @@
+{
+  "canonical_stage": "stage4b",
+  "checkpoint": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/checkpoints/counterfactual_bounded",
+  "conditions": [
+    {
+      "actent": 0.0,
+      "checkpoint": "counterfactual_bounded",
+      "enabled": false,
+      "family": "frozen",
+      "horizon": 0,
+      "mix_beta": 0.0,
+      "name": "frozen",
+      "objective": "standard",
+      "update_rms_clip": 0.0,
+      "value_correction_clip": 0.0
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "counterfactual_bounded",
+      "enabled": true,
+      "family": "dose_h15",
+      "horizon": 15,
+      "mix_beta": 0.0,
+      "name": "reward_only_h15",
+      "objective": "mixed_bounded",
+      "update_rms_clip": 0.0,
+      "value_correction_clip": 0.0
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "counterfactual_bounded",
+      "enabled": true,
+      "family": "dose_h15",
+      "horizon": 15,
+      "mix_beta": 0.05,
+      "name": "mixed_b005_h15",
+      "objective": "mixed_bounded",
+      "update_rms_clip": 0.0,
+      "value_correction_clip": 0.0
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "counterfactual_bounded",
+      "enabled": true,
+      "family": "dose_h15",
+      "horizon": 15,
+      "mix_beta": 0.1,
+      "name": "mixed_b010_h15",
+      "objective": "mixed_bounded",
+      "update_rms_clip": 0.0,
+      "value_correction_clip": 0.0
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "counterfactual_bounded",
+      "enabled": true,
+      "family": "dose_h15",
+      "horizon": 15,
+      "mix_beta": 0.25,
+      "name": "mixed_b025_h15",
+      "objective": "mixed_bounded",
+      "update_rms_clip": 0.0,
+      "value_correction_clip": 0.0
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "counterfactual_bounded",
+      "enabled": true,
+      "family": "correction_clip",
+      "horizon": 15,
+      "mix_beta": 0.25,
+      "name": "mixed_b025_clip050_h15",
+      "objective": "mixed_bounded",
+      "update_rms_clip": 0.0,
+      "value_correction_clip": 0.5
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "counterfactual_bounded",
+      "enabled": true,
+      "family": "update_cap",
+      "horizon": 15,
+      "mix_beta": 0.25,
+      "name": "mixed_b025_ucap15e6_h15",
+      "objective": "mixed_bounded",
+      "update_rms_clip": 1.5e-05,
+      "value_correction_clip": 0.0
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "counterfactual_bounded",
+      "enabled": true,
+      "family": "horizon_control",
+      "horizon": 6,
+      "mix_beta": 0.25,
+      "name": "mixed_b025_h6",
+      "objective": "mixed_bounded",
+      "update_rms_clip": 0.0,
+      "value_correction_clip": 0.0
+    },
+    {
+      "actent": 0.0,
+      "checkpoint": "counterfactual_bounded",
+      "enabled": true,
+      "family": "bounded_anchor",
+      "horizon": 15,
+      "mix_beta": 1.0,
+      "name": "mixed_b100_h15",
+      "objective": "mixed_bounded",
+      "update_rms_clip": 0.0,
+      "value_correction_clip": 0.0
+    }
+  ],
+  "digest": "9421a7b4c6430efdb73db624c73ce2fb09b31d29619a3c66f10d64ac049abb6c",
+  "evaluation": {
+    "adapt_every_k": 1,
+    "adapt_lr": 4e-05,
+    "adapt_steps": 1,
+    "agent_seeds": [
+      20260817,
+      20260818,
+      20260819
+    ],
+    "deterministic_episodes_per_replicate": 25,
+    "environment_seeds": [
+      4000,
+      4001,
+      4002
+    ],
+    "episode_length": 200,
+    "paired_rng_stride": 1000,
+    "posterior_samples": 128,
+    "sampled_episodes_per_replicate": 50
+  },
+  "format": 1,
+  "git_commit": "989f4263ec7868bd0c29c88405e1b9310cd15117",
+  "goals": [
+    "kill_goblin",
+    "bury_bones",
+    "chop_logs"
+  ],
+  "hypothesis": "A small bounded-success-value correction can improve reward-only IR without reducing worst-goal performance.",
+  "policy_modes": [
+    "sampled",
+    "deterministic"
+  ],
+  "primary_endpoints": [
+    "mean_goal_success",
+    "worst_goal_success",
+    "mean_goal_delta_vs_reward_only",
+    "worst_goal_delta_vs_reward_only"
+  ],
+  "python_version": "3.11.15",
+  "repair_manifest_sha256": "a0f740f41d43e1f7cd07219e0b4858f63e9ed5cf6d8b0650a9019803a812a033",
+  "replicates": 3,
+  "rlscape_version": "0.1.6",
+  "slug": "conservative_value_dose_stability",
+  "stage4a_root": "/home/cm150user/crl_ir/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair"
+}

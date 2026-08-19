@@ -38,13 +38,13 @@
 \title{\textbf{From Reservoir Replay to Critic-Free Imagined Rehearsal\\in Sequential RLScape}\\[3pt]
 \large A chronological experimental chapter on retention, model semantics,\\critic failure, and controlled actor recovery}
 \author{Steven Davenport\\Continual Reinforcement Learning Research Notes}
-\date{Experiments completed August 2026; expanded report generated 17 August 2026}
+\date{Experiments completed August 2026; expanded report generated 19 August 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This chapter records six linked studies in a goal-conditioned DreamerV3 agent operating in RLScape. Study I compares a 200k-capacity global FIFO replay against a persistent, goal-stratified episode reservoir while one agent learns \emph{kill goblin}, \emph{bury bones}, and \emph{chop logs} for 500k environment steps each. Reservoir replay produced strong but transient balanced retention: at 1.25M steps its worst sampled-policy goal reached \pct{49} versus \pct{8} for FIFO, but by 1.5M all reservoir goals had collapsed to at most \pct{16}. Study II finds accurate factual completion recognition, weak one-hot goal semantics, a severely optimistic critic, and a six-step IR target that is \pct{94.4}--\pct{97.3} critic bootstrap. Study III causally isolates the actor: critic-free reward-only IR recovers a corrupted policy, reaching \pct{73.0} sampled success at $H=15$ and \pct{85.3} deterministic success at $H=20$. Study IV transfers this mechanism to natural continual-learning damage: at 1.5M, reward-only $H=15$ recovers bury bones from \pct{14} to \pct{91} sampled and from \pct{4} to \pct{86} deterministic. Study V locates the critic failure on real posterior states rather than at long imagination depth. Study VI then intervenes on the learned teachers. Counterfactual event labels raise held-out completion-goal accuracy from \pct{33.3} to \pct{97.4}; a separate bounded head reduces kill/bury/chop value bias from $+1.429/+1.616/+0.595$ to $-0.014/-0.009/+0.002$. Nevertheless, factual-only reward IR gives the best sampled behavioral mean (\pct{88.0}), and bounded-bootstrap IR remains task- and horizon-dependent. The combined evidence establishes that semantic and scale repair are possible, but neither alone makes critic-backed adaptation uniformly safe. The next requirements are controlled value dose, fully paired adaptation randomness, and a prespecified gate and trust region for persistent continual use.
+This chapter records seven linked studies in a goal-conditioned DreamerV3 agent operating in RLScape. Study I compares a 200k-capacity global FIFO replay against a persistent, goal-stratified episode reservoir while one agent learns \emph{kill goblin}, \emph{bury bones}, and \emph{chop logs} for 500k environment steps each. Reservoir replay produced strong but transient balanced retention: at 1.25M steps its worst sampled-policy goal reached \pct{49} versus \pct{8} for FIFO, but by 1.5M all reservoir goals had collapsed to at most \pct{16}. Study II finds accurate factual completion recognition, weak one-hot goal semantics, a severely optimistic critic, and a six-step IR target that is \pct{94.4}--\pct{97.3} critic bootstrap. Study III causally isolates the actor: critic-free reward-only IR recovers a corrupted policy, reaching \pct{73.0} sampled success at $H=15$ and \pct{85.3} deterministic success at $H=20$. Study IV transfers this mechanism to natural continual-learning damage: at 1.5M, reward-only $H=15$ recovers bury bones from \pct{14} to \pct{91} sampled and from \pct{4} to \pct{86} deterministic. Study V locates the critic failure on real posterior states rather than at long imagination depth. Study VI then intervenes on the learned teachers. Counterfactual event labels raise held-out completion-goal accuracy from \pct{33.3} to \pct{97.4}; a separate bounded head reduces kill/bury/chop value bias from $+1.429/+1.616/+0.595$ to $-0.014/-0.009/+0.002$. Study VII reintroduces that bounded value conservatively under fully paired adaptation randomness. A five-percent correction raises sampled success from \pct{73.8} to \pct{87.6} and weakest-goal success from \pct{51.3} to \pct{78.7}, with positive macro change in all three replicates. Reward-only remains strongest under deterministic control, however, and no mixed condition passes the prespecified deterministic worst-goal safety floor. The combined evidence establishes that the repaired critic contains useful policy information in small doses, but reward-only IR remains the approved base teacher until gating, trust-region control, and training-time critic regularisation are tested.
 \end{abstract}
 
 \tableofcontents
@@ -61,6 +61,7 @@ The long-term research direction is continual reinforcement learning over an RLS
   \item If critic-free rehearsal repairs synthetic actor corruption, does it also recover behavior lost naturally during sequential training?
   \item Does critic error begin on real posterior states, emerge with imagination depth, or arise because the actor exploits the learned model?
   \item Can explicit counterfactual event labels and a separately bounded success-value head repair the learned teaching signals, and does that repair improve real-environment IR?
+  \item Can a small bounded-value correction improve reward-only IR under fully paired adaptation randomness without damaging the weakest goal or deterministic policy?
 \end{enumerate}
 
 The first experiment contributes a fully persisted three-goal sequential run, six immutable training checkpoints, 24 paired frozen/IR evaluation units, two action-selection modes, and a direct comparison to the previous FIFO run. It is an exploratory, single-seed systems experiment rather than a population-level statistical claim. The later experiments deliberately reuse the same pinned checkpoints. This converts a costly multi-day training run into a sequence of increasingly controlled mechanism tests.
@@ -73,6 +74,7 @@ The chapter is organized as a research diary without sacrificing paper-style sep
   \item \textbf{Study IV --- natural forgetting recovery.} Apply the successful critic-free objective to unmodified, naturally forgotten checkpoint actors and measure recovery and harm against paired frozen baselines.
   \item \textbf{Study V --- critic provenance and calibration.} Evaluate identical real posterior states, recorded-action imagination, and actor-selected imagination to identify where critic optimism originates and how it changes with horizon.
   \item \textbf{Study VI --- counterfactual and bounded head repair.} Freeze the representation and actor, repair reward/continuation semantics and value scale from preserved experience, then repeat a paired real-environment IR assay.
+  \item \textbf{Study VII --- conservative value dose and stability.} Interpolate exactly between reward-only and bounded-value teaching, repeat fully paired adaptation seeds, and test dose, horizon, correction clipping, and actor-update caps against a prespecified worst-goal rule.
 \end{enumerate}
 
 To keep implementation artifacts and thesis terminology aligned, the
@@ -95,6 +97,7 @@ Stage 2 & Controlled actor corruption and recovery & Study III \\
 Stage 3A & Critic provenance and calibration audit & Study V \\
 Stage 3B & Natural forgetting recovery & Study IV \\
 Stage 4A & Counterfactual goal-head repair & Study VI \\
+Stage 4B & Conservative bounded-value dose and stability & Study VII \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -113,14 +116,16 @@ Stage 4A & Counterfactual goal-head repair & Study VI \\
 \node[bx,fill=lightgreen,right=of s4] (s5) {\textbf{Study IV}\\Natural forgetting recovery\\\scriptsize Critic-free result transfers};
 \node[bx,fill=lightorange,below=of s5] (s6) {\textbf{Study V}\\Critic provenance audit\\\scriptsize Real-state error; actor amplification};
 \node[bx,fill=lightgreen,left=of s6] (s7) {\textbf{Study VI}\\CF + bounded head repair\\\scriptsize Semantics repaired; value still conditional};
+\node[bx,fill=lightorange,left=of s7] (s8) {\textbf{Study VII}\\Conservative value dose\\\scriptsize Sampled gain; modal safety fails};
 \draw[ar] (s1)--(s2);
 \draw[ar] (s2)--(s3);
 \draw[ar] (s3)--(s4);
 \draw[ar] (s4)--(s5);
 \draw[ar] (s5)--(s6);
 \draw[ar] (s6)--(s7);
+\draw[ar] (s7)--(s8);
 \end{tikzpicture}
-\caption{Chronological experimental logic. Each study was designed after observing the previous result; Studies II--VI reuse immutable checkpoints and therefore isolate mechanisms without another continual-training run.}
+\caption{Chronological experimental logic. Each study was designed after observing the previous result; Studies II--VII reuse immutable checkpoints and therefore isolate mechanisms without another continual-training run.}
 \label{fig:evidencechain}
 \end{figure}
 
@@ -1194,6 +1199,215 @@ The immediate target is a dose-controlled conservative value ablation against
 the reward-only teacher, followed by a gate and trust region only after the
 source of remaining chop harm is understood.
 
+\section{Study VII: conservative bounded-value dose and stability}
+
+Study VI produced an apparently contradictory result. The separately bounded
+success head was far better calibrated than the historical critic and improved
+held-out success ranking, yet using it as the full actor teacher remained
+task-dependent. Reward-only IR was safer behaviorally, but by construction
+discarded any longer-horizon information the repaired value head might contain.
+Canonical Stage 4B therefore asks a narrower intervention question: can a
+small amount of bounded value advice improve reward-only IR without sacrificing
+the weakest goal?
+
+This study also corrects the stochastic-assay weakness exposed in Study VI.
+Environment resets alone are not sufficient pairing when each episode contains
+Monte Carlo posterior sampling, sampled policy actions, and a changing temporary
+actor. Stage 4B explicitly indexes both posterior and policy random keys by
+replicate, episode, and environment step. The comparison is consequently a
+paired dose assay rather than a collection of merely seed-matched processes.
+
+\subsection{Causal interpolation and fixed controls}
+
+All conditions load the same Stage 4A
+\texttt{counterfactual\_bounded} checkpoint. The encoder, RSSM, decoder,
+counterfactually repaired reward and continuation heads, bounded value head,
+historical online/slow critics, and persistent actor are fixed at load. Only an
+episode-local actor clone changes. Let the normalized critic-free reward
+advantage and bounded-value advantage be
+\begin{align}
+ A_t^{\mathrm R} &= R_{t,\mathrm R}^{\lambda}/\sigma_{\mathrm R},\\
+ A_t^{\mathrm B} &= (R_{t,\mathrm B}^{\lambda}-V_{t,\mathrm B})/
+                    \sigma_{\mathrm R}.
+\end{align}
+The mixed teacher is
+\begin{equation}
+ A_t^{\beta}=A_t^{\mathrm R}+
+ \beta\,\operatorname{clip}(A_t^{\mathrm B}-A_t^{\mathrm R},-c,c).
+ \label{eq:stage4bmix}
+\end{equation}
+Thus $\beta=0$ is exactly reward-only IR and unclipped $\beta=1$ is exactly the
+Study VI bounded objective. The correction is the incremental difference
+$A^{\mathrm B}-A^{\mathrm R}$, so imagined reward is not counted twice. All
+adapted conditions use one actor update at every nonterminal real step, 128
+Monte Carlo posterior samples, learning rate $4\times10^{-5}$, and zero entropy
+bonus. Every learned model and prediction head remains frozen.
+
+Nine conditions were fixed before evaluation: frozen; reward-only $H=15$;
+unclipped $H=15$ doses $\beta\in\{.05,.10,.25,1\}$; $\beta=.25$ with a .50
+correction clip; $\beta=.25$ with a post-Adam actor-update RMS cap of
+$1.5\times10^{-5}$; and $\beta=.25,H=6$ as a horizon control. The update cap
+was chosen from Study VI update magnitudes before Stage 4B outcomes were
+observed and preserves the Adam update direction.
+
+\subsection{Pairing, budget, and decision rule}
+
+Three prespecified replicates use distinct environment and agent seeds. Within
+each replicate, all conditions share exact goal/reset sequences and explicit
+episode-step posterior and action keys. Each condition runs all three goals
+for 50 sampled and 25 deterministic episodes per replicate:
+\begin{equation}
+ 9\text{ conditions}\times3\text{ goals}\times3\text{ replicates}
+ \times(50+25)=6{,}075\text{ episodes}.
+\end{equation}
+All 162 evaluation units completed with zero failed attempts. The pairing audit
+passed, all requested episode counts are exact, the source checkpoint digest
+matches the immutable specification, and the restart-safe queue records every
+child command. A stale unit created by the initial non-tmux launcher was
+reconciled on restart without duplicating or altering its completed episodes.
+
+The primary endpoints are macro mean success, weakest-goal success, paired
+macro change from reward-only, and weakest-goal paired change from reward-only.
+Advancement required positive sampled macro change, positive sampled macro
+change in at least two of three replicates, and sampled and deterministic
+weakest-goal changes no lower than $-.05$. This rule was fixed before results
+were read; deterministic harm cannot be hidden by a better sampled mean.
+
+\subsection{Small value doses strongly improve sampled behavior}
+
+Figure~\ref{fig:stage4bdose} shows a non-monotonic dose response. Reward-only
+reaches \pct{73.8} sampled macro success and \pct{51.3} weakest-goal success,
+already improving the frozen actor's \pct{62.0}/\pct{50.0}. A five-percent
+bounded correction raises these to \pct{87.6}/\pct{78.7}. Its paired macro
+gain is $+.138$, positive in every replicate ($+.067,+.133,+.213$), and its
+per-goal changes are $+.273$ kill goblin, $+.040$ bury bones, and $+.100$ chop
+logs. The gain is therefore neither compensation by one easy task nor one
+lucky adaptation seed.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.92\linewidth]{stage4b_conservative_value/value_dose_sampled.pdf}
+\caption{Study VII sampled-policy dose response for the unclipped $H=15$ family. Small value corrections improve every goal, with the best aggregate and weakest-goal profile at $\beta=.05$. Pure bounded-value teaching ($\beta=1$) loses the benefit.}
+\label{fig:stage4bdose}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study VII aggregate sampled-policy result. Deltas and weakest deltas are relative to reward-only $H=15$.}
+\label{tab:stage4bsampled}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Mean & Weakest & $\Delta$ mean & $\Delta$ weakest \\
+\midrule
+Frozen & .620 & .500 & $-.118$ & $-.300$ \\
+Reward-only $H=15$ & .738 & .513 & .000 & .000 \\
+$\beta=.05,H=15$ & \textbf{.876} & \textbf{.787} & \textbf{+.138} & \textbf{+.040} \\
+$\beta=.10,H=15$ & .824 & .600 & +.087 & +.020 \\
+$\beta=.25,H=15$ & .840 & .760 & +.102 & $-.020$ \\
+$\beta=.25$, correction clip .50 & .862 & .747 & +.124 & .000 \\
+$\beta=.25$, update RMS cap & .836 & .767 & +.098 & $-.080$ \\
+$\beta=.25,H=6$ & .811 & .773 & +.073 & $-.027$ \\
+$\beta=1,H=15$ & .722 & .613 & $-.016$ & $-.187$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The remaining controls constrain the mechanism. Moderate dose $\beta=.25$ is
+useful but less good than $\beta=.05$; clipping its incremental correction
+raises the sampled mean to \pct{86.2} but does not beat the five-percent
+weakest-goal result. The post-Adam update cap changes the profile without
+removing worst-goal harm. Shortening $H$ from 15 to 6 lowers the moderate-dose
+mean from \pct{84.0} to \pct{81.1}. Pure bounded teaching reaches only
+\pct{72.2}, below reward-only. The bounded head therefore contributes useful
+information as a correction, not as a replacement teacher.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.99\linewidth]{stage4b_conservative_value/mean_worst_goal.pdf}
+\caption{Study VII macro and weakest-goal success. The five-percent correction is the strongest sampled treatment. Reward-only remains the strongest deterministic treatment, exposing a policy-mode trade-off hidden by sampled success alone.}
+\label{fig:stage4bmeanworst}
+\end{figure}
+
+\subsection{Deterministic control rejects automatic advancement}
+
+The sampled gain does not transfer uniformly to the policy mode. Reward-only
+is the best deterministic condition at \pct{81.3} macro and \pct{76.0}
+weakest-goal success. Both $\beta=.05$ and $.10$ reach \pct{79.6} macro, but
+their weakest goals fall to \pct{62.7} and \pct{66.7}. For $\beta=.05$, the
+loss is concentrated in kill goblin ($-.133$ relative to reward-only), while
+chop improves by $+.093$ and bury changes by $-.013$. The actor update has
+placed more useful probability mass into the sampled distribution without
+reliably improving its modal action sequence.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.92\linewidth]{stage4b_conservative_value/value_dose_deterministic.pdf}
+\caption{Study VII deterministic-policy dose response for the unclipped $H=15$ family. Goal-specific effects do not share the sampled optimum: the five-percent dose improves chop but damages kill, while larger doses trade among all three goals.}
+\label{fig:stage4bdetdose}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study VII aggregate deterministic-policy result. No mixed condition respects the prespecified $-.05$ weakest-goal safety floor.}
+\label{tab:stage4bdet}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Mean & Weakest & $\Delta$ mean & $\Delta$ weakest \\
+\midrule
+Frozen & .587 & .427 & $-.227$ & $-.333$ \\
+Reward-only $H=15$ & \textbf{.813} & \textbf{.760} & .000 & .000 \\
+$\beta=.05,H=15$ & .796 & .627 & $-.018$ & $-.133$ \\
+$\beta=.10,H=15$ & .796 & .667 & $-.018$ & $-.093$ \\
+$\beta=.25,H=15$ & .720 & .653 & $-.093$ & $-.120$ \\
+$\beta=.25$, correction clip .50 & .716 & .587 & $-.098$ & $-.173$ \\
+$\beta=.25$, update RMS cap & .751 & .707 & $-.062$ & $-.213$ \\
+$\beta=.25,H=6$ & .649 & .613 & $-.164$ & $-.280$ \\
+$\beta=1,H=15$ & .724 & .573 & $-.089$ & $-.187$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.99\linewidth]{stage4b_conservative_value/paired_delta_heatmap.pdf}
+\caption{Study VII paired goal-level change from reward-only IR. Blue indicates benefit and red harm. Small value doses broadly improve sampled control, especially kill goblin, while deterministic effects are weaker and often negative.}
+\label{fig:stage4bheatmap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.90\linewidth]{stage4b_conservative_value/replicate_stability.pdf}
+\caption{Study VII adaptation-seed stability. The five-percent sampled macro gain is positive in all three fully paired replicates. Deterministic ordering is less stable and remains below reward-only on average.}
+\label{fig:stage4breplicates}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.88\linewidth]{stage4b_conservative_value/sampled_deterministic_tradeoff.pdf}
+\caption{Macro changes relative to reward-only in the two policy modes. Every intermediate-dose treatment lies in the sampled-benefit/deterministic-harm quadrant; the pure bounded anchor is worse in both. This is the central safety result of Study VII.}
+\label{fig:stage4btradeoff}
+\end{figure}
+
+\subsection{Study VII decision and claim boundary}
+
+No mixed condition passes the complete advancement rule. The two smallest
+doses satisfy the sampled clauses, but their deterministic weakest-goal changes
+are $-.133$ and $-.093$, below the $-.05$ floor. Reward-only $H=15$ therefore
+remains the approved teacher for Stage 5. The five-percent correction is
+retained as the leading gated or regularised candidate, not silently promoted
+to the default algorithm.
+
+Scientifically, the result is positive but bounded. It establishes that the
+repaired value head contains behaviorally useful information: a small dose
+produces a large, replicated, all-goal sampled improvement. It also establishes
+that calibration on held-out replay states does not guarantee a safe modal
+actor update on imagined states. This is one repaired checkpoint from one
+continual-training seed, with actor changes reset every episode. Persistent
+continual updates, independent world-model seeds, longer task sequences, and
+training-time critic regularisation remain untested.
+
 \section{Cross-study synthesis}
 
 The experiments support the following chain of evidence:
@@ -1214,9 +1428,12 @@ The experiments support the following chain of evidence:
   \item A separately bounded factual success head repairs critic scale and improves initial-state ranking, most strongly for bury, without changing the historical critic or actor.
   \item Head-level repair is not equivalent to behavioral superiority. Factual-only reward IR gives the strongest sampled mean and worst-task result; bounded-bootstrap IR remains harmful on chop at both tested horizons.
   \item Environment-seed pairing is insufficient for a low-variance IR assay when posterior and policy randomness inside adaptation are not also paired. The unused-bounded-head reward-only contrast exposes this requirement directly.
+  \item Under full environment and agent-PRNG pairing, small bounded-value corrections contain reproducible behavioral information: $\beta=.05$ improves sampled macro success by 13.8 percentage points over reward-only in all three replicates and improves every sampled goal.
+  \item Value dose is non-monotonic. Pure bounded teaching is worse than reward-only, and neither correction clipping, an actor-update RMS cap, nor shortening $H$ makes the mixed objective uniformly safer.
+  \item Sampled improvement is not modal-policy safety. Every mixed condition improves the sampled macro but harms the deterministic macro relative to reward-only; no condition passes the prespecified deterministic weakest-goal floor.
 \end{enumerate}
 
-The initial hypothesis---that model exploitation slowly inflates critic targets during continual learning---is therefore only partly correct. Actor exploitation is measured directly, but the larger error precedes it: the critic is already badly calibrated at real posterior states. Nor does value grow progressively from $H=6$ to $H=20$. Study VI further separates critic scale from actor-teacher quality. Bounding removes the impossible value scale but does not eliminate bad task-specific gradients; counterfactual labels remove goal aliasing but do not improve over factual reward-only adaptation. Recursive target bias, imagined-state generalization, objective construction, and continual distribution shift therefore remain distinct candidate failure mechanisms rather than one undifferentiated ``weak conditioning'' explanation.
+The initial hypothesis---that model exploitation slowly inflates critic targets during continual learning---is therefore only partly correct. Actor exploitation is measured directly, but the larger error precedes it: the critic is already badly calibrated at real posterior states. Nor does value grow progressively from $H=6$ to $H=20$. Study VI further separates critic scale from actor-teacher quality. Bounding removes the impossible value scale but does not eliminate bad task-specific gradients; counterfactual labels remove goal aliasing but do not improve over factual reward-only adaptation. Study VII then shows that this bounded head is not useless: at low weight it carries reproducible policy information that reward-only IR lacks. The remaining defect is dose- and policy-mode-dependent rather than a binary good/bad critic distinction. Recursive target bias, imagined-state generalization, objective construction, continual distribution shift, and modal-policy concentration therefore remain distinct candidate failure mechanisms rather than one undifferentiated ``weak conditioning'' explanation.
 
 \section{Revised experimental ladder}
 
@@ -1224,8 +1441,9 @@ The chronology changes the priorities proposed after Study I.
 
 \begin{enumerate}
   \item \textbf{Stage 4A (completed): counterfactual and bounded head repair.} Counterfactual labels repaired held-out reward/continuation semantics and the bounded head repaired value scale and ranking. The behavioral hypothesis was mixed: factual reward-only IR remained strongest, while bounded IR retained goal-specific harm.
-  \item \textbf{Stage 4B: conservative value-dose and stability assay.} From the same pinned checkpoint, fully pair environment and agent PRNG streams and repeat adaptation seeds. Compare reward-only against $J=J_{\mathrm{RO}}+\beta J_{\mathrm{B}}$ over a small prespecified $\beta$ grid, clipped bounded advantages, short bootstrap windows, and update/KL caps. The primary endpoint is Pareto improvement in mean and worst-goal success, not average gain alone.
-  \item \textbf{Stage 5: prespecified IR gate and trust region.} Use Studies IV and VI only to nominate signals; freeze the decision rule before evaluation. The gate must detect when adaptation is needed without privileged historical success, while an action-KL or parameter-update constraint limits harm. Evaluation should report recovered weak cells, damaged competent cells, compute avoided, and false-positive gate activations.
+  \item \textbf{Stage 4B (completed): conservative value-dose and stability assay.} Fully paired replication identified a large sampled benefit at $\beta=.05$, but every mixed condition failed the deterministic weakest-goal safety floor. Reward-only remains the approved base teacher; the small correction remains a candidate to activate only under a gate or stronger constraint.
+  \item \textbf{Stage 5: prespecified IR gate and trust region.} Use Studies IV, VI, and VII only to nominate signals; freeze the decision rule before evaluation. The gate must detect when adaptation is needed without privileged historical success, while an action-KL or parameter-update constraint limits both sampled and modal-policy harm. Evaluation should report recovered weak cells, damaged competent cells, compute avoided, false-positive gate activations, and sampled--deterministic divergence.
+  \item \textbf{Training-time critic regularisation.} Keep this as a separate intervention rather than changing the Stage 5 teacher post hoc. Candidate controls include bounded/return-range targets, held-out calibration and ranking audits, counterfactual goal supervision, and regularisation against optimistic drift across continual phases. Compare any retrained critic against the existing pinned baseline before using it in persistent IR.
   \item \textbf{Replay-mixture continual experiment.} Preserve Algorithm R retention but train primarily on the current task plus a controlled old-goal reservoir mixture, with update dose matched where possible. Compare gated reward-only/conservative IR against a no-IR baseline at pinned checkpoints.
   \item \textbf{Stage 6: full validation.} Replicate across training seeds and task orders, then extend from three to five RLScape goals. Add return phases only after the mechanism is stable, to quantify relearning speed, backward transfer, and real-sample savings.
 \end{enumerate}
@@ -1235,13 +1453,15 @@ The chronology changes the priorities proposed after Study I.
 The combined evidence is unusually deep for one training trajectory but remains exploratory.
 \begin{itemize}
   \item \textbf{One continual-training seed.} Episode-level paired intervals do not quantify variation across independently trained world models and critics.
-  \item \textbf{Adaptive research sequence.} Studies II and III were designed after inspecting Study I, Study IV after Study III, Study V after the critic-free recovery result, and Study VI after the provenance audit. Each workflow was specified before its child evaluations, but the overall sequence remains mechanism discovery rather than an independent confirmatory programme.
+  \item \textbf{Adaptive research sequence.} Studies II and III were designed after inspecting Study I, Study IV after Study III, Study V after the critic-free recovery result, Study VI after the provenance audit, and Study VII after the repair result. Each workflow was specified before its child evaluations, but the overall sequence remains mechanism discovery rather than an independent confirmatory programme.
   \item \textbf{Corruption calibration and deterministic anomaly.} The mask was selected on sampled episodes. Under the independent main schedule, corruption improves deterministic kill success from \pct{32} to \pct{68}; aggregate deterministic ``recovery fractions'' are therefore not meaningful for that goal. Raw success and paired changes are reported instead.
   \item \textbf{Reward-only is model based, not oracle based.} It removes the critic but still trusts learned reward, continuation, and transition predictions. Success in the real environment validates outcomes, not calibration everywhere in latent space.
-  \item \textbf{No persistent learning in Studies III, IV, or VI.} Adaptation resets each episode. The studies establish test-time recovery and mechanism repair, not yet a continual-learning update rule that safely carries knowledge forward.
+  \item \textbf{No persistent learning in Studies III, IV, VI, or VII.} Adaptation resets each episode. The studies establish test-time recovery and mechanism repair, not yet a continual-learning update rule that safely carries knowledge forward.
   \item \textbf{Historical weak labels are not gates.} Study IV fixed weak/competent status from the earlier sampled evaluation. The independent frozen schedule shifted some absolute rates, most visibly 1.25M bury from historical \pct{49} to \pct{71}. Treatment effects use paired contemporary baselines, but the label itself cannot be deployed online.
   \item \textbf{Stage V is diagnostic rather than interventional.} Its same-state design localizes critic error and actor amplification, but does not uniquely identify whether recursive bootstrapping, weak goal semantics, sequential distribution shift, or another optimizer interaction caused critic drift.
   \item \textbf{Stage VI uses one repaired checkpoint.} The counterfactual and bounded heads are fitted and tested from the reservoir 1.25M representation. Their calibration and behavioral effects may change at the collapsed checkpoint, under FIFO representations, or across independent training seeds.
+  \item \textbf{Stage VII repeats adaptation seeds, not training seeds.} Its three replicates vary environment and agent random streams around one fixed repaired actor/world model. They demonstrate stability of the episode-local treatment effect, not population variation across independently trained critics.
+  \item \textbf{Sampled--deterministic divergence remains mechanistically unresolved.} Small value doses improve sampled behavior but not deterministic control. The current assay does not distinguish beneficial distribution broadening from unstable logit shifts, state-specific mode changes, or later-step compounding.
   \item \textbf{Agent randomness was not fully paired.} Stage VI pairs reset identities but not every posterior/policy random draw inside separate adaptation processes. The differing reward-only results from functionally identical counterfactual and counterfactual-plus-bounded teachers quantify this otherwise hidden source of assay variance.
   \item \textbf{Event semantics are narrower than policy semantics.} Counterfactual labels are valid for the observed completion transition, but do not identify alternative-goal values or guarantee correct reward gradients on actor-imagined off-distribution states.
   \item \textbf{No oracle return for imagined counterfactuals.} Realized returns calibrate factual recorded states. Actor-selected and alternative-goal paths are assessed through paired contrasts, not falsely labelled with unobserved ground truth.
@@ -1255,11 +1475,11 @@ The programme began with a replay hypothesis: preserve older goals in a reservoi
 
 Controlled actor corruption turns that diagnosis into a causal result. Standard IR and entropy-off IR do not reliably recover the actor. Reward-only IR does, reaching \pct{73.0} sampled and \pct{85.3} deterministic mean success and exceeding the original clean actor under the same evaluation schedules. Study IV then removes the artificial corruption: on naturally damaged actors, reward-only IR improves aggregate success at every tested horizon and recovers 1.5M bury from \pct{14} to \pct{91} sampled and \pct{4} to \pct{86} deterministic. Ordinary IR still catastrophically damages competent 1.25M behaviors.
 
-Study V explains the failed teacher more precisely. On identical real states, critic bias grows from $+1.184$ to $+1.595$ as ranking collapses; the slow critic mirrors the error; target scale plateaus by short horizons; and the actor selects additional high-bootstrap, often lower-reward trajectories. Study VI then demonstrates that the diagnosed defects can be changed independently. Counterfactual supervision produces near-perfect held-out completion-goal identification, and a separate bounded head returns predictions to the attainable success scale. These are genuine mechanism repairs, not merely post-hoc correlations.
+Study V explains the failed teacher more precisely. On identical real states, critic bias grows from $+1.184$ to $+1.595$ as ranking collapses; the slow critic mirrors the error; target scale plateaus by short horizons; and the actor selects additional high-bootstrap, often lower-reward trajectories. Study VI then demonstrates that the diagnosed defects can be changed independently. Counterfactual supervision produces near-perfect held-out completion-goal identification, and a separate bounded head returns predictions to the attainable success scale. These are genuine mechanism repairs, not merely post-hoc correlations. Study VII converts the bounded repair into a dose-response result: a five-percent correction raises sampled success from \pct{73.8} to \pct{87.6} relative to reward-only and does so in all three fully paired replicates, whereas pure bounded teaching is inferior.
 
-The behavioral result prevents an overly simple conclusion. Factual-only reward IR, not the semantically strongest counterfactual head, gives the best sampled profile; bounded-bootstrap IR is much safer than the original critic but still damages chop. The research direction therefore remains viable, but its center of gravity changes again: the immediate opportunity is not simply ``fix the critic and turn standard IR back on.'' It is \textbf{critic-free adaptation as the reference teacher, conservative and dose-controlled value reintroduction, fully paired stochastic assays, and only then a prespecified gate and trust region supported by replay that preserves old experience without overwhelming current-task learning}.
+The behavioral result prevents an overly simple conclusion. Factual-only reward IR, not the semantically strongest counterfactual head, gives the best Stage VI sampled profile; Stage VII then shows that a small bounded correction can improve that general strategy, but only in sampled control. Every mixed treatment reduces deterministic macro success relative to reward-only, so no candidate passes the prespecified safety rule. The research direction therefore remains viable, but its center of gravity changes again: the immediate opportunity is not simply ``fix the critic and turn standard IR back on.'' It is \textbf{reward-only adaptation as the approved reference teacher, conservative value information activated only under evidence-based gating and policy constraints, fully paired stochastic assays, and replay that preserves old experience without overwhelming current-task learning}.
 
-This is a positive result in the intended scientific sense. It identifies a condition under which IR works strongly on both synthetic and natural policy deficits, identifies and localizes the learned component that makes the default method fail, directly repairs goal semantics and value scale, and shows which failure remains after those repairs. It also exposes task-specific harm and stochastic-assay variance that must be resolved before gating. The next constructive study should use the pinned repaired checkpoint for a conservative value-dose and PRNG-paired stability assay; another costly continual-training run is not yet required.
+This is a positive result in the intended scientific sense. It identifies conditions under which IR works strongly on synthetic and natural policy deficits, identifies and localizes the learned component that makes the default method fail, directly repairs goal semantics and value scale, and measures how much repaired value information can be useful. It also rejects automatic promotion of the strongest sampled treatment because deterministic weakest-task harm remains. The next constructive study should use the pinned repaired checkpoint for a prespecified gate and stronger trust-region assay, while a separate training-time branch investigates why the critic becomes optimistic and weakly goal conditioned. Another costly continual-training run is not yet required.
 
 \clearpage
 \appendix
@@ -1391,6 +1611,10 @@ Stage VI source/split & Reservoir 1.25M checkpoint; disjoint 576-episode repair 
 Stage VI repair & Factual-only and all-five-goal counterfactual reward/continuation arms; 2,000 updates; batch 256; $\alpha=4\times10^{-5}$; event fraction .5; separate bounded factual-success head with 2,000 updates \\
 Stage VI evaluation & Frozen; original standard $H=6$; four reward-only $H=15$ arms; bounded-bootstrap $H\in\{6,15\}$; three goals; 100 sampled + 50 deterministic episodes per cell \\
 Stage VI integrity & 5 audits + 3 repairs + 48 evaluation cells; 3,600/3,600 episodes; zero failed child attempts; reset identities paired; actor digests equal; counterfactual reward/continuation digests bit-identical \\
+Stage VII source/objective & Stage VI counterfactual-plus-bounded checkpoint; $A^\beta=A^{\mathrm R}+\beta\operatorname{clip}(A^{\mathrm B}-A^{\mathrm R},-c,c)$; all model/heads frozen; episode-local actor only \\
+Stage VII conditions & Frozen; reward-only $H=15$; $\beta\in\{.05,.10,.25,1\}$ at $H=15$; $\beta=.25$ correction clip .50; update RMS cap $1.5\times10^{-5}$; $H=6$ control \\
+Stage VII adaptation & One actor update per nonterminal real step; 128 posterior samples; $\alpha=4\times10^{-5}$; zero entropy; three environment/agent-seed replicates \\
+Stage VII evaluation/integrity & Three goals; 50 sampled + 25 deterministic episodes per cell; 162/162 units and 6,075/6,075 episodes; zero failed attempts; reset, posterior, and action keys fully paired \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1600,7 +1824,51 @@ Chop logs & .224 & .819 & .226 & +.595 & .173 & .632 \\
 \end{tabular}
 \end{table}
 
-The expanded package contains the original compact Study I tables, Stage II CSV/JSON summaries and vector figures, the complete Study III result, comparison, corruption-selection, and specification files, all 60 Study IV result rows with paired effects, the complete compact Study V calibration and target-provenance artifacts, and the Stage VI immutable specification, repair manifests, five held-out audit summaries, all 48 evaluation rows, paired effects, and integrity records. The included \texttt{generate\_figures.py} regenerates the report-native plots from these audited compact inputs. Raw episode and transition logs remain on the experiment machine and are not duplicated into the report package.
+\section{Complete Study VII success tables}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Sampled-policy real-environment success in Study VII, aggregated over three fully paired replicates (150 episodes per goal and condition).}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Kill & Bury & Chop & Mean \\
+\midrule
+Frozen & .500 & .600 & .760 & .620 \\
+Reward-only $H=15$ & .513 & .900 & .800 & .738 \\
+$\beta=.05,H=15$ & .787 & .940 & .900 & \textbf{.876} \\
+$\beta=.10,H=15$ & .600 & .920 & .953 & .824 \\
+$\beta=.25,H=15$ & .760 & .880 & .880 & .840 \\
+$\beta=.25$, correction clip .50 & .747 & .900 & .940 & .862 \\
+$\beta=.25$, update RMS cap & .767 & .820 & .920 & .836 \\
+$\beta=.25,H=6$ & .773 & .873 & .787 & .811 \\
+$\beta=1,H=15$ & .767 & .787 & .613 & .722 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Deterministic-policy real-environment success in Study VII, aggregated over three fully paired replicates (75 episodes per goal and condition).}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Kill & Bury & Chop & Mean \\
+\midrule
+Frozen & .427 & .587 & .747 & .587 \\
+Reward-only $H=15$ & .760 & .920 & .760 & \textbf{.813} \\
+$\beta=.05,H=15$ & .627 & .907 & .853 & .796 \\
+$\beta=.10,H=15$ & .667 & .947 & .773 & .796 \\
+$\beta=.25,H=15$ & .653 & .800 & .707 & .720 \\
+$\beta=.25$, correction clip .50 & .587 & .787 & .773 & .716 \\
+$\beta=.25$, update RMS cap & .773 & .707 & .773 & .751 \\
+$\beta=.25,H=6$ & .693 & .640 & .613 & .649 \\
+$\beta=1,H=15$ & .733 & .867 & .573 & .724 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The expanded package contains the original compact Study I tables, Stage II CSV/JSON summaries and vector figures, the complete Study III result, comparison, corruption-selection, and specification files, all 60 Study IV result rows with paired effects, the complete compact Study V calibration and target-provenance artifacts, the Stage VI immutable specification, repair manifests, five held-out audit summaries and all 48 evaluation rows, and the Stage VII immutable specification, 162-unit/6,075-episode result table, pairing audit, replicate summaries, and prespecified decision record. The included \texttt{generate\_figures.py} regenerates the report-native plots from these audited compact inputs. Raw episode and transition logs remain on the experiment machine and are not duplicated into the report package.
 
 \bibliographystyle{plainnat}
 \bibliography{references}

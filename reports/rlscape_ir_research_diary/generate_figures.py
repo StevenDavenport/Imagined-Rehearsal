@@ -3,7 +3,8 @@
 
 The numerical arrays and compact tables below are audited summaries extracted
 from the FIFO, episode-reservoir, actor-recovery, critic-provenance, and
-counterfactual-head-repair artifacts copied from office-gpu in August 2026.
+counterfactual-head-repair and conservative-value-dose artifacts copied from
+the execution host in August 2026.
 The raw JSONL logs remain the
 authoritative source; these inputs make the paper package reproducible without
 bundling the much larger raw run roots.
@@ -133,6 +134,24 @@ STAGE4A_CONDITION_LABELS = [
     "CF+bdd reward-only H=15", "CF+bdd bootstrap H=6",
     "CF+bdd bootstrap H=15",
 ]
+
+STAGE4B = DATA / "stage4b_conservative_value"
+STAGE4B_FIGURES = "stage4b_conservative_value"
+STAGE4B_CONDITIONS = [
+    "frozen", "reward_only_h15", "mixed_b005_h15", "mixed_b010_h15",
+    "mixed_b025_h15", "mixed_b025_clip050_h15",
+    "mixed_b025_ucap15e6_h15", "mixed_b025_h6", "mixed_b100_h15",
+]
+STAGE4B_LABELS = {
+    "frozen": "Frozen", "reward_only_h15": "Reward\nonly",
+    "mixed_b005_h15": r"$\beta=.05$",
+    "mixed_b010_h15": r"$\beta=.10$",
+    "mixed_b025_h15": r"$\beta=.25$",
+    "mixed_b025_clip050_h15": "$\\beta=.25$\nclip .50",
+    "mixed_b025_ucap15e6_h15": "$\\beta=.25$\nupdate cap",
+    "mixed_b025_h6": "$\\beta=.25$\nH=6",
+    "mixed_b100_h15": r"$\beta=1$",
+}
 
 
 def style() -> None:
@@ -963,6 +982,143 @@ def stage4a_mean_worst() -> None:
   save(fig, f"{STAGE4A_FIGURES}/mean_worst_task")
 
 
+def read_stage4b(name: str) -> list[dict[str, str]]:
+  with (STAGE4B / name).open(newline="") as handle:
+    return list(csv.DictReader(handle))
+
+
+def stage4b_value_dose() -> None:
+  rows = read_stage4b("goal_summary.csv")
+  doses = [
+      "reward_only_h15", "mixed_b005_h15", "mixed_b010_h15",
+      "mixed_b025_h15", "mixed_b100_h15",
+  ]
+  colors = [COLORS["kill"], COLORS["bury"], COLORS["chop"]]
+  for mode in ["sampled", "deterministic"]:
+    lookup = {(row["condition"], row["goal"]): row for row in rows
+              if row["policy_mode"] == mode}
+    fig, ax = plt.subplots(figsize=(7.15, 3.8), constrained_layout=True)
+    for goal, label, color in zip(STAGE2_GOALS, STAGE2_GOAL_LABELS, colors):
+      xs = [float(lookup[(condition, goal)]["mix_beta"])
+            for condition in doses]
+      ys = [float(lookup[(condition, goal)]["success_rate"])
+            for condition in doses]
+      ax.plot(xs, ys, marker="o", color=color, label=label)
+    ax.set_xscale("symlog", linthresh=.05)
+    ax.set_xticks([0, .05, .1, .25, 1], ["0", ".05", ".10", ".25", "1"])
+    ax.set(xlabel=r"Bounded-value dose $\beta$ ($H=15$, unclipped)",
+           ylabel="Success rate", ylim=(0, 1),
+           title=f"Study VII value-dose response --- {mode}")
+    ax.legend(frameon=False)
+    save(fig, f"{STAGE4B_FIGURES}/value_dose_{mode}")
+
+
+def stage4b_mean_worst() -> None:
+  rows = read_stage4b("condition_summary.csv")
+  fig, axes = plt.subplots(1, 2, figsize=(7.5, 3.7), sharey=True,
+                           constrained_layout=True)
+  x = np.arange(len(STAGE4B_CONDITIONS))
+  for ax, mode in zip(axes, ["sampled", "deterministic"]):
+    lookup = {row["condition"]: row for row in rows
+              if row["policy_mode"] == mode}
+    means = [float(lookup[name]["mean_goal_success"])
+             for name in STAGE4B_CONDITIONS]
+    worst = [float(lookup[name]["worst_goal_success"])
+             for name in STAGE4B_CONDITIONS]
+    ax.bar(x - .18, means, width=.36, label="Mean goal", color="#4c78a8")
+    ax.bar(x + .18, worst, width=.36, label="Worst goal", color="#e45756")
+    ax.set_xticks(x, [STAGE4B_LABELS[name] for name in STAGE4B_CONDITIONS],
+                  rotation=34, ha="right", fontsize=6.5)
+    ax.set(ylim=(0, 1), title=mode.title())
+    ax.grid(axis="x", visible=False)
+  axes[0].set_ylabel("Success rate")
+  axes[0].legend(frameon=False, fontsize=7)
+  fig.suptitle("Study VII mean and weakest-goal safety", fontsize=11)
+  save(fig, f"{STAGE4B_FIGURES}/mean_worst_goal")
+
+
+def stage4b_paired_delta() -> None:
+  rows = read_stage4b("goal_summary.csv")
+  fig, axes = plt.subplots(1, 2, figsize=(7.5, 3.8), sharey=True,
+                           constrained_layout=True)
+  for ax, mode in zip(axes, ["sampled", "deterministic"]):
+    lookup = {(row["condition"], row["goal"]): row for row in rows
+              if row["policy_mode"] == mode}
+    matrix = np.array([
+        [float(lookup[(condition, goal)]["paired_delta_vs_reward_only"])
+         for condition in STAGE4B_CONDITIONS]
+        for goal in STAGE2_GOALS])
+    im = ax.imshow(matrix, vmin=-.5, vmax=.5, cmap="RdBu", aspect="auto")
+    ax.set_xticks(range(len(STAGE4B_CONDITIONS)),
+                  [STAGE4B_LABELS[name] for name in STAGE4B_CONDITIONS],
+                  rotation=36, ha="right", fontsize=6.5)
+    ax.set_yticks(range(3), STAGE2_GOAL_LABELS)
+    ax.set_title(mode.title())
+    ax.grid(False)
+    for y in range(3):
+      for x in range(len(STAGE4B_CONDITIONS)):
+        ax.text(x, y, f"{matrix[y, x]:+.2f}", ha="center", va="center",
+                fontsize=6, color="white" if abs(matrix[y, x]) > .34
+                else "black")
+  fig.colorbar(im, ax=axes, shrink=.78,
+               label="Paired success change versus reward-only IR")
+  fig.suptitle("Study VII benefit and harm by goal", fontsize=11)
+  save(fig, f"{STAGE4B_FIGURES}/paired_delta_heatmap")
+
+
+def stage4b_replicate_stability() -> None:
+  rows = read_stage4b("main_results.csv")
+  fig, axes = plt.subplots(1, 2, figsize=(7.5, 3.7), sharey=True,
+                           constrained_layout=True)
+  for ax, mode in zip(axes, ["sampled", "deterministic"]):
+    for replicate in range(3):
+      values = []
+      for condition in STAGE4B_CONDITIONS:
+        selected = [float(row["success_rate"]) for row in rows
+                    if row["policy_mode"] == mode and
+                    row["condition"] == condition and
+                    int(row["replicate"]) == replicate]
+        values.append(float(np.mean(selected)))
+      ax.plot(range(len(values)), values, marker="o", ms=3,
+              label=f"Replicate {replicate}", alpha=.8)
+    ax.set_xticks(range(len(STAGE4B_CONDITIONS)),
+                  [STAGE4B_LABELS[name] for name in STAGE4B_CONDITIONS],
+                  rotation=34, ha="right", fontsize=6.5)
+    ax.set(ylim=(0, 1), title=mode.title())
+  axes[0].set_ylabel("Macro success across goals")
+  axes[0].legend(frameon=False, fontsize=7)
+  fig.suptitle("Study VII adaptation-seed stability", fontsize=11)
+  save(fig, f"{STAGE4B_FIGURES}/replicate_stability")
+
+
+def stage4b_mode_tradeoff() -> None:
+  rows = read_stage4b("condition_summary.csv")
+  lookup = {(row["condition"], row["policy_mode"]): row for row in rows}
+  conditions = STAGE4B_CONDITIONS[2:]
+  sampled = np.array([
+      float(lookup[(name, "sampled")]["mean_goal_delta_vs_reward_only"])
+      for name in conditions])
+  deterministic = np.array([
+      float(lookup[(name, "deterministic")]["mean_goal_delta_vs_reward_only"])
+      for name in conditions])
+  fig, ax = plt.subplots(figsize=(7.15, 3.8), constrained_layout=True)
+  ax.axhline(0, color="0.3", lw=1)
+  ax.axvline(0, color="0.3", lw=1)
+  ax.axhspan(-.22, 0, xmin=.5, color="#fce5cc", alpha=.45)
+  for index, name in enumerate(conditions):
+    ax.scatter(sampled[index], deterministic[index], s=45,
+               color=mpl.cm.tab10(index / max(1, len(conditions) - 1)),
+               edgecolor="white", linewidth=.5)
+    ax.annotate(STAGE4B_LABELS[name].replace("\n", " "),
+                (sampled[index], deterministic[index]), xytext=(4, 3),
+                textcoords="offset points", fontsize=6.5)
+  ax.set(xlabel="Sampled macro change versus reward-only",
+         ylabel="Deterministic macro change versus reward-only",
+         xlim=(-.04, .16), ylim=(-.19, .03),
+         title="Small value doses improve sampling without improving the mode")
+  save(fig, f"{STAGE4B_FIGURES}/sampled_deterministic_tradeoff")
+
+
 def main() -> None:
   style()
   training_curve()
@@ -992,6 +1148,11 @@ def main() -> None:
   stage4a_success_matrix()
   stage4a_paired_effects()
   stage4a_mean_worst()
+  stage4b_value_dose()
+  stage4b_mean_worst()
+  stage4b_paired_delta()
+  stage4b_replicate_stability()
+  stage4b_mode_tradeoff()
 
 
 if __name__ == "__main__":

@@ -117,6 +117,42 @@ class PairedAdaptiveEvalAgent(AdaptiveEvalAgent):
     return super().policy_latent(carry, params=params, mode=mode)
 
 
+class GatedAdaptiveEvalAgent(AdaptiveEvalAgent):
+
+  def __init__(self, act_space, entropy):
+    super().__init__(act_space)
+    self.config.eval_adapt.imag_length = 15
+    self.config.eval_adapt.start_batch = 128
+    self.config.eval_adapt.objective = 'reward_only'
+    self.config.eval_adapt.actent = 0.0
+    self.config.eval_adapt.gate = SimpleNamespace(
+        enabled=True, kind='entropy', audit=False,
+        entropy_threshold=.5, js_threshold=.5,
+        min_success_rate=.03, direction_threshold=.2)
+    self.entropy = entropy
+    self.gate_calls = 0
+    self.prepared_calls = 0
+
+  def gate_features(
+      self, carry, params=None, horizon=15, start_batch=128,
+      consequence=False, **kwargs):
+    del carry, params, horizon, start_batch, kwargs
+    self.gate_calls += 1
+    return ({'prepared': np.ones(1)} if consequence else {}), {
+        'actor_entropy': np.float32(self.entropy),
+        'posterior_entropy': np.float32(self.entropy),
+        'js_disagreement': np.float32(.1),
+        'success_rate': np.float32(.5 if consequence else 0),
+        'success_action_concentration': np.float32(.5 if consequence else 0),
+        'success_action_divergence': np.float32(.5 if consequence else 0),
+    }
+
+  def adapt_prepared(self, params, carry, rollout, steps=1, **kwargs):
+    del rollout, kwargs
+    self.prepared_calls += 1
+    return super().adapt(params, carry, steps=steps, freeze_critic=True)
+
+
 class EvalLogger:
 
   def __init__(self):
@@ -159,6 +195,26 @@ def test_eval_only_can_stop_at_an_exact_episode_count(tmp_path, monkeypatch):
   assert int(logger.step) == 9
   assert env.closed
   assert logger.closed
+
+
+def test_eval_only_warmup_is_timed_but_not_recorded(tmp_path, monkeypatch):
+  module = importlib.import_module('embodied.run.eval_only')
+  monkeypatch.setattr(module.elements.checkpoint, 'load', lambda *args: None)
+  env = EvalEnv()
+  agent = EvalAgent(env.act_space)
+  logger = EvalLogger()
+  args = SimpleNamespace(
+      from_checkpoint='unused', logdir=str(tmp_path), envs=1, debug=True,
+      usage={}, log_every=1000, eval_episodes=3, eval_warmup_episodes=1,
+      steps=999)
+
+  module.eval_only(lambda: agent, lambda index: env, lambda: logger, args)
+
+  assert len(logger.episodes) == 3
+  assert int(logger.step) == 12
+  runtime = json.loads((tmp_path / 'eval_runtime.json').read_text())
+  assert runtime['warmup_episodes'] == 1
+  assert runtime['environment_steps'] == 9
 
 
 def test_eval_only_actor_ir_is_sampled_actor_only_and_episode_local(
@@ -219,3 +275,24 @@ def test_eval_only_paired_rng_restarts_by_episode_and_separates_streams(
   integrity = json.loads((tmp_path / 'eval_integrity.json').read_text())
   assert integrity['paired_rng'] is True
   assert integrity['paired_rng_seed'] == 700
+
+
+def test_eval_only_entropy_gate_skips_updates_below_threshold(
+    tmp_path, monkeypatch):
+  module = importlib.import_module('embodied.run.eval_only')
+  monkeypatch.setattr(module.elements.checkpoint, 'load', lambda *args: None)
+  env = EvalEnv()
+  agent = GatedAdaptiveEvalAgent(env.act_space, entropy=.2)
+  logger = EvalLogger()
+  args = SimpleNamespace(
+      from_checkpoint='unused', logdir=str(tmp_path), envs=1, debug=True,
+      usage={}, log_every=1000, eval_episodes=2,
+      eval_policy_mode='sampled', steps=999)
+
+  module.eval_only(lambda: agent, lambda index: env, lambda: logger, args)
+
+  assert agent.gate_calls == 4
+  assert not agent.freeze_critic
+  integrity = json.loads((tmp_path / 'eval_integrity.json').read_text())
+  assert integrity['gate_enabled'] is True
+  assert integrity['gate_kind'] == 'entropy'

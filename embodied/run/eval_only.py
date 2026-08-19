@@ -1,10 +1,15 @@
 from collections import defaultdict
 from functools import partial as bind
 import json
+import time
 
 import elements
 import embodied
 import numpy as np
+
+from .ir_gate import GATE_KINDS
+from .ir_gate import cheap_decision
+from .ir_gate import consequence_decision
 
 
 def eval_only(make_agent, make_env, make_logger, args):
@@ -35,10 +40,13 @@ def eval_only(make_agent, make_env, make_logger, args):
   episodes = defaultdict(elements.Agg)
   should_log = elements.when.Clock(args.log_every)
   policy_fps = elements.FPS()
+  recording = True
 
   @elements.timer.section('logfn')
   def logfn(tran, worker):
     nonlocal trace_episode, trace_episode_step, trace_return
+    if not recording:
+      return
     episode = episodes[worker]
     tran['is_first'] and episode.reset()
     episode.add('score', tran['reward'], agg='sum')
@@ -103,6 +111,11 @@ def eval_only(make_agent, make_env, make_logger, args):
         if key in tran:
           row[key.replace('log/eval_adapt/', '').replace('/', '_')] = float(
               np.asarray(tran[key]).item())
+      for key, value in tran.items():
+        if key.startswith((
+            'log/eval_adapt/gate/', 'log/eval_adapt/compute/')):
+          row[key.replace('log/eval_adapt/', '').replace('/', '_')] = float(
+              np.asarray(value).item())
       trace_file.write(json.dumps(row) + '\n')
       trace_episode_step += 1
       if row['is_last']:
@@ -126,6 +139,18 @@ def eval_only(make_agent, make_env, make_logger, args):
   adapt_policy_params = None
   reference_actor_params = None
   adapt_every_k = int(getattr(adapt_cfg, 'every_k', 0))
+  gate_cfg = getattr(adapt_cfg, 'gate', None)
+  gate_enabled = bool(getattr(gate_cfg, 'enabled', False))
+  gate_audit = bool(getattr(gate_cfg, 'audit', False))
+  gate_kind = str(getattr(gate_cfg, 'kind', 'none')).lower()
+  if gate_kind not in GATE_KINDS:
+    raise ValueError(f'Unknown eval_adapt.gate.kind: {gate_kind!r}')
+  if gate_enabled and not bool(adapt_cfg.enabled):
+    raise ValueError('eval_adapt.gate.enabled requires eval_adapt.enabled')
+  if gate_enabled and gate_kind == 'none':
+    raise ValueError('Enabled IR gate requires a non-none gate kind')
+  if gate_enabled and adapt_objective == 'distill':
+    raise ValueError('Stage 5A gates do not support distillation')
   steps_since_adapt = 0
   paired_rng = bool(getattr(adapt_cfg, 'paired_rng', False))
   paired_rng_seed = int(getattr(adapt_cfg, 'paired_rng_seed', 0))
@@ -155,47 +180,161 @@ def eval_only(make_agent, make_env, make_logger, args):
     adapt_policy_params = None
     steps_since_adapt = 0
 
+  def seed_kwargs(rng_index, offset):
+    if not paired_rng:
+      return {}
+    return {
+        'seed_index': int(rng_index) * max(1, int(adapt_cfg.steps)),
+        'seed_base': paired_rng_seed + int(offset),
+    }
+
+  def put_scalar(outs, batch_shape, key, value):
+    outs[key] = np.full(batch_shape, np.float32(value), np.float32)
+
   def maybe_adapt(carry, acts, outs, batch_shape, rng_index=None):
+    """Evaluate the optional gate and perform at most one reusable IR path."""
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
     first_trigger = adapt_params is None
-    if adapt_params is None:
-      adapt_params = agent.clone_params()
-    if adapt_objective == 'distill':
-      if reference_actor_params is None:
-        raise RuntimeError('Reference actor parameters were not loaded')
-      teacher_stats = agent.policy_stats(
-          carry, actor_params=reference_actor_params)
-      adapt_params, carry, mets = agent.distill_actor(
-          adapt_params, carry, teacher_stats, adapt_cfg.steps)
-    else:
-      adapt_params, carry, mets = agent.adapt(
-          adapt_params, carry, adapt_cfg.steps,
-          warmup=(first_trigger and bool(adapt_cfg.train_critic)),
-          freeze_critic=not bool(adapt_cfg.train_critic),
+    prepared_rollout = None
+    features = {}
+    decision = None
+    cheap_seconds = 0.0
+    consequence_seconds = 0.0
+    adapt_seconds = 0.0
+    cheap_evaluated = bool(gate_enabled or gate_audit)
+    consequence_evaluated = False
+    imag_length = int(getattr(adapt_cfg, 'imag_length', 1))
+    start_batch = int(getattr(adapt_cfg, 'start_batch', 1))
+
+    if cheap_evaluated:
+      before = time.perf_counter()
+      _, features = agent.gate_features(
+          carry, params=adapt_params,
+          horizon=imag_length,
+          start_batch=start_batch, consequence=False,
+          **seed_kwargs(rng_index, 2))
+      cheap_seconds = time.perf_counter() - before
+      decision = cheap_decision(
+          gate_kind if gate_enabled else 'none', features,
+          entropy_threshold=float(getattr(
+              gate_cfg, 'entropy_threshold', 1.0)),
+          js_threshold=float(getattr(gate_cfg, 'js_threshold', 1.0)))
+      need_consequence = bool(
+          gate_audit or (gate_enabled and decision.needs_consequence))
+      if need_consequence:
+        before = time.perf_counter()
+        prepared_rollout, consequence_features = agent.gate_features(
+            carry, params=adapt_params,
+            horizon=imag_length,
+            start_batch=start_batch, consequence=True,
+            **seed_kwargs(rng_index, 3))
+        consequence_seconds = time.perf_counter() - before
+        consequence_evaluated = True
+        features.update(consequence_features)
+        if gate_enabled and decision.needs_consequence:
+          decision = consequence_decision(
+              decision, features,
+              min_success_rate=float(getattr(
+                  gate_cfg, 'min_success_rate', 0.03125)),
+              direction_threshold=float(getattr(
+                  gate_cfg, 'direction_threshold', 1.0)))
+
+    should_adapt = bool(adapt_cfg.enabled) and (
+        not gate_enabled or bool(decision and decision.adapt))
+    mets = {}
+    if should_adapt:
+      if adapt_params is None:
+        adapt_params = agent.clone_params()
+      before = time.perf_counter()
+      if adapt_objective == 'distill':
+        if reference_actor_params is None:
+          raise RuntimeError('Reference actor parameters were not loaded')
+        teacher_stats = agent.policy_stats(
+            carry, actor_params=reference_actor_params)
+        adapt_params, carry, mets = agent.distill_actor(
+            adapt_params, carry, teacher_stats, adapt_cfg.steps)
+      elif prepared_rollout is not None:
+        adapt_params, carry, mets = agent.adapt_prepared(
+            adapt_params, carry, prepared_rollout, adapt_cfg.steps,
+            **seed_kwargs(rng_index, 4))
+      else:
+        adapt_params, carry, mets = agent.adapt(
+            adapt_params, carry, adapt_cfg.steps,
+            warmup=(first_trigger and bool(adapt_cfg.train_critic)),
+            freeze_critic=not bool(adapt_cfg.train_critic),
+            **seed_kwargs(rng_index, 3 if cheap_evaluated else 2))
+      adapt_seconds = time.perf_counter() - before
+      if adapt_policy_params is not None:
+        discard = getattr(agent, 'discard_params', None)
+        if discard:
+          discard(adapt_policy_params)
+      adapt_policy_params = agent.extract_policy_params(adapt_params)
+      carry, acts, _ = agent.policy_latent(
+          carry, params=adapt_policy_params, mode=agent_policy_mode,
           **({
-              'seed_index': int(rng_index) * max(1, int(adapt_cfg.steps)),
-              'seed_base': paired_rng_seed + 2,
+              'seed_index': int(rng_index),
+              'seed_base': paired_rng_seed,
           } if paired_rng else {}))
-    if adapt_policy_params is not None:
-      discard = getattr(agent, 'discard_params', None)
-      if discard:
-        discard(adapt_policy_params)
-    adapt_policy_params = agent.extract_policy_params(adapt_params)
-    carry, acts, _ = agent.policy_latent(
-        carry, params=adapt_policy_params, mode=agent_policy_mode,
-        **({
-            'seed_index': int(rng_index),
-            'seed_base': paired_rng_seed,
-        } if paired_rng else {}))
-    steps_since_adapt = 0
-    outs['log/eval_adapt/trigger'] = np.full(batch_shape, 1.0, np.float32)
-    outs['log/eval_adapt/steps'] = np.full(
-        batch_shape, float(adapt_cfg.steps), np.float32)
+      steps_since_adapt = 0
+
+    put_scalar(outs, batch_shape, 'log/eval_adapt/trigger', should_adapt)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/steps',
+        float(adapt_cfg.steps) if should_adapt else 0.0)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/evaluated', cheap_evaluated)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/cheap_pass',
+        bool(decision.cheap_pass) if decision else False)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/consequence_evaluated',
+        consequence_evaluated)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/consequence_pass',
+        bool(decision.consequence_pass)
+        if decision and decision.consequence_pass is not None else False)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/final_pass', should_adapt)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/cheap_seconds',
+        cheap_seconds)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/consequence_seconds',
+        consequence_seconds)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/adapt_seconds',
+        adapt_seconds)
+    ordinary_rollouts = (
+        int(adapt_cfg.steps)
+        if should_adapt and prepared_rollout is None else 0)
+    posterior_samples = start_batch * (
+        int(cheap_evaluated) + int(consequence_evaluated) +
+        ordinary_rollouts)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/posterior_samples',
+        posterior_samples)
+    imagined = start_batch * imag_length * (
+        int(consequence_evaluated) + ordinary_rollouts)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/imagined_transitions',
+        imagined)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/actor_updates',
+        int(adapt_cfg.steps) if should_adapt else 0)
+    for key, value in features.items():
+      value = np.asarray(value)
+      if value.size == 1:
+        put_scalar(
+            outs, batch_shape, f'log/eval_adapt/gate/{key}', value.item())
     for key, value in mets.items():
       value = np.asarray(value)
       if value.ndim == 0:
-        outs[f'log/eval_adapt/{key}'] = np.full(
-            batch_shape, value.astype(np.float32), np.float32)
+        put_scalar(outs, batch_shape, f'log/eval_adapt/{key}', value.item())
+    if prepared_rollout is not None:
+      discard = getattr(agent, 'discard_params', None)
+      if discard:
+        discard(prepared_rollout)
+    steps_since_adapt = 0
     return carry, acts
 
   def policy(carry, obs, **kwargs):
@@ -221,7 +360,7 @@ def eval_only(make_agent, make_env, make_logger, args):
             'seed_index': int(rng_index),
             'seed_base': paired_rng_seed,
         } if paired_rng else {}))
-    if adapt_cfg.enabled:
+    if adapt_cfg.enabled or gate_audit:
       if obs['is_first'].shape[0] != 1:
         raise ValueError('eval_adapt requires eval envs=1')
       if obs['is_last'].any():
@@ -229,11 +368,11 @@ def eval_only(make_agent, make_env, make_logger, args):
         # on an unused action and then immediately throw its parameters away.
         discard_adaptation()
       elif obs['is_first'].any():
-        assert (
-            adapt_params is None and
-            adapt_policy_params is None and
-            steps_since_adapt == 0
-        ), 'eval_adapt state leaked across episode boundary'
+        assert steps_since_adapt == 0, (
+            'eval_adapt cadence leaked across episode boundary')
+        if adapt_cfg.enabled:
+          assert adapt_params is None and adapt_policy_params is None, (
+              'eval_adapt parameters leaked across episode boundary')
         carry, acts = maybe_adapt(
             carry, acts, outs, obs['is_first'].shape, rng_index)
       else:
@@ -277,6 +416,17 @@ def eval_only(make_agent, make_env, make_logger, args):
 
     print(f'Start {requested_mode} evaluation')
     driver.reset(agent.init_policy)
+    warmup_episodes = int(getattr(args, 'eval_warmup_episodes', 0))
+    if warmup_episodes < 0:
+      raise ValueError('run.eval_warmup_episodes must be nonnegative')
+    warmup_started = time.perf_counter()
+    if warmup_episodes:
+      recording = False
+      driver(policy, episodes=warmup_episodes)
+      recording = True
+    warmup_seconds = time.perf_counter() - warmup_started
+    evaluation_started = time.perf_counter()
+    evaluation_start_step = int(step)
     eval_episodes = int(getattr(args, 'eval_episodes', 0))
     if eval_episodes:
       if eval_episodes < 0:
@@ -288,11 +438,25 @@ def eval_only(make_agent, make_env, make_logger, args):
         driver(policy, steps=10)
         if should_log(step):
           write_metrics()
+    evaluation_seconds = time.perf_counter() - evaluation_started
+    evaluation_steps = int(step) - evaluation_start_step
+    (logdir / 'eval_runtime.json').write_text(json.dumps({
+        'evaluation_seconds': evaluation_seconds,
+        'environment_steps': evaluation_steps,
+        'steps_per_second': (
+            evaluation_steps / evaluation_seconds
+            if evaluation_seconds > 0 else float('nan')),
+        'warmup_episodes': warmup_episodes,
+        'warmup_seconds': warmup_seconds,
+    }, indent=2, sort_keys=True) + '\n')
     integrity_after = digests() if digests else None
     integrity = {
         'policy_mode': requested_mode,
         'adapt_enabled': bool(adapt_cfg.enabled),
         'adapt_objective': adapt_objective,
+        'gate_enabled': gate_enabled,
+        'gate_kind': gate_kind,
+        'gate_audit': gate_audit,
         'paired_rng': paired_rng,
         'paired_rng_seed': paired_rng_seed if paired_rng else None,
         'paired_rng_stride': paired_rng_stride if paired_rng else None,

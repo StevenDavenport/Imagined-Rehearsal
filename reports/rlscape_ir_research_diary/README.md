@@ -12,9 +12,11 @@ chronological RLScape continual-learning investigation:
 4. **Stage 3B / Study IV:** reward-only rehearsal on naturally forgotten
    checkpoint policies;
 5. **Stage 3A / Study V:** critic provenance on real posterior states and
-   actor-versus-recorded imagined trajectories.
+   actor-versus-recorded imagined trajectories;
 6. **Stage 4A / Study VI:** matched factual/counterfactual reward-continuation
-   repair, a separate bounded success head, and paired real-environment IR.
+   repair, a separate bounded success head, and paired real-environment IR;
+7. **Stage 4B / Study VII:** fully PRNG-paired conservative bounded-value dose,
+   horizon, clipping, and update-cap assays across three adaptation replicates.
 
 The canonical experiment names and remaining Stage 4--6 ladder are
 maintained in the repository at `experiments/rlscape/README.md`.
@@ -44,5 +46,7 @@ on 2026-08-15. Stage V's real-state calibration, horizon decomposition,
 proposal contrasts, and integrity summaries were added after the completed GPU
 audit. Stage VI's specification, repair/audit summaries, complete 3,600-episode
 evaluation table, integrity records, and report-native figures were added on
-2026-08-17. They make the report portable; the original JSONL logs remain the
-authoritative raw artifacts.
+2026-08-17. Stage VII's immutable specification, complete 6,075-episode table,
+paired goal/replicate summaries, decision audit, and six report-native figure
+families were added on 2026-08-19. They make the report portable; the original
+JSONL logs remain the authoritative raw artifacts.

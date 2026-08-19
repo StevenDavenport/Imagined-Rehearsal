@@ -31,8 +31,10 @@ The machine-readable companion is [`registry.json`](registry.json).
 | **3A** | Critic Provenance and Calibration Audit | Complete | Supported/refined: severe error is already present on real posterior states and actor-selected imagination amplifies it; horizon growth is not the primary source | Study V |
 | **3B** | Natural Forgetting Recovery | Complete | Supported: reward-only IR improved both natural checkpoints and recovered 1.50M bury from 14% to 91% sampled; standard IR remained unsafe | Study IV |
 | **4A** | Counterfactual Goal-Head Repair | Complete | Mixed: counterfactual labels repaired held-out goal semantics and bounded value repaired scale, but factual reward-only IR remained the strongest sampled teacher and bounded IR was still task-dependent | Study VI |
-| **4B** | Conservative Bounded-Value Dose and Stability | Ready to run | Test whether a small, clipped bounded-value correction can improve reward-only IR without lowering worst-goal performance | Planned Study VII |
-| **5** | Gated Continual Imagined Rehearsal | Reserved | Combine reward-only/conservative IR with a prespecified gate and trust region | Future algorithm |
+| **4B** | Conservative Bounded-Value Dose and Stability | Complete | Mixed: beta=.05 gave a replicated +13.8 pp sampled gain and +4.0 pp worst-goal gain over reward-only, but every mixed condition violated the deterministic worst-goal safety floor | Study VII |
+| **5A** | Interpretable Gating for Imagined Rehearsal | Ready to run | Test entropy, MCPB JS, and consequence-aware gates against always-on IR with compute accounting | Future algorithm |
+| **5B** | Hard-KL Update Safety | Reserved | Bound accepted episode-local actor drift after the gate mechanism is qualified | Future algorithm |
+| **5C** | Persistent Gated Continual IR | Reserved | Carry safe, gated adaptation across episodes | Future algorithm |
 | **6** | Full Continual-Learning Validation | Reserved | Multi-seed/task-order validation with transfer, forgetting, and recurrence | Future validation |
 
 Stages 3A and 3B are sibling experiments, not a forced sequence. Stage 3B
@@ -51,13 +53,27 @@ still damaged chop. The next stage must therefore test conservative value dose
 and adaptation stability rather than assuming semantic calibration alone is a
 sufficient actor-teaching objective.
 
-Stage 4B makes that test directly on the repaired Stage 4A checkpoint. Its
+Stage 4B made that test directly on the repaired Stage 4A checkpoint. Its
 mixed objective is anchored exactly at reward-only (`beta=0`) and full bounded
 IR (`beta=1`), with small prespecified doses, a correction-clipping control, and
 an H=6 horizon control. Three replicates share explicit episode-step posterior
 and action random keys as well as identical RLScape reset schedules. Advancement
-depends on both macro improvement and worst-goal safety; a good mean cannot hide
-a damaged task.
+depended on both macro improvement and worst-goal safety; a good mean could not
+hide a damaged task. All 162 units and 6,075 episodes completed without a failed
+attempt. `beta=.05` improved sampled macro success from .738 to .876 and
+worst-goal success from .513 to .787, with positive macro change in all three
+replicates. However, deterministic worst-goal success fell from .760 to .627.
+No mixed condition passed the full prespecified safety rule, so reward-only
+H=15 remains the approved Stage 5 base teacher while small value correction is
+retained as a gated/regularised candidate.
+
+Stage 5 is now an explicit three-part ladder. Stage 5A prioritizes gating:
+factual actor entropy, mean posterior-conditioned entropy, MCPB
+Jensen--Shannon disagreement, and reward-conditioned action evidence are
+audited before fixed interpretable gates are tested on held-out episodes.
+Compute is measured against no-IR and always-on IR but does not constrain gate
+selection. Stage 5B adds hard-KL rollback only after gating is understood, and
+Stage 5C is the first persistent continual-actor experiment.
 
 ## Where each layer lives
 
@@ -77,8 +93,9 @@ The completed reservoir run remains historically named
 the authoritative raw artifacts for Stages 1A, 1B, and 2 respectively, and
 `stage3a_critic_provenance_calibration` and
 `stage3b_natural_forgetting_recovery` are the authoritative raw Stage 3A and
-Stage 3B roots. The historical `M4` label must not be interpreted as canonical
-Stage 4.
+Stage 3B roots. Nested `stage4a_counterfactual_head_repair` and
+`stage4b_conservative_value` are the authoritative raw Stage 4A and Stage 4B
+roots. The historical `M4` label must not be interpreted as canonical Stage 4.
 
 ## Maintained protocols
 
@@ -89,6 +106,7 @@ Stage 4.
 - [Stage 3B: Natural Forgetting Recovery](stage3b_natural_forgetting_recovery.md)
 - [Stage 4A: Counterfactual Goal-Head Repair](stage4a_counterfactual_head_repair.md)
 - [Stage 4B: Conservative Bounded-Value Dose and Stability](stage4b_conservative_value_dose.md)
+- [Stage 5A: Interpretable Gating for Imagined Rehearsal](stage5a_interpretable_gating.md)
 
 Stage 0's full methodology and results are preserved as Study I in the
 [research diary](../../reports/rlscape_ir_research_diary/report.pdf). The

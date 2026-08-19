@@ -24,6 +24,10 @@ name. Canonical experiment identities are defined in
   package: immutable specification, held-out FIFO/reservoir/repaired head
   audits, all 48 paired evaluation cells, repair-integrity manifests, and the
   findings narrative.
+- `stage4b_conservative_value/` is the compact **Stage 4B** evidence package:
+  immutable nine-condition specification, complete 162-unit restart queue,
+  all 6,075 episode outcomes, paired goal/condition summaries, pairing audit,
+  five figure families, and the findings narrative.
 
 Stage 3B completed all 4,500 episodes without retry or pairing failure. Its
 principal result is that reward-only IR transfers from synthetic actor
@@ -41,6 +45,13 @@ selectivity from 33.3% to 97.4% and that a bounded success head repairs value
 scale, but neither change automatically outperforms factual reward-only IR in
 the real environment. See
 [`STAGE4A_FINDINGS.md`](m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/STAGE4A_FINDINGS.md).
+
+Stage 4B shows that a five-percent bounded-value correction raises sampled
+success from 73.8% to 87.6% relative to reward-only IR and improves all three
+sampled goals in all three adaptation replicates. It does not pass the complete
+safety rule because deterministic worst-goal success falls by 13.3 percentage
+points. See
+[`STAGE4B_FINDINGS.md`](m4_reservoir_3goal_500k_seed0/stage4b_conservative_value/STAGE4B_FINDINGS.md).
 
 Historical paths are intentionally not rewritten inside CSV/JSON extracts.
 They identify the exact source host and run from which each result was derived.

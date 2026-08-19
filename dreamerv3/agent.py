@@ -35,6 +35,36 @@ def select_policy_action(policy, mode, seed=None):
   raise ValueError(f'Unknown policy mode {mode!r}; expected train or eval')
 
 
+def categorical_entropy(prob):
+  """Categorical entropy with numerically safe zero-probability handling."""
+  prob = jnp.asarray(prob, f32)
+  return -(prob * jnp.log(jnp.maximum(prob, 1e-8))).sum(-1)
+
+
+def categorical_js(prob, axis=1):
+  """Jensen--Shannon disagreement along an ensemble/sample axis."""
+  prob = jnp.asarray(prob, f32)
+  mixture = prob.mean(axis)
+  # Round-off can make the entropy difference a few ulps negative even though
+  # Jensen--Shannon divergence is nonnegative by definition.
+  return jnp.maximum(
+      categorical_entropy(mixture) - categorical_entropy(prob).mean(axis),
+      0.0)
+
+
+def normalized_categorical_entropy(prob):
+  classes = int(prob.shape[-1])
+  scale = jnp.log(jnp.asarray(max(classes, 2), f32))
+  return jnp.clip(categorical_entropy(prob) / scale, 0.0, 1.0)
+
+
+def categorical_js_pair(left, right):
+  pair = jnp.stack([left, right], 1)
+  return jnp.clip(
+      categorical_js(pair, axis=1) / jnp.log(jnp.asarray(2.0, f32)),
+      0.0, 1.0)
+
+
 class Agent(embodied.jax.Agent):
 
   banner = [
@@ -265,6 +295,106 @@ class Agent(embodied.jax.Agent):
       if hasattr(base, 'stddev'):
         stats[f'{key}/stddev'] = base.stddev
     return stats
+
+  def gate_features(self, carry, horizon=15, start_batch=128,
+                    consequence=False):
+    """Measure uncertainty and optionally prepare a reusable IR rollout.
+
+    The cheap features use only posterior resampling plus actor forwards. The
+    consequence branch additionally runs the ordinary IR imagination and
+    returns it unchanged so a passing gate can reuse it for the actor update.
+    All statistics are normalized to approximately [0, 1].
+    """
+    _, dyn_carry, _, _ = carry
+    horizon = int(horizon)
+    start_batch = max(1, int(start_batch))
+    batch = int(dyn_carry['deter'].shape[0])
+    goal = self._carry_goal(dyn_carry)
+
+    factual = self.pol(self._head_input(dyn_carry, goal), 1)
+    if 'logit' not in dyn_carry:
+      raise KeyError('Stage 5A gating requires posterior logits in carry')
+    logit = jnp.repeat(dyn_carry['logit'], start_batch, axis=0)
+    sampled = {
+        'deter': jnp.repeat(dyn_carry['deter'], start_batch, axis=0),
+        'stoch': self.dyn.sample_posterior(logit),
+    }
+    sampled_goal = (
+        jnp.repeat(goal, start_batch, axis=0)
+        if self.goal_enabled else None)
+    posterior_policy = self.pol(
+        self._head_input(sampled, sampled_goal), 1)
+
+    actual_entropy = []
+    posterior_entropy = []
+    posterior_js = []
+    for key in sorted(posterior_policy):
+      factual_base = getattr(factual[key], 'output', factual[key])
+      posterior_base = getattr(
+          posterior_policy[key], 'output', posterior_policy[key])
+      if not (hasattr(factual_base, 'logits') and
+              hasattr(posterior_base, 'logits')):
+        raise ValueError(
+            'Stage 5A gates require categorical actor distributions: '
+            f'{key}')
+      factual_prob = jax.nn.softmax(factual_base.logits, -1)
+      posterior_prob = jax.nn.softmax(posterior_base.logits, -1)
+      classes = int(posterior_prob.shape[-1])
+      posterior_prob = posterior_prob.reshape(
+          (batch, start_batch, classes))
+      actual_entropy.append(normalized_categorical_entropy(factual_prob))
+      posterior_entropy.append(
+          normalized_categorical_entropy(posterior_prob).mean(1))
+      posterior_js.append(
+          jnp.clip(
+              categorical_js(posterior_prob, axis=1) /
+              jnp.log(jnp.asarray(max(classes, 2), f32)), 0.0, 1.0))
+
+    metrics = {
+        'actor_entropy': jnp.stack(actual_entropy).mean(),
+        'posterior_entropy': jnp.stack(posterior_entropy).mean(),
+        'js_disagreement': jnp.stack(posterior_js).mean(),
+        'success_rate': jnp.asarray(0.0, f32),
+        'success_action_concentration': jnp.asarray(0.0, f32),
+        'success_action_divergence': jnp.asarray(0.0, f32),
+    }
+    if not consequence:
+      return {}, metrics
+
+    rollout = self._adapt_rollout(
+        carry, horizon=horizon, start_batch=start_batch)
+    reward_threshold = float(getattr(
+        self.config.eval_adapt.gate, 'reward_threshold', 0.5))
+    success = (rollout['rew'].max(-1) >= reward_threshold).astype(f32)
+    success = success.reshape((batch, start_batch))
+    metrics['success_rate'] = success.mean()
+
+    concentrations = []
+    divergences = []
+    first_policy = self.pol(
+        jax.tree.map(lambda x: x[:, 0], rollout['inp']), 1)
+    for key in sorted(first_policy):
+      base = getattr(first_policy[key], 'output', first_policy[key])
+      if not hasattr(base, 'logits'):
+        raise ValueError(
+            'Stage 5A consequence gates require categorical actions: '
+            f'{key}')
+      prob = jax.nn.softmax(base.logits, -1)
+      classes = int(prob.shape[-1])
+      prob = prob.reshape((batch, start_batch, classes))
+      mixture = prob.mean(1)
+      action = jnp.asarray(rollout['imgact'][key][:, 0], i32)
+      action = action.reshape((batch, start_batch))
+      weighted = jax.nn.one_hot(action, classes, dtype=f32) * success[..., None]
+      count = success.sum(1, keepdims=True)
+      empirical = weighted.sum(1) / jnp.maximum(count, 1.0)
+      empirical = jnp.where(count > 0, empirical, mixture)
+      concentrations.append(1.0 - normalized_categorical_entropy(empirical))
+      divergences.append(categorical_js_pair(mixture, empirical))
+    metrics['success_action_concentration'] = jnp.stack(
+        concentrations).mean()
+    metrics['success_action_divergence'] = jnp.stack(divergences).mean()
+    return rollout, metrics
 
   def posterior_chunk(self, carry, obs, prevact):
     """Re-encode a recorded sequence chunk while preserving recurrent state."""
@@ -1032,6 +1162,25 @@ class Agent(embodied.jax.Agent):
 
     metrics, (carry, mets) = self.adapt_opt(lossfn, carry, has_aux=True)
     metrics.update(prefix(mets, 'adapt'))
+    return carry, metrics
+
+  def adapt_prepared(self, carry, rollout):
+    """Apply actor-only IR to a rollout already computed by a gate.
+
+    Stage 5A uses this path to ensure that consequence gating does not pay for
+    one imagination to decide and a second identical imagination to update.
+    """
+    if bool(self.config.eval_adapt.train_critic):
+      raise ValueError('Prepared Stage 5A adaptation requires a frozen critic')
+
+    def actor_lossfn(carry):
+      loss, metrics = self._adapt_actor_objective(rollout)
+      return loss, (carry, metrics)
+
+    metrics, (carry, mets) = self.adapt_actor_opt(
+        actor_lossfn, carry, has_aux=True)
+    metrics.update(prefix(mets, 'adapt_actor'))
+    metrics.update(self._adapt_viewer_metrics(rollout['imgfeat']))
     return carry, metrics
 
   def adapt_critic_horizon(self, carry, horizon=6, start_batch=1):

@@ -1,0 +1,17 @@
+{
+  "agent_rng_keys": [
+    "replicate",
+    "episode_index",
+    "episode_step",
+    "agent_seed"
+  ],
+  "environment_keys": [
+    "replicate",
+    "goal",
+    "policy_mode",
+    "reset_seed"
+  ],
+  "equal": true,
+  "format": 1,
+  "note": "Every condition shares RLScape resets and explicit episode-step posterior/action random keys within each replicate."
+}
