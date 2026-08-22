@@ -88,7 +88,11 @@ def build_eval_command(
       grid_rows=args.grid_rows, adapt_steps=args.adapt_steps,
       adapt_lr=args.adapt_lr, adapt_every_k=args.adapt_every_k,
       start_batch=args.start_batch, mvn_path=args.mvn_path,
-      java_home=args.java_home)
+      java_home=args.java_home,
+      # Stage 5A selected its gates on the Stage 4A counterfactual+bounded
+      # checkpoint. Stage 5B/5C must instantiate the same parameter tree even
+      # when the current objective does not consume the bounded-value head.
+      extra_configs=('rlscape_stage4a_bounded_value',))
   command += [
       '--run.eval_warmup_episodes', str(int(warmup_episodes)),
       '--eval_adapt.persistence', persistence,

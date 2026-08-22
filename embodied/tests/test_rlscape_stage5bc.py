@@ -64,6 +64,8 @@ def test_stage5_persistent_command_is_explicit_and_opt_in(tmp_path):
   assert value('--eval_adapt.resume_adapt_state') == 'True'
   assert value('--eval_adapt.gate.kind') == 'two_stage'
   assert value('--run.eval_warmup_episodes') == '0'
+  configs = command[command.index('--configs') + 1:command.index('--seed')]
+  assert 'rlscape_stage4a_bounded_value' in configs
 
 
 def test_stage5b_dry_run_is_immutable_and_prespecified(tmp_path, monkeypatch):
