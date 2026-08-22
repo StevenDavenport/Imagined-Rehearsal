@@ -111,15 +111,33 @@
     },
     {
       "id": "stage5b",
+      "slug": "ir_necessity_discrimination",
+      "name": "IR Necessity Discrimination",
+      "status": "ready_to_run",
+      "hypothesis_status": "unresolved",
+      "runner": "scripts/rlscape_stage5b_need_discrimination.py",
+      "protocol": "experiments/rlscape/stage5b_ir_necessity_discrimination.md"
+    },
+    {
+      "id": "stage5c",
+      "slug": "persistent_self_terminating_recovery",
+      "name": "Persistent Self-Terminating Recovery",
+      "status": "ready_to_run",
+      "hypothesis_status": "unresolved",
+      "runner": "scripts/rlscape_stage5c_persistent_recovery.py",
+      "protocol": "experiments/rlscape/stage5c_persistent_recovery.md"
+    },
+    {
+      "id": "stage5d",
       "slug": "hard_kl_update_safety",
       "name": "Hard-KL Update Safety",
       "status": "reserved",
       "hypothesis_status": "unresolved"
     },
     {
-      "id": "stage5c",
-      "slug": "persistent_gated_continual_ir",
-      "name": "Persistent Gated Continual IR",
+      "id": "stage5e",
+      "slug": "continual_gated_ir_integration",
+      "name": "Continual Gated IR Integration",
       "status": "reserved",
       "hypothesis_status": "unresolved"
     },

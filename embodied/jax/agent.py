@@ -683,6 +683,25 @@ class Agent(embodied.Agent):
   def clone_params(self):
     return jax.tree.map(lambda x: x.copy(), self.params)
 
+  def export_params(self, params=None):
+    """Gather an arbitrary parameter clone in ordinary checkpoint format."""
+    params = self.params if params is None else params
+    with self.train_lock:
+      gathered = {}
+      for keys, gather_fn, _ in self._ckpt_groups:
+        group = {k: params[k] for k in keys}
+        gathered.update(jax.device_get(gather_fn(group)))
+    assert gathered
+    counters = {
+        'updates': int(self.n_updates),
+        'batches': int(self.n_batches),
+        'actions': int(self.n_actions),
+        'adapt': int(self.n_adapt),
+        'model_updates': int(self.n_model_updates),
+        'probes': int(self.n_probes),
+    }
+    return {'params': gathered, 'counters': counters}
+
   def extract_policy_params(self, params):
     policy_params = {k: params[k].copy() for k in self.policy_keys}
     return internal.move(policy_params, self.policy_params_sharding)
@@ -698,9 +717,13 @@ class Agent(embodied.Agent):
           lambda value: value.delete() if hasattr(value, 'delete') else None,
           params)
 
-  def parameter_digests(self):
+  def parameter_digests(self, params=None):
     """Return stable digests used to prove evaluation did not mutate state."""
-    params = self.save()['params']
+    return self.checkpoint_digests(self.export_params(params))
+
+  def checkpoint_digests(self, checkpoint):
+    """Digest an already gathered checkpoint without another device copy."""
+    params = checkpoint['params']
     groups = {
         'all': [],
         'actor': [],
@@ -841,22 +864,7 @@ class Agent(embodied.Agent):
 
   @elements.timer.section('jaxagent_save')
   def save(self):
-    with self.train_lock:
-      params = {}
-      for keys, gather_fn, _ in self._ckpt_groups:
-        group = {k: self.params[k] for k in keys}
-        params.update(jax.device_get(gather_fn(group)))
-    assert params
-    counters = {
-        'updates': int(self.n_updates),
-        'batches': int(self.n_batches),
-        'actions': int(self.n_actions),
-        'adapt': int(self.n_adapt),
-        'model_updates': int(self.n_model_updates),
-        'probes': int(self.n_probes),
-    }
-    data = {'params': params, 'counters': counters}
-    return data
+    return self.export_params()
 
   @elements.timer.section('jaxagent_load')
   def load(self, data, regex=None):

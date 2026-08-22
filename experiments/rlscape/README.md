@@ -33,8 +33,10 @@ The machine-readable companion is [`registry.json`](registry.json).
 | **4A** | Counterfactual Goal-Head Repair | Complete | Mixed: counterfactual labels repaired held-out goal semantics and bounded value repaired scale, but factual reward-only IR remained the strongest sampled teacher and bounded IR was still task-dependent | Study VI |
 | **4B** | Conservative Bounded-Value Dose and Stability | Complete | Mixed: beta=.05 gave a replicated +13.8 pp sampled gain and +4.0 pp worst-goal gain over reward-only, but every mixed condition violated the deterministic worst-goal safety floor | Study VII |
 | **5A** | Interpretable Gating for Imagined Rehearsal | Ready to run | Test entropy, MCPB JS, and consequence-aware gates against always-on IR with compute accounting | Future algorithm |
-| **5B** | Hard-KL Update Safety | Reserved | Bound accepted episode-local actor drift after the gate mechanism is qualified | Future algorithm |
-| **5C** | Persistent Gated Continual IR | Reserved | Carry safe, gated adaptation across episodes | Future algorithm |
+| **5B** | IR Necessity Discrimination | Ready to run | Test whether frozen gates adapt on a weak task and abstain on a competent task | Future algorithm |
+| **5C** | Persistent Self-Terminating Recovery | Ready to run | Test recovery speed, natural gate shutoff, retained-task safety, and compute across episode-persistent IR | Future algorithm |
+| **5D** | Hard-KL Update Safety | Reserved | Bound accepted actor drift with hard rollback after gating is understood | Future algorithm |
+| **5E** | Continual Gated IR Integration | Reserved | Combine current-task learning, reservoir preservation, and gated persistent IR | Future algorithm |
 | **6** | Full Continual-Learning Validation | Reserved | Multi-seed/task-order validation with transfer, forgetting, and recurrence | Future validation |
 
 Stages 3A and 3B are sibling experiments, not a forced sequence. Stage 3B
@@ -67,13 +69,17 @@ No mixed condition passed the full prespecified safety rule, so reward-only
 H=15 remains the approved Stage 5 base teacher while small value correction is
 retained as a gated/regularised candidate.
 
-Stage 5 is now an explicit three-part ladder. Stage 5A prioritizes gating:
+Stage 5 is now an explicit algorithm ladder. Stage 5A prioritizes gating:
 factual actor entropy, mean posterior-conditioned entropy, MCPB
 Jensen--Shannon disagreement, and reward-conditioned action evidence are
 audited before fixed interpretable gates are tested on held-out episodes.
 Compute is measured against no-IR and always-on IR but does not constrain gate
-selection. Stage 5B adds hard-KL rollback only after gating is understood, and
-Stage 5C is the first persistent continual-actor experiment.
+selection. Stage 5B then tests the missing negative case: whether a frozen gate
+distinguishes an IR-responsive weak task from a competent task on the same
+checkpoint. Stage 5C carries actor and adaptation-optimizer state across
+episodes and asks whether recovery becomes self-terminating. Hard-KL rollback
+moves to Stage 5D; only after those mechanisms have separate evidence does
+Stage 5E integrate them into continual training.
 
 ## Where each layer lives
 
@@ -107,6 +113,8 @@ roots. The historical `M4` label must not be interpreted as canonical Stage 4.
 - [Stage 4A: Counterfactual Goal-Head Repair](stage4a_counterfactual_head_repair.md)
 - [Stage 4B: Conservative Bounded-Value Dose and Stability](stage4b_conservative_value_dose.md)
 - [Stage 5A: Interpretable Gating for Imagined Rehearsal](stage5a_interpretable_gating.md)
+- [Stage 5B: IR Necessity Discrimination](stage5b_ir_necessity_discrimination.md)
+- [Stage 5C: Persistent Self-Terminating Recovery](stage5c_persistent_recovery.md)
 
 Stage 0's full methodology and results are preserved as Study I in the
 [research diary](../../reports/rlscape_ir_research_diary/report.pdf). The

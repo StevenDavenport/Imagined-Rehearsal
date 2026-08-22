@@ -41,13 +41,22 @@ class AdaptiveEvalAgent(EvalAgent):
     self.latent_modes = []
     self.freeze_critic = []
     self.discarded = 0
+    self.clone_calls = 0
 
   def policy(self, carry, obs, mode='eval', params=None):
     self.policy_modes.append(mode)
     return super().policy(carry, obs, mode=mode, params=params)
 
   def clone_params(self):
+    self.clone_calls += 1
     return {'pol/x': np.ones(1)}
+
+  def export_params(self, params=None):
+    return {'params': params or {'pol/x': np.zeros(1)}, 'counters': {}}
+
+  def checkpoint_digests(self, checkpoint):
+    del checkpoint
+    return self.parameter_digests()
 
   def adapt(
       self, params, carry, steps=1, warmup=False, freeze_critic=False):
@@ -71,7 +80,8 @@ class AdaptiveEvalAgent(EvalAgent):
     if params is not None:
       self.discarded += 1
 
-  def parameter_digests(self):
+  def parameter_digests(self, params=None):
+    del params
     return {'all': {'sha256': 'constant', 'arrays': 1}}
 
 
@@ -245,9 +255,38 @@ def test_eval_only_actor_ir_is_sampled_actor_only_and_episode_local(
   # Dummy length 2 yields an initial and one nonterminal adaptation per episode;
   # terminal observations must not trigger another update.
   assert len(agent.freeze_critic) == 4
+  assert agent.clone_calls == 2
   assert agent.discarded >= 4
   integrity = (tmp_path / 'eval_integrity.json').read_text()
   assert '"equal": true' in integrity
+
+
+def test_eval_only_run_persistence_reuses_adapted_params_across_episodes(
+    tmp_path, monkeypatch):
+  module = importlib.import_module('embodied.run.eval_only')
+  monkeypatch.setattr(module.elements.checkpoint, 'load', lambda *args: None)
+  env = EvalEnv()
+  agent = AdaptiveEvalAgent(env.act_space)
+  agent.config.eval_adapt.persistence = 'run'
+  agent.config.eval_adapt.output_checkpoint = str(tmp_path / 'adapted')
+  logger = EvalLogger()
+  args = SimpleNamespace(
+      from_checkpoint='unused', logdir=str(tmp_path), envs=1, debug=True,
+      usage={}, log_every=1000, eval_episodes=2,
+      eval_policy_mode='sampled', steps=999)
+
+  module.eval_only(lambda: agent, lambda index: env, lambda: logger, args)
+
+  assert agent.clone_calls == 1
+  assert len(agent.freeze_critic) == 4
+  integrity = json.loads((tmp_path / 'eval_integrity.json').read_text())
+  assert integrity['persistence'] == 'run'
+  assert (tmp_path / 'adapted' / 'agent.pkl').is_file()
+  assert (tmp_path / 'adapted' / 'done').is_file()
+  manifest = json.loads((
+      tmp_path / 'adapted' / 'persistent_ir_manifest.json').read_text())
+  assert manifest['episodes'] == 2
+  assert manifest['frozen_component_violations'] == {}
 
 
 def test_eval_only_paired_rng_restarts_by_episode_and_separates_streams(

@@ -169,6 +169,9 @@ defaults:
 
   eval_adapt:
     enabled: False
+    persistence: episode
+    output_checkpoint: ''
+    resume_adapt_state: False
     train_critic: False
     objective: standard
     reference_checkpoint: ''

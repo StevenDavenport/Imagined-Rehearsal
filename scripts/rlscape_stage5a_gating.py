@@ -164,8 +164,8 @@ def build_command(
   return command
 
 
-def trace_summary(logdir):
-  rows = read_jsonl(logdir / 'stage5a_trace.jsonl')
+def trace_summary(logdir, filename='stage5a_trace.jsonl'):
+  rows = read_jsonl(logdir / filename)
   keys = (
       'gate_evaluated', 'gate_cheap_pass', 'gate_consequence_evaluated',
       'gate_consequence_pass', 'gate_final_pass', 'gate_actor_entropy',

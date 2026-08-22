@@ -1,6 +1,9 @@
 from collections import defaultdict
 from functools import partial as bind
 import json
+import os
+import pathlib
+import pickle
 import time
 
 import elements
@@ -10,6 +13,27 @@ import numpy as np
 from .ir_gate import GATE_KINDS
 from .ir_gate import cheap_decision
 from .ir_gate import consequence_decision
+
+
+def _save_adapted_checkpoint(
+    agent, params, destination, manifest, payload=None):
+  """Atomically publish an evaluation-local parameter clone."""
+  destination = pathlib.Path(destination).expanduser().resolve()
+  if destination.exists():
+    raise FileExistsError(destination)
+  destination.parent.mkdir(parents=True, exist_ok=True)
+  temporary = destination.with_name(
+      f'.{destination.name}.tmp-{os.getpid()}')
+  if temporary.exists():
+    raise FileExistsError(temporary)
+  temporary.mkdir()
+  payload = payload if payload is not None else agent.export_params(params)
+  with (temporary / 'agent.pkl').open('wb') as handle:
+    pickle.dump(payload, handle, protocol=pickle.HIGHEST_PROTOCOL)
+  (temporary / 'persistent_ir_manifest.json').write_text(
+      json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+  (temporary / 'done').write_bytes(b'')
+  temporary.replace(destination)
 
 
 def eval_only(make_agent, make_env, make_logger, args):
@@ -130,6 +154,17 @@ def eval_only(make_agent, make_env, make_logger, args):
   driver.on_step(logfn)
 
   adapt_cfg = agent.config.eval_adapt
+  persistence = str(getattr(adapt_cfg, 'persistence', 'episode')).lower()
+  if persistence not in ('episode', 'run'):
+    raise ValueError(
+        'eval_adapt.persistence must be episode or run, got '
+        f'{persistence!r}')
+  output_checkpoint = str(getattr(adapt_cfg, 'output_checkpoint', ''))
+  resume_adapt_state = bool(getattr(
+      adapt_cfg, 'resume_adapt_state', False))
+  if persistence == 'episode' and (output_checkpoint or resume_adapt_state):
+    raise ValueError(
+        'Persistent checkpoint settings require eval_adapt.persistence=run')
   adapt_objective = str(getattr(adapt_cfg, 'objective', 'standard'))
   if adapt_objective not in (
       'standard', 'reward_only', 'bounded', 'mixed_bounded', 'distill'):
@@ -365,12 +400,17 @@ def eval_only(make_agent, make_env, make_logger, args):
         raise ValueError('eval_adapt requires eval envs=1')
       if obs['is_last'].any():
         # The driver masks terminal actions. Adapting here would spend compute
-        # on an unused action and then immediately throw its parameters away.
-        discard_adaptation()
+        # on an unused action. Episode-local evaluation also throws its cloned
+        # parameters away here; run-persistent evaluation deliberately keeps
+        # the actor and optimizer state while resetting only cadence/carry.
+        if persistence == 'episode':
+          discard_adaptation()
+        else:
+          steps_since_adapt = 0
       elif obs['is_first'].any():
         assert steps_since_adapt == 0, (
             'eval_adapt cadence leaked across episode boundary')
-        if adapt_cfg.enabled:
+        if adapt_cfg.enabled and persistence == 'episode':
           assert adapt_params is None and adapt_policy_params is None, (
               'eval_adapt parameters leaked across episode boundary')
         carry, acts = maybe_adapt(
@@ -394,9 +434,11 @@ def eval_only(make_agent, make_env, make_logger, args):
     # Adaptation optimizer state is evaluation-local and older checkpoints do
     # not contain the critic-first optimizer namespaces. Always leave these
     # freshly initialized instead of requiring an exact checkpoint tree match.
+    load_regex = (
+        '^(?!model_opt/)' if resume_adapt_state else
+        '^(?!(adapt_opt|adapt_actor_opt|adapt_critic_opt|model_opt)/)')
     elements.checkpoint.load(args.from_checkpoint, dict(
-        agent=bind(agent.load, regex=(
-            '^(?!(adapt_opt|adapt_actor_opt|adapt_critic_opt|model_opt)/)'))))
+        agent=bind(agent.load, regex=load_regex)))
     if adapt_cfg.enabled and adapt_objective == 'distill':
       reference_checkpoint = str(getattr(
           adapt_cfg, 'reference_checkpoint', ''))
@@ -424,6 +466,10 @@ def eval_only(make_agent, make_env, make_logger, args):
       recording = False
       driver(policy, episodes=warmup_episodes)
       recording = True
+      # Warm-up exists only to remove compilation/start-up costs. It must not
+      # become the first persistent recovery block.
+      if persistence == 'run':
+        discard_adaptation()
     warmup_seconds = time.perf_counter() - warmup_started
     evaluation_started = time.perf_counter()
     evaluation_start_step = int(step)
@@ -450,6 +496,29 @@ def eval_only(make_agent, make_env, make_logger, args):
         'warmup_seconds': warmup_seconds,
     }, indent=2, sort_keys=True) + '\n')
     integrity_after = digests() if digests else None
+    adapted_payload = None
+    if persistence == 'run' and output_checkpoint:
+      adapted_payload = agent.export_params(adapt_params)
+    checkpoint_digests = getattr(agent, 'checkpoint_digests', None)
+    if (persistence == 'run' and adapted_payload is not None and
+        checkpoint_digests):
+      adapted_integrity = checkpoint_digests(adapted_payload)
+    elif persistence == 'run' and digests and adapt_params is not None:
+      adapted_integrity = digests(adapt_params)
+    else:
+      # Episode-local adaptation is discarded and has no persistent integrity
+      # surface. Avoid gathering a full temporary checkpoint just to prove the
+      # already-audited base agent remained unchanged.
+      adapted_integrity = integrity_after
+    frozen_groups = (
+        'critic', 'bounded_value', 'reward_continuation', 'representation',
+        'world_model', 'normalizers')
+    persistent_violations = {
+        key: (integrity_before[key], adapted_integrity[key])
+        for key in frozen_groups
+        if integrity_before is not None and adapted_integrity is not None and
+        key in integrity_before and key in adapted_integrity and
+        integrity_before[key] != adapted_integrity[key]}
     integrity = {
         'policy_mode': requested_mode,
         'adapt_enabled': bool(adapt_cfg.enabled),
@@ -457,6 +526,9 @@ def eval_only(make_agent, make_env, make_logger, args):
         'gate_enabled': gate_enabled,
         'gate_kind': gate_kind,
         'gate_audit': gate_audit,
+        'persistence': persistence,
+        'resume_adapt_state': resume_adapt_state,
+        'output_checkpoint': output_checkpoint,
         'paired_rng': paired_rng,
         'paired_rng_seed': paired_rng_seed if paired_rng else None,
         'paired_rng_stride': paired_rng_stride if paired_rng else None,
@@ -464,6 +536,8 @@ def eval_only(make_agent, make_env, make_logger, args):
             adapt_cfg, 'reference_checkpoint', '')),
         'before': integrity_before,
         'after': integrity_after,
+        'adapted': adapted_integrity,
+        'persistent_frozen_component_violations': persistent_violations,
         'equal': integrity_before == integrity_after,
     }
     (logdir / 'eval_integrity.json').write_text(
@@ -472,6 +546,26 @@ def eval_only(make_agent, make_env, make_logger, args):
       raise RuntimeError(
           'Persistent agent parameters changed during evaluation; see '
           f'{logdir / "eval_integrity.json"}')
+    if persistent_violations:
+      raise RuntimeError(
+          'Persistent IR changed frozen components; see '
+          f'{logdir / "eval_integrity.json"}')
+    if output_checkpoint:
+      _save_adapted_checkpoint(
+          agent, adapt_params, output_checkpoint, {
+              'format': 1,
+              'source_checkpoint': str(args.from_checkpoint),
+              'persistence': persistence,
+              'resume_adapt_state': resume_adapt_state,
+              'adapt_enabled': bool(adapt_cfg.enabled),
+              'adapt_objective': adapt_objective,
+              'gate_enabled': gate_enabled,
+              'gate_kind': gate_kind,
+              'episodes': eval_episodes,
+              'integrity_before': integrity_before,
+              'integrity_after': adapted_integrity,
+              'frozen_component_violations': persistent_violations,
+          }, payload=adapted_payload)
   finally:
     try:
       discard_adaptation()

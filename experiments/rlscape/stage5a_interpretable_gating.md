@@ -108,6 +108,7 @@ python scripts/rlscape_stage5a_status.py \
 ## Claim boundary
 
 Stage 5A evaluates an interpretable gate, not a learned gate, a KL trust
-region, or persistent actor adaptation. Hard-KL update safety is Stage 5B.
-Persistent gated continual IR is Stage 5C and begins only after the gate and
-trust-region mechanisms have separate evidence.
+region, or persistent actor adaptation. Stage 5B tests whether the frozen gate
+can distinguish states where IR is behaviorally useful from states belonging
+to an already-competent policy. Stage 5C then tests persistent recovery. Hard-KL
+update safety is reserved for Stage 5D.
