@@ -34,6 +34,7 @@ The machine-readable companion is [`registry.json`](registry.json).
 | **4B** | Conservative Bounded-Value Dose and Stability | Complete | Mixed: beta=.05 gave a replicated +13.8 pp sampled gain and +4.0 pp worst-goal gain over reward-only, but every mixed condition violated the deterministic worst-goal safety floor | Study VII |
 | **5A** | Interpretable Gating for Imagined Rehearsal | Ready to run | Test entropy, MCPB JS, and consequence-aware gates against always-on IR with compute accounting | Future algorithm |
 | **5B** | IR Necessity Discrimination | Ready to run | Test whether frozen gates adapt on a weak task and abstain on a competent task | Future algorithm |
+| **5B.1** | Offline Performance-Gate Audit | Ready to run | Test whether prospective JS and imagined-performance signals separate later underperformance and paired IR need across tasks | Future algorithm |
 | **5C** | Persistent Self-Terminating Recovery | Ready to run | Test recovery speed, natural gate shutoff, retained-task safety, and compute across episode-persistent IR | Future algorithm |
 | **5D** | Hard-KL Update Safety | Reserved | Bound accepted actor drift with hard rollback after gating is understood | Future algorithm |
 | **5E** | Continual Gated IR Integration | Reserved | Combine current-task learning, reservoir preservation, and gated persistent IR | Future algorithm |
@@ -76,7 +77,9 @@ audited before fixed interpretable gates are tested on held-out episodes.
 Compute is measured against no-IR and always-on IR but does not constrain gate
 selection. Stage 5B then tests the missing negative case: whether a frozen gate
 distinguishes an IR-responsive weak task from a competent task on the same
-checkpoint. Stage 5C carries actor and adaptation-optimizer state across
+checkpoint. Stage 5B.1 is an offline diagnostic pause: it asks whether JS is
+calibrated to performance, whether its threshold transfers across tasks, and
+whether imagined performance supplies the missing axis. Stage 5C carries actor and adaptation-optimizer state across
 episodes and asks whether recovery becomes self-terminating. Hard-KL rollback
 moves to Stage 5D; only after those mechanisms have separate evidence does
 Stage 5E integrate them into continual training.
@@ -114,6 +117,7 @@ roots. The historical `M4` label must not be interpreted as canonical Stage 4.
 - [Stage 4B: Conservative Bounded-Value Dose and Stability](stage4b_conservative_value_dose.md)
 - [Stage 5A: Interpretable Gating for Imagined Rehearsal](stage5a_interpretable_gating.md)
 - [Stage 5B: IR Necessity Discrimination](stage5b_ir_necessity_discrimination.md)
+- [Stage 5B.1: Offline Performance-Gate Audit](stage5b1_performance_gate_audit.md)
 - [Stage 5C: Persistent Self-Terminating Recovery](stage5c_persistent_recovery.md)
 
 Stage 0's full methodology and results are preserved as Study I in the

@@ -119,6 +119,15 @@
       "protocol": "experiments/rlscape/stage5b_ir_necessity_discrimination.md"
     },
     {
+      "id": "stage5b1",
+      "slug": "offline_performance_gate_audit",
+      "name": "Offline Performance-Gate Audit",
+      "status": "ready_to_run",
+      "hypothesis_status": "unresolved",
+      "runner": "scripts/rlscape_stage5b1_performance_gate_audit.py",
+      "protocol": "experiments/rlscape/stage5b1_performance_gate_audit.md"
+    },
+    {
       "id": "stage5c",
       "slug": "persistent_self_terminating_recovery",
       "name": "Persistent Self-Terminating Recovery",
