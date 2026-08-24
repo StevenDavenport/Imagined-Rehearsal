@@ -357,6 +357,9 @@ class Agent(embodied.jax.Agent):
         'success_rate': jnp.asarray(0.0, f32),
         'success_action_concentration': jnp.asarray(0.0, f32),
         'success_action_divergence': jnp.asarray(0.0, f32),
+        'reward_return_mean': jnp.asarray(0.0, f32),
+        'reward_return_std': jnp.asarray(0.0, f32),
+        'reward_return_sem': jnp.asarray(0.0, f32),
     }
     if not consequence:
       return {}, metrics
@@ -368,6 +371,16 @@ class Agent(embodied.jax.Agent):
     success = (rollout['rew'].max(-1) >= reward_threshold).astype(f32)
     success = success.reshape((batch, start_batch))
     metrics['success_rate'] = success.mean()
+    disc = 1 if self.config.contdisc else 1 - 1 / self.config.horizon
+    zeros = jnp.zeros_like(rollout['rew'])
+    reward_return = lambda_return(
+        zeros, 1 - rollout['con'], rollout['rew'], zeros, zeros,
+        disc, self.config.imag_loss.lam)[:, 0]
+    metrics['reward_return_mean'] = reward_return.mean()
+    metrics['reward_return_std'] = reward_return.std()
+    metrics['reward_return_sem'] = (
+        reward_return.std() /
+        jnp.sqrt(jnp.asarray(max(int(reward_return.size), 1), f32)))
 
     concentrations = []
     divergences = []

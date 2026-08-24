@@ -118,6 +118,7 @@ roots. The historical `M4` label must not be interpreted as canonical Stage 4.
 - [Stage 5A: Interpretable Gating for Imagined Rehearsal](stage5a_interpretable_gating.md)
 - [Stage 5B: IR Necessity Discrimination](stage5b_ir_necessity_discrimination.md)
 - [Stage 5B.1: Offline Performance-Gate Audit](stage5b1_performance_gate_audit.md)
+- [Stage 5B.2: Paired Virtual-Update Gate](stage5b2_virtual_update_gate.md)
 - [Stage 5C: Persistent Self-Terminating Recovery](stage5c_persistent_recovery.md)
 
 Stage 0's full methodology and results are preserved as Study I in the

@@ -200,6 +200,12 @@ defaults:
       min_success_rate: 0.03125
       direction_threshold: 1.0
       reward_threshold: 0.5
+      virtual_score: reward_return
+      virtual_min_improvement: 0.0
+      virtual_max_baseline_score: 1.0e30
+      virtual_dormant_every: 25
+      virtual_active_every: 1
+      virtual_deactivate_after: 3
     viewer:
       enabled: False
       traj_index: 0

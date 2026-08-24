@@ -8,6 +8,7 @@ from dreamerv3.agent import normalized_categorical_entropy
 from embodied.run.ir_gate import cheap_decision
 from embodied.run.ir_gate import consequence_decision
 from embodied.run.ir_gate import incremental_compute
+from embodied.run.ir_gate import virtual_update_decision
 
 
 def test_entropy_and_js_separate_shared_uncertainty_from_disagreement():
@@ -50,3 +51,21 @@ def test_gate_thresholds_are_inclusive_and_compute_saving_is_incremental():
       'js', features, entropy_threshold=.9, js_threshold=.4).adapt
   assert np.isclose(incremental_compute(10, 30, 20), .5)
   assert math.isnan(incremental_compute(10, 10, 9))
+
+
+def test_virtual_update_gate_requires_both_low_baseline_and_improvement():
+  accepted = virtual_update_decision(
+      .1, .2, min_improvement=.01, max_baseline_score=.5)
+  assert accepted.baseline_pass
+  assert accepted.adapt
+  assert np.isclose(accepted.improvement, .1)
+
+  strong = virtual_update_decision(
+      .8, .9, min_improvement=.01, max_baseline_score=.5)
+  assert not strong.baseline_pass
+  assert not strong.adapt
+
+  damaged = virtual_update_decision(
+      .1, .05, min_improvement=0, max_baseline_score=.5)
+  assert damaged.baseline_pass
+  assert not damaged.adapt

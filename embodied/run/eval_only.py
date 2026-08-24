@@ -13,6 +13,7 @@ import numpy as np
 from .ir_gate import GATE_KINDS
 from .ir_gate import cheap_decision
 from .ir_gate import consequence_decision
+from .ir_gate import virtual_update_decision
 
 
 def _save_adapted_checkpoint(
@@ -186,7 +187,36 @@ def eval_only(make_agent, make_env, make_logger, args):
     raise ValueError('Enabled IR gate requires a non-none gate kind')
   if gate_enabled and adapt_objective == 'distill':
     raise ValueError('Stage 5A gates do not support distillation')
+  virtual_gate = bool(gate_enabled and gate_kind == 'virtual_update')
+  virtual_score = str(getattr(
+      gate_cfg, 'virtual_score', 'reward_return')).lower()
+  virtual_score_keys = {
+      'reward_return': 'reward_return_mean',
+      'success_rate': 'success_rate',
+  }
+  if virtual_score not in virtual_score_keys:
+    raise ValueError(
+        f'Unknown eval_adapt.gate.virtual_score: {virtual_score!r}')
+  virtual_min_improvement = float(getattr(
+      gate_cfg, 'virtual_min_improvement', 0.0))
+  virtual_max_baseline = float(getattr(
+      gate_cfg, 'virtual_max_baseline_score', float('inf')))
+  virtual_dormant_every = int(getattr(
+      gate_cfg, 'virtual_dormant_every', 25))
+  virtual_active_every = int(getattr(
+      gate_cfg, 'virtual_active_every', 1))
+  virtual_deactivate_after = int(getattr(
+      gate_cfg, 'virtual_deactivate_after', 3))
+  if virtual_gate and bool(adapt_cfg.train_critic):
+    raise ValueError('virtual_update currently requires a frozen critic')
+  if virtual_gate and min(
+      virtual_dormant_every, virtual_active_every,
+      virtual_deactivate_after) < 1:
+    raise ValueError('Virtual-update cadence and hysteresis must be positive')
   steps_since_adapt = 0
+  steps_since_probe = 0
+  virtual_active = False
+  virtual_reject_streak = 0
   paired_rng = bool(getattr(adapt_cfg, 'paired_rng', False))
   paired_rng_seed = int(getattr(adapt_cfg, 'paired_rng_seed', 0))
   paired_rng_stride = int(getattr(adapt_cfg, 'paired_rng_stride', 1000))
@@ -196,6 +226,10 @@ def eval_only(make_agent, make_env, make_logger, args):
     raise ValueError('eval_adapt.paired_rng_stride must be at least 2')
   if paired_rng and adapt_objective == 'distill':
     raise ValueError('Paired RNG is not implemented for distillation')
+  if virtual_gate and not paired_rng:
+    raise ValueError(
+        'virtual_update requires eval_adapt.paired_rng=True so before and '
+        'after scores use common random numbers')
   requested_mode = str(getattr(
       args, 'eval_policy_mode', 'deterministic')).lower()
   policy_modes = {'deterministic': 'eval', 'sampled': 'train'}
@@ -207,6 +241,7 @@ def eval_only(make_agent, make_env, make_logger, args):
 
   def discard_adaptation():
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
+    nonlocal steps_since_probe, virtual_active, virtual_reject_streak
     discard = getattr(agent, 'discard_params', None)
     if discard:
       discard(adapt_policy_params)
@@ -214,6 +249,9 @@ def eval_only(make_agent, make_env, make_logger, args):
     adapt_params = None
     adapt_policy_params = None
     steps_since_adapt = 0
+    steps_since_probe = 0
+    virtual_active = False
+    virtual_reject_streak = 0
 
   def seed_kwargs(rng_index, offset):
     if not paired_rng:
@@ -226,9 +264,168 @@ def eval_only(make_agent, make_env, make_logger, args):
   def put_scalar(outs, batch_shape, key, value):
     outs[key] = np.full(batch_shape, np.float32(value), np.float32)
 
+  def maybe_virtual_adapt(
+      carry, acts, outs, batch_shape, rng_index=None):
+    """Tentatively update the actor and commit only paired improvements."""
+    nonlocal adapt_params, adapt_policy_params, steps_since_adapt
+    nonlocal steps_since_probe, virtual_active, virtual_reject_streak
+    if adapt_params is None:
+      adapt_params = agent.clone_params()
+
+    was_active = bool(virtual_active)
+    imag_length = int(getattr(adapt_cfg, 'imag_length', 1))
+    start_batch = int(getattr(adapt_cfg, 'start_batch', 1))
+    score_key = virtual_score_keys[virtual_score]
+
+    before = time.perf_counter()
+    before_rollout, before_features = agent.gate_features(
+        carry, params=adapt_params, horizon=imag_length,
+        start_batch=start_batch, consequence=True,
+        **seed_kwargs(rng_index, 20))
+    before_seconds = time.perf_counter() - before
+
+    before = time.perf_counter()
+    training_rollout, _ = agent.gate_features(
+        carry, params=adapt_params, horizon=imag_length,
+        start_batch=start_batch, consequence=True,
+        **seed_kwargs(rng_index, 21))
+    training_seconds = time.perf_counter() - before
+
+    rollback = agent.snapshot_adapt_actor_state(adapt_params)
+    before = time.perf_counter()
+    tentative_params, tentative_carry, mets = agent.adapt_prepared(
+        adapt_params, carry, training_rollout, adapt_cfg.steps,
+        **seed_kwargs(rng_index, 22))
+    update_seconds = time.perf_counter() - before
+
+    before = time.perf_counter()
+    after_rollout, after_features = agent.gate_features(
+        carry, params=tentative_params, horizon=imag_length,
+        start_batch=start_batch, consequence=True,
+        **seed_kwargs(rng_index, 20))
+    after_seconds = time.perf_counter() - before
+
+    decision = virtual_update_decision(
+        before_features[score_key], after_features[score_key],
+        min_improvement=virtual_min_improvement,
+        max_baseline_score=virtual_max_baseline)
+    if decision.adapt:
+      agent.discard_params(rollback)
+      adapt_params = tentative_params
+      carry = tentative_carry
+      if adapt_policy_params is not None:
+        agent.discard_params(adapt_policy_params)
+      adapt_policy_params = agent.extract_policy_params(adapt_params)
+      carry, acts, _ = agent.policy_latent(
+          carry, params=adapt_policy_params, mode=agent_policy_mode,
+          **({
+              'seed_index': int(rng_index),
+              'seed_base': paired_rng_seed,
+          } if paired_rng else {}))
+      virtual_active = True
+      virtual_reject_streak = 0
+      steps_since_adapt = 0
+    else:
+      adapt_params = agent.restore_adapt_actor_state(
+          tentative_params, rollback)
+      if was_active:
+        virtual_reject_streak += 1
+        if virtual_reject_streak >= virtual_deactivate_after:
+          virtual_active = False
+      else:
+        virtual_reject_streak = 0
+
+    put_scalar(outs, batch_shape, 'log/eval_adapt/trigger', decision.adapt)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/steps',
+        float(adapt_cfg.steps) if decision.adapt else 0.0)
+    put_scalar(outs, batch_shape, 'log/eval_adapt/gate/evaluated', True)
+    put_scalar(outs, batch_shape, 'log/eval_adapt/gate/cheap_pass', True)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/consequence_evaluated', True)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/consequence_pass',
+        decision.adapt)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/final_pass',
+        decision.adapt)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/baseline_pass',
+        decision.baseline_pass)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/virtual_active_before',
+        was_active)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/virtual_active_after',
+        virtual_active)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/reject_streak',
+        virtual_reject_streak)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/score_before',
+        decision.baseline_score)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/score_after',
+        decision.candidate_score)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/score_improvement',
+        decision.improvement)
+    for prefix, features in (
+        ('before', before_features), ('after', after_features)):
+      for key, value in features.items():
+        value = np.asarray(value)
+        if value.size == 1:
+          put_scalar(
+              outs, batch_shape,
+              f'log/eval_adapt/gate/{prefix}_{key}', value.item())
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/cheap_seconds', 0.0)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/consequence_seconds',
+        before_seconds + training_seconds + after_seconds)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/adapt_seconds',
+        update_seconds)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/before_probe_seconds',
+        before_seconds)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/after_probe_seconds',
+        after_seconds)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/training_rollout_seconds',
+        training_seconds)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/posterior_samples',
+        3 * start_batch)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/imagined_transitions',
+        3 * start_batch * imag_length)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/actor_updates',
+        int(adapt_cfg.steps) if decision.adapt else 0)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/tentative_actor_updates',
+        int(adapt_cfg.steps))
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/compute/rejected_actor_updates',
+        0 if decision.adapt else int(adapt_cfg.steps))
+    for key, value in mets.items():
+      value = np.asarray(value)
+      if value.ndim == 0:
+        put_scalar(outs, batch_shape, f'log/eval_adapt/{key}', value.item())
+    agent.discard_params(before_rollout)
+    agent.discard_params(training_rollout)
+    agent.discard_params(after_rollout)
+    steps_since_probe = 0
+    return carry, acts
+
   def maybe_adapt(carry, acts, outs, batch_shape, rng_index=None):
     """Evaluate the optional gate and perform at most one reusable IR path."""
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
+    if virtual_gate:
+      return maybe_virtual_adapt(
+          carry, acts, outs, batch_shape, rng_index)
     first_trigger = adapt_params is None
     prepared_rollout = None
     features = {}
@@ -374,6 +571,7 @@ def eval_only(make_agent, make_env, make_logger, args):
 
   def policy(carry, obs, **kwargs):
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
+    nonlocal steps_since_probe, virtual_active, virtual_reject_streak
     nonlocal paired_episode, paired_step
     if paired_rng:
       if obs['is_first'].shape[0] != 1:
@@ -407,19 +605,34 @@ def eval_only(make_agent, make_env, make_logger, args):
           discard_adaptation()
         else:
           steps_since_adapt = 0
+          steps_since_probe = 0
+          virtual_active = False
+          virtual_reject_streak = 0
       elif obs['is_first'].any():
         assert steps_since_adapt == 0, (
             'eval_adapt cadence leaked across episode boundary')
         if adapt_cfg.enabled and persistence == 'episode':
           assert adapt_params is None and adapt_policy_params is None, (
               'eval_adapt parameters leaked across episode boundary')
+        steps_since_probe = 0
+        virtual_active = False
+        virtual_reject_streak = 0
         carry, acts = maybe_adapt(
             carry, acts, outs, obs['is_first'].shape, rng_index)
       else:
-        steps_since_adapt += 1
-        if adapt_every_k > 0 and steps_since_adapt >= adapt_every_k:
-          carry, acts = maybe_adapt(
-              carry, acts, outs, obs['is_first'].shape, rng_index)
+        if virtual_gate:
+          steps_since_probe += 1
+          cadence = (
+              virtual_active_every if virtual_active
+              else virtual_dormant_every)
+          if steps_since_probe >= cadence:
+            carry, acts = maybe_adapt(
+                carry, acts, outs, obs['is_first'].shape, rng_index)
+        else:
+          steps_since_adapt += 1
+          if adapt_every_k > 0 and steps_since_adapt >= adapt_every_k:
+            carry, acts = maybe_adapt(
+                carry, acts, outs, obs['is_first'].shape, rng_index)
     return carry, acts, outs
 
   def write_metrics():
@@ -526,6 +739,17 @@ def eval_only(make_agent, make_env, make_logger, args):
         'gate_enabled': gate_enabled,
         'gate_kind': gate_kind,
         'gate_audit': gate_audit,
+        'virtual_score': virtual_score if virtual_gate else None,
+        'virtual_min_improvement': (
+            virtual_min_improvement if virtual_gate else None),
+        'virtual_max_baseline_score': (
+            virtual_max_baseline if virtual_gate else None),
+        'virtual_dormant_every': (
+            virtual_dormant_every if virtual_gate else None),
+        'virtual_active_every': (
+            virtual_active_every if virtual_gate else None),
+        'virtual_deactivate_after': (
+            virtual_deactivate_after if virtual_gate else None),
         'persistence': persistence,
         'resume_adapt_state': resume_adapt_state,
         'output_checkpoint': output_checkpoint,

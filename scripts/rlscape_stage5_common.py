@@ -72,6 +72,27 @@ def conditions(selected: dict) -> list[dict]:
   return result
 
 
+def virtual_reward_condition(
+    name: str, *, dormant_every: int, active_every: int = 1,
+    deactivate_after: int = 3, min_improvement: float = 0.0,
+    max_baseline_score: float = 1e30) -> dict:
+  """Reward-only IR guarded by a paired tentative-update probe."""
+  if min(dormant_every, active_every, deactivate_after) < 1:
+    raise ValueError('Virtual gate cadence and hysteresis must be positive')
+  return dict(
+      name=name, family='virtual_update', checkpoint='source', enabled=True,
+      objective='reward_only', objective_label='reward_only', horizon=15,
+      actent=0.0, gate_enabled=True, gate_kind='virtual_update',
+      entropy_threshold=1.0, js_threshold=1.0,
+      min_success_rate=4 / 128, direction_threshold=1.0,
+      virtual_score='reward_return',
+      virtual_min_improvement=float(min_improvement),
+      virtual_max_baseline_score=float(max_baseline_score),
+      virtual_dormant_every=int(dormant_every),
+      virtual_active_every=int(active_every),
+      virtual_deactivate_after=int(deactivate_after))
+
+
 def build_eval_command(
     args, *, logdir: pathlib.Path, checkpoint: pathlib.Path,
     condition: dict, goal: str, policy_mode: str, episodes: int,
@@ -114,6 +135,21 @@ def build_eval_command(
       '--eval_adapt.gate.direction_threshold',
       str(float(condition['direction_threshold'])),
   ]
+  if condition['gate_kind'] == 'virtual_update':
+    command += [
+        '--eval_adapt.gate.virtual_score',
+        str(condition['virtual_score']),
+        '--eval_adapt.gate.virtual_min_improvement',
+        str(float(condition['virtual_min_improvement'])),
+        '--eval_adapt.gate.virtual_max_baseline_score',
+        str(float(condition['virtual_max_baseline_score'])),
+        '--eval_adapt.gate.virtual_dormant_every',
+        str(int(condition['virtual_dormant_every'])),
+        '--eval_adapt.gate.virtual_active_every',
+        str(int(condition['virtual_active_every'])),
+        '--eval_adapt.gate.virtual_deactivate_after',
+        str(int(condition['virtual_deactivate_after'])),
+    ]
   if output_checkpoint is not None:
     command += [
         '--eval_adapt.output_checkpoint', str(output_checkpoint)]

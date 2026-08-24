@@ -683,6 +683,25 @@ class Agent(embodied.Agent):
   def clone_params(self):
     return jax.tree.map(lambda x: x.copy(), self.params)
 
+  def snapshot_adapt_actor_state(self, params):
+    """Copy only state mutated by actor-only evaluation adaptation."""
+    keys = [
+        key for key in params
+        if key in self.actor_keys or key.startswith('adapt_actor_opt/')]
+    if not keys:
+      raise RuntimeError('No actor adaptation state found to snapshot')
+    return {key: params[key].copy() for key in keys}
+
+  def restore_adapt_actor_state(self, params, snapshot):
+    """Rollback a donated tentative update without copying frozen modules."""
+    restored = dict(params)
+    for key, value in snapshot.items():
+      replaced = restored[key]
+      restored[key] = value
+      if hasattr(replaced, 'delete'):
+        replaced.delete()
+    return restored
+
   def export_params(self, params=None):
     """Gather an arbitrary parameter clone in ordinary checkpoint format."""
     params = self.params if params is None else params

@@ -174,7 +174,15 @@ def trace_summary(logdir, filename='stage5a_trace.jsonl'):
       'gate_success_action_divergence', 'compute_cheap_seconds',
       'compute_consequence_seconds', 'compute_adapt_seconds',
       'compute_posterior_samples', 'compute_imagined_transitions',
-      'compute_actor_updates')
+      'compute_actor_updates', 'compute_tentative_actor_updates',
+      'compute_rejected_actor_updates', 'compute_before_probe_seconds',
+      'compute_after_probe_seconds', 'compute_training_rollout_seconds',
+      'gate_baseline_pass',
+      'gate_virtual_active_before', 'gate_virtual_active_after',
+      'gate_reject_streak', 'gate_score_before', 'gate_score_after',
+      'gate_score_improvement', 'gate_before_success_rate',
+      'gate_after_success_rate', 'gate_before_reward_return_mean',
+      'gate_after_reward_return_mean')
   summary = {}
   for key in keys:
     values = [float(row[key]) for row in rows if key in row]

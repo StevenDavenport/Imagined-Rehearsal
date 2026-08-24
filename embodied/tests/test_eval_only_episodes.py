@@ -87,8 +87,8 @@ class AdaptiveEvalAgent(EvalAgent):
 
 class EvalEnv(Dummy):
 
-  def __init__(self):
-    super().__init__('disc', size=(8, 8), length=2)
+  def __init__(self, length=2):
+    super().__init__('disc', size=(8, 8), length=length)
     self.closed = False
 
   def close(self):
@@ -102,6 +102,8 @@ class PairedAdaptiveEvalAgent(AdaptiveEvalAgent):
     self.config.eval_adapt.paired_rng = True
     self.config.eval_adapt.paired_rng_seed = 700
     self.config.eval_adapt.paired_rng_stride = 1000
+    self.config.eval_adapt.trace = SimpleNamespace(
+        enabled=True, filename='stage5_trace.jsonl')
     self.policy_seeds = []
     self.adapt_seeds = []
     self.latent_seeds = []
@@ -161,6 +163,76 @@ class GatedAdaptiveEvalAgent(AdaptiveEvalAgent):
     del rollout, kwargs
     self.prepared_calls += 1
     return super().adapt(params, carry, steps=steps, freeze_critic=True)
+
+
+class VirtualAdaptiveEvalAgent(GatedAdaptiveEvalAgent):
+
+  def __init__(self, act_space, delta, dormant_every=3):
+    super().__init__(act_space, entropy=.1)
+    self.config.eval_adapt.paired_rng = True
+    self.config.eval_adapt.paired_rng_seed = 700
+    self.config.eval_adapt.paired_rng_stride = 1000
+    self.config.eval_adapt.trace = SimpleNamespace(
+        enabled=True, filename='stage5_trace.jsonl')
+    self.config.eval_adapt.gate.kind = 'virtual_update'
+    self.config.eval_adapt.gate.virtual_score = 'reward_return'
+    self.config.eval_adapt.gate.virtual_min_improvement = 0.0
+    self.config.eval_adapt.gate.virtual_max_baseline_score = 1e30
+    self.config.eval_adapt.gate.virtual_dormant_every = dormant_every
+    self.config.eval_adapt.gate.virtual_active_every = 1
+    self.config.eval_adapt.gate.virtual_deactivate_after = 2
+    self.delta = float(delta)
+
+  def policy(
+      self, carry, obs, mode='eval', params=None,
+      seed_index=None, seed_base=None):
+    del seed_index, seed_base
+    return super().policy(carry, obs, mode=mode, params=params)
+
+  def policy_latent(
+      self, carry, params=None, mode='train',
+      seed_index=None, seed_base=None):
+    del seed_index, seed_base
+    return super().policy_latent(carry, params=params, mode=mode)
+
+  def clone_params(self):
+    self.clone_calls += 1
+    return {
+        'pol/x': np.zeros(1, np.float32),
+        'adapt_actor_opt/x': np.zeros(1, np.float32),
+    }
+
+  def snapshot_adapt_actor_state(self, params):
+    return {key: value.copy() for key, value in params.items()}
+
+  def restore_adapt_actor_state(self, params, snapshot):
+    del params
+    return snapshot
+
+  def gate_features(
+      self, carry, params=None, horizon=15, start_batch=128,
+      consequence=False, **kwargs):
+    del carry, horizon, start_batch, kwargs
+    self.gate_calls += 1
+    score = float(params['pol/x'][0])
+    return ({'prepared': np.ones(1)} if consequence else {}), {
+        'actor_entropy': np.float32(.1),
+        'posterior_entropy': np.float32(.1),
+        'js_disagreement': np.float32(.1),
+        'success_rate': np.float32(score > 0),
+        'success_action_concentration': np.float32(0),
+        'success_action_divergence': np.float32(0),
+        'reward_return_mean': np.float32(score),
+        'reward_return_std': np.float32(0),
+        'reward_return_sem': np.float32(0),
+    }
+
+  def adapt_prepared(self, params, carry, rollout, steps=1, **kwargs):
+    del rollout, kwargs
+    self.prepared_calls += 1
+    candidate = {key: value.copy() for key, value in params.items()}
+    candidate['pol/x'] += self.delta * steps
+    return candidate, carry, {'actor_steps': np.float32(steps)}
 
 
 class EvalLogger:
@@ -335,3 +407,50 @@ def test_eval_only_entropy_gate_skips_updates_below_threshold(
   integrity = json.loads((tmp_path / 'eval_integrity.json').read_text())
   assert integrity['gate_enabled'] is True
   assert integrity['gate_kind'] == 'entropy'
+
+
+def test_eval_only_virtual_gate_commits_improvements_every_active_step(
+    tmp_path, monkeypatch):
+  module = importlib.import_module('embodied.run.eval_only')
+  monkeypatch.setattr(module.elements.checkpoint, 'load', lambda *args: None)
+  env = EvalEnv(length=5)
+  agent = VirtualAdaptiveEvalAgent(env.act_space, delta=1)
+  logger = EvalLogger()
+  args = SimpleNamespace(
+      from_checkpoint='unused', logdir=str(tmp_path), envs=1, debug=True,
+      usage={}, log_every=1000, eval_episodes=1,
+      eval_policy_mode='sampled', steps=999)
+
+  module.eval_only(lambda: agent, lambda index: env, lambda: logger, args)
+
+  traces = [json.loads(line) for line in (
+      tmp_path / 'stage5_trace.jsonl').read_text().splitlines()]
+  probes = [row for row in traces if 'gate_score_improvement' in row]
+  assert len(probes) == 5
+  assert all(row['adapt_trigger'] == 1 for row in probes)
+  assert all(np.isclose(row['gate_score_improvement'], 1) for row in probes)
+  assert agent.prepared_calls == 5
+
+
+def test_eval_only_virtual_gate_rolls_back_and_uses_dormant_cadence(
+    tmp_path, monkeypatch):
+  module = importlib.import_module('embodied.run.eval_only')
+  monkeypatch.setattr(module.elements.checkpoint, 'load', lambda *args: None)
+  env = EvalEnv(length=7)
+  agent = VirtualAdaptiveEvalAgent(
+      env.act_space, delta=-1, dormant_every=3)
+  logger = EvalLogger()
+  args = SimpleNamespace(
+      from_checkpoint='unused', logdir=str(tmp_path), envs=1, debug=True,
+      usage={}, log_every=1000, eval_episodes=1,
+      eval_policy_mode='sampled', steps=999)
+
+  module.eval_only(lambda: agent, lambda index: env, lambda: logger, args)
+
+  traces = [json.loads(line) for line in (
+      tmp_path / 'stage5_trace.jsonl').read_text().splitlines()]
+  probes = [row for row in traces if 'gate_score_improvement' in row]
+  assert [row['episode_step'] for row in probes] == [0, 3, 6]
+  assert all(row['adapt_trigger'] == 0 for row in probes)
+  assert all(np.isclose(row['gate_score_before'], 0) for row in probes)
+  assert all(np.isclose(row['gate_score_after'], -1) for row in probes)
