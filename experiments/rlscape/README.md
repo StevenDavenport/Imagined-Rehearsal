@@ -35,6 +35,8 @@ The machine-readable companion is [`registry.json`](registry.json).
 | **5A** | Interpretable Gating for Imagined Rehearsal | Ready to run | Test entropy, MCPB JS, and consequence-aware gates against always-on IR with compute accounting | Future algorithm |
 | **5B** | IR Necessity Discrimination | Ready to run | Test whether frozen gates adapt on a weak task and abstain on a competent task | Future algorithm |
 | **5B.1** | Offline Performance-Gate Audit | Ready to run | Test whether prospective JS and imagined-performance signals separate later underperformance and paired IR need across tasks | Future algorithm |
+| **5B.2** | Paired Virtual-Update Gate | Complete | Rejected: held-out imagined improvement was near chance for true IR need and approved severe bury damage | Study XI |
+| **5B.2a** | Bury-Bones Virtual-Gate Autopsy | Ready to run | Unresolved: separates partial dose, harmful virtual selection, and hallucinated learned reward | Planned Study XII |
 | **5C** | Persistent Self-Terminating Recovery | Ready to run | Test recovery speed, natural gate shutoff, retained-task safety, and compute across episode-persistent IR | Future algorithm |
 | **5D** | Hard-KL Update Safety | Reserved | Bound accepted actor drift with hard rollback after gating is understood | Future algorithm |
 | **5E** | Continual Gated IR Integration | Reserved | Combine current-task learning, reservoir preservation, and gated persistent IR | Future algorithm |
@@ -119,6 +121,7 @@ roots. The historical `M4` label must not be interpreted as canonical Stage 4.
 - [Stage 5B: IR Necessity Discrimination](stage5b_ir_necessity_discrimination.md)
 - [Stage 5B.1: Offline Performance-Gate Audit](stage5b1_performance_gate_audit.md)
 - [Stage 5B.2: Paired Virtual-Update Gate](stage5b2_virtual_update_gate.md)
+- [Stage 5B.2a: Bury-Bones Virtual-Gate Autopsy](stage5b2a_bury_bones_gate_autopsy.md)
 - [Stage 5C: Persistent Self-Terminating Recovery](stage5c_persistent_recovery.md)
 
 Stage 0's full methodology and results are preserved as Study I in the

@@ -186,6 +186,10 @@ defaults:
     lr: 1e-4
     critic_lr: 1e-4
     every_k: 0
+    # Optional evaluation-only controls. Zero preserves the historical
+    # unlimited cadence. Random scheduling is dormant unless its gate kind is
+    # explicitly selected.
+    max_actor_updates_per_episode: 0
     actent: 3e-4
     start_batch: 1
     trace:
@@ -206,6 +210,10 @@ defaults:
       virtual_dormant_every: 25
       virtual_active_every: 1
       virtual_deactivate_after: 3
+      virtual_accept_mode: positive
+      random_updates: 0
+      random_window: 200
+      random_seed_offset: 500000
     viewer:
       enabled: False
       traj_index: 0

@@ -382,6 +382,33 @@ class Agent(embodied.jax.Agent):
         reward_return.std() /
         jnp.sqrt(jnp.asarray(max(int(reward_return.size), 1), f32)))
 
+    # Hallucinated-reward diagnostics. These deliberately describe the raw
+    # frozen reward-model predictions rather than the optimized objective so
+    # an evaluator can detect an actor learning to exploit a spurious reward
+    # attractor. All are scalars and therefore remain cheap to serialize in
+    # the per-step Stage 5 trace.
+    reward = rollout['rew']
+    reward_peak = reward.max(-1)
+    reward_peak_step = jnp.argmax(reward, -1)
+    reward_event = reward_peak >= reward_threshold
+    reward_event_count = reward_event.astype(f32).sum()
+    first_event = jnp.argmax(
+        (reward >= reward_threshold).astype(i32), -1)
+    metrics.update({
+        'reward_step_mean': reward.mean(),
+        'reward_step_std': reward.std(),
+        'reward_step_max': reward.max(),
+        'reward_sum_mean': reward.sum(-1).mean(),
+        'reward_peak_mean': reward_peak.mean(),
+        'reward_peak_p95': jnp.quantile(reward_peak, 0.95),
+        'reward_peak_timestep_mean': reward_peak_step.astype(f32).mean(),
+        'reward_event_step_rate': (
+            (reward >= reward_threshold).astype(f32).mean()),
+        'reward_first_event_timestep_mean': (
+            (first_event.astype(f32) * reward_event.astype(f32)).sum() /
+            jnp.maximum(reward_event_count, 1.0)),
+    })
+
     concentrations = []
     divergences = []
     first_policy = self.pol(
@@ -404,6 +431,33 @@ class Agent(embodied.jax.Agent):
       empirical = jnp.where(count > 0, empirical, mixture)
       concentrations.append(1.0 - normalized_categorical_entropy(empirical))
       divergences.append(categorical_js_pair(mixture, empirical))
+
+      # Record both the overall imagined action attractor and the action at
+      # the state immediately preceding the largest predicted reward. The
+      # latter is diagnostic only: it does not alter the gate or actor loss.
+      imagined_action = jnp.asarray(rollout['imgact'][key], i32)
+      all_action_prob = jax.nn.one_hot(
+          imagined_action.reshape((-1,)), classes, dtype=f32).mean(0)
+      preceding_step = jnp.maximum(reward_peak_step - 1, 0)
+      preceding_action = jnp.take_along_axis(
+          imagined_action, preceding_step[:, None], axis=1)[:, 0]
+      reward_action_count = (
+          jax.nn.one_hot(preceding_action, classes, dtype=f32) *
+          reward_event[:, None]).sum(0)
+      reward_action_prob = reward_action_count / jnp.maximum(
+          reward_event_count, 1.0)
+      safe_key = str(key).replace('/', '_')
+      metrics.update({
+          f'imagined_action_{safe_key}_mode': jnp.argmax(
+              all_action_prob).astype(f32),
+          f'imagined_action_{safe_key}_concentration': all_action_prob.max(),
+          f'imagined_action_{safe_key}_entropy': (
+              normalized_categorical_entropy(all_action_prob)),
+          f'reward_preceding_action_{safe_key}_mode': jnp.argmax(
+              reward_action_count).astype(f32),
+          f'reward_preceding_action_{safe_key}_concentration': jnp.where(
+              reward_event_count > 0, reward_action_prob.max(), 0.0),
+      })
     metrics['success_action_concentration'] = jnp.stack(
         concentrations).mean()
     metrics['success_action_divergence'] = jnp.stack(divergences).mean()

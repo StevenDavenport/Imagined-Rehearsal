@@ -454,3 +454,51 @@ def test_eval_only_virtual_gate_rolls_back_and_uses_dormant_cadence(
   assert all(row['adapt_trigger'] == 0 for row in probes)
   assert all(np.isclose(row['gate_score_before'], 0) for row in probes)
   assert all(np.isclose(row['gate_score_after'], -1) for row in probes)
+
+
+def test_eval_only_actor_update_budget_stops_at_exact_cap(
+    tmp_path, monkeypatch):
+  module = importlib.import_module('embodied.run.eval_only')
+  monkeypatch.setattr(module.elements.checkpoint, 'load', lambda *args: None)
+  env = EvalEnv(length=7)
+  agent = PairedAdaptiveEvalAgent(env.act_space)
+  agent.config.eval_adapt.max_actor_updates_per_episode = 3
+  logger = EvalLogger()
+  args = SimpleNamespace(
+      from_checkpoint='unused', logdir=str(tmp_path), envs=1, debug=True,
+      usage={}, log_every=1000, eval_episodes=1,
+      eval_policy_mode='sampled', steps=999)
+
+  module.eval_only(lambda: agent, lambda index: env, lambda: logger, args)
+
+  traces = [json.loads(line) for line in (
+      tmp_path / 'stage5_trace.jsonl').read_text().splitlines()]
+  assert sum(row['adapt_trigger'] for row in traces) == 3
+  assert len(agent.adapt_seeds) == 3
+
+
+def test_eval_only_random_schedule_selects_exact_updates_reproducibly(
+    tmp_path, monkeypatch):
+  module = importlib.import_module('embodied.run.eval_only')
+  monkeypatch.setattr(module.elements.checkpoint, 'load', lambda *args: None)
+  env = EvalEnv(length=7)
+  agent = PairedAdaptiveEvalAgent(env.act_space)
+  agent.config.eval_adapt.max_actor_updates_per_episode = 3
+  agent.config.eval_adapt.gate = SimpleNamespace(
+      enabled=True, kind='random_schedule', audit=False,
+      random_updates=3, random_window=7, random_seed_offset=500000)
+  logger = EvalLogger()
+  args = SimpleNamespace(
+      from_checkpoint='unused', logdir=str(tmp_path), envs=1, debug=True,
+      usage={}, log_every=1000, eval_episodes=1,
+      eval_policy_mode='sampled', steps=999)
+
+  module.eval_only(lambda: agent, lambda index: env, lambda: logger, args)
+
+  traces = [json.loads(line) for line in (
+      tmp_path / 'stage5_trace.jsonl').read_text().splitlines()]
+  selected = [row['episode_step'] for row in traces
+              if row['adapt_trigger'] > 0]
+  expected = sorted(np.random.default_rng(700 + 500000).choice(
+      7, size=3, replace=False).tolist())
+  assert selected == expected

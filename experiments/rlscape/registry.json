@@ -137,6 +137,17 @@
       "protocol": "experiments/rlscape/stage5b2_virtual_update_gate.md"
     },
     {
+      "id": "stage5b2a",
+      "slug": "bury_bones_gate_autopsy",
+      "name": "Bury-Bones Virtual-Gate Autopsy",
+      "status": "ready_to_run",
+      "hypothesis_status": "unresolved",
+      "runner": "scripts/rlscape_stage5b2a_bury_autopsy.py",
+      "protocol": "experiments/rlscape/stage5b2a_bury_bones_gate_autopsy.md",
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5b2a_bury_autopsy",
+      "report_section": "Planned Study XII"
+    },
+    {
       "id": "stage5c",
       "slug": "persistent_self_terminating_recovery",
       "name": "Persistent Self-Terminating Recovery",

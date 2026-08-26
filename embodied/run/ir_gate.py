@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-GATE_KINDS = ('none', 'entropy', 'js', 'two_stage', 'virtual_update')
+GATE_KINDS = (
+    'none', 'entropy', 'js', 'two_stage', 'virtual_update',
+    'random_schedule')
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,9 @@ def cheap_decision(kind, features, *, entropy_threshold, js_threshold):
   if kind == 'virtual_update':
     raise ValueError(
         'virtual_update requires a paired tentative actor update')
+  if kind == 'random_schedule':
+    raise ValueError(
+        'random_schedule requires an episode-indexed external schedule')
   passed = (
       entropy >= float(entropy_threshold) or
       disagreement >= float(js_threshold))
@@ -66,7 +71,7 @@ def consequence_decision(
 
 def virtual_update_decision(
     baseline_score, candidate_score, *, min_improvement=0.0,
-    max_baseline_score=float('inf')):
+    max_baseline_score=float('inf'), accept_mode='positive'):
   """Decide whether to commit a tentative IR update.
 
   The baseline screen represents the prospective "will I underperform?"
@@ -78,12 +83,21 @@ def virtual_update_decision(
   candidate = float(candidate_score)
   improvement = candidate - baseline
   baseline_pass = baseline <= float(max_baseline_score)
+  if accept_mode == 'positive':
+    direction_pass = improvement > float(min_improvement)
+  elif accept_mode == 'negative':
+    # This intentionally accepts the complement of the canonical positive
+    # decision at a zero threshold. It is an investigation control, not a
+    # recommended gate.
+    direction_pass = improvement <= -float(min_improvement)
+  else:
+    raise ValueError(f'Unknown virtual accept mode: {accept_mode!r}')
   return VirtualUpdateDecision(
       baseline_score=baseline,
       candidate_score=candidate,
       improvement=improvement,
       baseline_pass=baseline_pass,
-      adapt=(baseline_pass and improvement > float(min_improvement)))
+      adapt=(baseline_pass and direction_pass))
 
 
 def incremental_compute(no_ir, always_ir, gated):

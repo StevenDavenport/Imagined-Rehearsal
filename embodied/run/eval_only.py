@@ -11,6 +11,7 @@ import embodied
 import numpy as np
 
 from .ir_gate import GATE_KINDS
+from .ir_gate import GateDecision
 from .ir_gate import cheap_decision
 from .ir_gate import consequence_decision
 from .ir_gate import virtual_update_decision
@@ -137,10 +138,11 @@ def eval_only(make_agent, make_env, make_logger, args):
           row[key.replace('log/eval_adapt/', '').replace('/', '_')] = float(
               np.asarray(tran[key]).item())
       for key, value in tran.items():
-        if key.startswith((
-            'log/eval_adapt/gate/', 'log/eval_adapt/compute/')):
-          row[key.replace('log/eval_adapt/', '').replace('/', '_')] = float(
-              np.asarray(value).item())
+        if key.startswith('log/eval_adapt/'):
+          value = np.asarray(value)
+          if value.size == 1:
+            row[key.replace('log/eval_adapt/', '').replace('/', '_')] = float(
+                value.item())
       trace_file.write(json.dumps(row) + '\n')
       trace_episode_step += 1
       if row['is_last']:
@@ -175,6 +177,12 @@ def eval_only(make_agent, make_env, make_logger, args):
   adapt_policy_params = None
   reference_actor_params = None
   adapt_every_k = int(getattr(adapt_cfg, 'every_k', 0))
+  max_actor_updates_per_episode = int(getattr(
+      adapt_cfg, 'max_actor_updates_per_episode', 0))
+  if max_actor_updates_per_episode < 0:
+    raise ValueError(
+        'eval_adapt.max_actor_updates_per_episode must be nonnegative')
+  episode_actor_updates = 0
   gate_cfg = getattr(adapt_cfg, 'gate', None)
   gate_enabled = bool(getattr(gate_cfg, 'enabled', False))
   gate_audit = bool(getattr(gate_cfg, 'audit', False))
@@ -188,6 +196,8 @@ def eval_only(make_agent, make_env, make_logger, args):
   if gate_enabled and adapt_objective == 'distill':
     raise ValueError('Stage 5A gates do not support distillation')
   virtual_gate = bool(gate_enabled and gate_kind == 'virtual_update')
+  random_schedule_gate = bool(
+      gate_enabled and gate_kind == 'random_schedule')
   virtual_score = str(getattr(
       gate_cfg, 'virtual_score', 'reward_return')).lower()
   virtual_score_keys = {
@@ -207,12 +217,27 @@ def eval_only(make_agent, make_env, make_logger, args):
       gate_cfg, 'virtual_active_every', 1))
   virtual_deactivate_after = int(getattr(
       gate_cfg, 'virtual_deactivate_after', 3))
+  virtual_accept_mode = str(getattr(
+      gate_cfg, 'virtual_accept_mode', 'positive')).lower()
+  if virtual_accept_mode not in ('positive', 'negative'):
+    raise ValueError(
+        'eval_adapt.gate.virtual_accept_mode must be positive or negative')
+  random_updates = int(getattr(gate_cfg, 'random_updates', 0))
+  random_window = int(getattr(gate_cfg, 'random_window', 200))
+  random_seed_offset = int(getattr(
+      gate_cfg, 'random_seed_offset', 500000))
+  random_schedule = frozenset()
   if virtual_gate and bool(adapt_cfg.train_critic):
     raise ValueError('virtual_update currently requires a frozen critic')
   if virtual_gate and min(
       virtual_dormant_every, virtual_active_every,
       virtual_deactivate_after) < 1:
     raise ValueError('Virtual-update cadence and hysteresis must be positive')
+  if random_schedule_gate and (
+      random_updates < 1 or random_window < 1 or
+      random_updates > random_window):
+    raise ValueError(
+        'random_schedule requires 1 <= random_updates <= random_window')
   steps_since_adapt = 0
   steps_since_probe = 0
   virtual_active = False
@@ -230,6 +255,9 @@ def eval_only(make_agent, make_env, make_logger, args):
     raise ValueError(
         'virtual_update requires eval_adapt.paired_rng=True so before and '
         'after scores use common random numbers')
+  if random_schedule_gate and not paired_rng:
+    raise ValueError(
+        'random_schedule requires eval_adapt.paired_rng=True')
   requested_mode = str(getattr(
       args, 'eval_policy_mode', 'deterministic')).lower()
   policy_modes = {'deterministic': 'eval', 'sampled': 'train'}
@@ -242,6 +270,7 @@ def eval_only(make_agent, make_env, make_logger, args):
   def discard_adaptation():
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
     nonlocal steps_since_probe, virtual_active, virtual_reject_streak
+    nonlocal episode_actor_updates, random_schedule
     discard = getattr(agent, 'discard_params', None)
     if discard:
       discard(adapt_policy_params)
@@ -252,6 +281,23 @@ def eval_only(make_agent, make_env, make_logger, args):
     steps_since_probe = 0
     virtual_active = False
     virtual_reject_streak = 0
+    episode_actor_updates = 0
+    random_schedule = frozenset()
+
+  def budget_available():
+    requested = int(adapt_cfg.steps)
+    return bool(
+        max_actor_updates_per_episode == 0 or
+        episode_actor_updates + requested <=
+        max_actor_updates_per_episode)
+
+  def make_random_schedule(episode_index):
+    if not random_schedule_gate:
+      return frozenset()
+    rng = np.random.default_rng(
+        paired_rng_seed + random_seed_offset + int(episode_index))
+    return frozenset(int(value) for value in rng.choice(
+        random_window, size=random_updates, replace=False))
 
   def seed_kwargs(rng_index, offset):
     if not paired_rng:
@@ -269,6 +315,9 @@ def eval_only(make_agent, make_env, make_logger, args):
     """Tentatively update the actor and commit only paired improvements."""
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
     nonlocal steps_since_probe, virtual_active, virtual_reject_streak
+    nonlocal episode_actor_updates
+    if not budget_available():
+      return carry, acts
     if adapt_params is None:
       adapt_params = agent.clone_params()
 
@@ -308,7 +357,8 @@ def eval_only(make_agent, make_env, make_logger, args):
     decision = virtual_update_decision(
         before_features[score_key], after_features[score_key],
         min_improvement=virtual_min_improvement,
-        max_baseline_score=virtual_max_baseline)
+        max_baseline_score=virtual_max_baseline,
+        accept_mode=virtual_accept_mode)
     if decision.adapt:
       agent.discard_params(rollback)
       adapt_params = tentative_params
@@ -325,6 +375,7 @@ def eval_only(make_agent, make_env, make_logger, args):
       virtual_active = True
       virtual_reject_streak = 0
       steps_since_adapt = 0
+      episode_actor_updates += int(adapt_cfg.steps)
     else:
       adapt_params = agent.restore_adapt_actor_state(
           tentative_params, rollback)
@@ -410,6 +461,12 @@ def eval_only(make_agent, make_env, make_logger, args):
     put_scalar(
         outs, batch_shape, 'log/eval_adapt/compute/rejected_actor_updates',
         0 if decision.adapt else int(adapt_cfg.steps))
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/episode_actor_updates',
+        episode_actor_updates)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/budget_exhausted',
+        not budget_available())
     for key, value in mets.items():
       value = np.asarray(value)
       if value.ndim == 0:
@@ -423,6 +480,7 @@ def eval_only(make_agent, make_env, make_logger, args):
   def maybe_adapt(carry, acts, outs, batch_shape, rng_index=None):
     """Evaluate the optional gate and perform at most one reusable IR path."""
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
+    nonlocal episode_actor_updates
     if virtual_gate:
       return maybe_virtual_adapt(
           carry, acts, outs, batch_shape, rng_index)
@@ -434,11 +492,15 @@ def eval_only(make_agent, make_env, make_logger, args):
     consequence_seconds = 0.0
     adapt_seconds = 0.0
     cheap_evaluated = bool(gate_enabled or gate_audit)
+    cheap_feature_evaluated = bool(cheap_evaluated and not random_schedule_gate)
     consequence_evaluated = False
     imag_length = int(getattr(adapt_cfg, 'imag_length', 1))
     start_batch = int(getattr(adapt_cfg, 'start_batch', 1))
 
-    if cheap_evaluated:
+    if random_schedule_gate:
+      selected = paired_step in random_schedule
+      decision = GateDecision(selected, False, None, selected)
+    elif cheap_evaluated:
       before = time.perf_counter()
       _, features = agent.gate_features(
           carry, params=adapt_params,
@@ -471,7 +533,7 @@ def eval_only(make_agent, make_env, make_logger, args):
               direction_threshold=float(getattr(
                   gate_cfg, 'direction_threshold', 1.0)))
 
-    should_adapt = bool(adapt_cfg.enabled) and (
+    should_adapt = bool(adapt_cfg.enabled) and budget_available() and (
         not gate_enabled or bool(decision and decision.adapt))
     mets = {}
     if should_adapt:
@@ -494,7 +556,7 @@ def eval_only(make_agent, make_env, make_logger, args):
             adapt_params, carry, adapt_cfg.steps,
             warmup=(first_trigger and bool(adapt_cfg.train_critic)),
             freeze_critic=not bool(adapt_cfg.train_critic),
-            **seed_kwargs(rng_index, 3 if cheap_evaluated else 2))
+            **seed_kwargs(rng_index, 3 if cheap_feature_evaluated else 2))
       adapt_seconds = time.perf_counter() - before
       if adapt_policy_params is not None:
         discard = getattr(agent, 'discard_params', None)
@@ -508,6 +570,7 @@ def eval_only(make_agent, make_env, make_logger, args):
               'seed_base': paired_rng_seed,
           } if paired_rng else {}))
       steps_since_adapt = 0
+      episode_actor_updates += int(adapt_cfg.steps)
 
     put_scalar(outs, batch_shape, 'log/eval_adapt/trigger', should_adapt)
     put_scalar(
@@ -540,7 +603,7 @@ def eval_only(make_agent, make_env, make_logger, args):
         int(adapt_cfg.steps)
         if should_adapt and prepared_rollout is None else 0)
     posterior_samples = start_batch * (
-        int(cheap_evaluated) + int(consequence_evaluated) +
+        int(cheap_feature_evaluated) + int(consequence_evaluated) +
         ordinary_rollouts)
     put_scalar(
         outs, batch_shape, 'log/eval_adapt/compute/posterior_samples',
@@ -553,6 +616,12 @@ def eval_only(make_agent, make_env, make_logger, args):
     put_scalar(
         outs, batch_shape, 'log/eval_adapt/compute/actor_updates',
         int(adapt_cfg.steps) if should_adapt else 0)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/episode_actor_updates',
+        episode_actor_updates)
+    put_scalar(
+        outs, batch_shape, 'log/eval_adapt/gate/budget_exhausted',
+        not budget_available())
     for key, value in features.items():
       value = np.asarray(value)
       if value.size == 1:
@@ -573,6 +642,7 @@ def eval_only(make_agent, make_env, make_logger, args):
     nonlocal adapt_params, adapt_policy_params, steps_since_adapt
     nonlocal steps_since_probe, virtual_active, virtual_reject_streak
     nonlocal paired_episode, paired_step
+    nonlocal episode_actor_updates, random_schedule
     if paired_rng:
       if obs['is_first'].shape[0] != 1:
         raise ValueError('eval_adapt.paired_rng requires eval envs=1')
@@ -617,17 +687,25 @@ def eval_only(make_agent, make_env, make_logger, args):
         steps_since_probe = 0
         virtual_active = False
         virtual_reject_streak = 0
-        carry, acts = maybe_adapt(
-            carry, acts, outs, obs['is_first'].shape, rng_index)
+        episode_actor_updates = 0
+        random_schedule = make_random_schedule(paired_episode)
+        if budget_available():
+          carry, acts = maybe_adapt(
+              carry, acts, outs, obs['is_first'].shape, rng_index)
       else:
-        if virtual_gate:
+        if not budget_available():
+          pass
+        elif virtual_gate:
           steps_since_probe += 1
           cadence = (
               virtual_active_every if virtual_active
               else virtual_dormant_every)
           if steps_since_probe >= cadence:
             carry, acts = maybe_adapt(
-                carry, acts, outs, obs['is_first'].shape, rng_index)
+              carry, acts, outs, obs['is_first'].shape, rng_index)
+        elif random_schedule_gate:
+          carry, acts = maybe_adapt(
+              carry, acts, outs, obs['is_first'].shape, rng_index)
         else:
           steps_since_adapt += 1
           if adapt_every_k > 0 and steps_since_adapt >= adapt_every_k:
@@ -750,6 +828,15 @@ def eval_only(make_agent, make_env, make_logger, args):
             virtual_active_every if virtual_gate else None),
         'virtual_deactivate_after': (
             virtual_deactivate_after if virtual_gate else None),
+        'virtual_accept_mode': (
+            virtual_accept_mode if virtual_gate else None),
+        'random_updates': (
+            random_updates if random_schedule_gate else None),
+        'random_window': (
+            random_window if random_schedule_gate else None),
+        'random_seed_offset': (
+            random_seed_offset if random_schedule_gate else None),
+        'max_actor_updates_per_episode': max_actor_updates_per_episode,
         'persistence': persistence,
         'resume_adapt_state': resume_adapt_state,
         'output_checkpoint': output_checkpoint,

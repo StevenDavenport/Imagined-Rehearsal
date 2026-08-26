@@ -2,6 +2,7 @@
 """Print concise progress for a Stage 5B or Stage 5C workflow."""
 
 import argparse
+from collections import defaultdict
 import json
 import pathlib
 
@@ -42,6 +43,32 @@ def main(argv=None):
           spec.get('target_goal'), '/', spec.get('retained_goal'))
     print('Recovery budget:', spec.get('recovery_episode_budget'),
           'episodes per trajectory')
+  elif spec.get('canonical_stage') == 'stage5b2a':
+    conditions = spec.get('conditions', [])
+    replicates = int(spec.get('replicates', 0))
+    print('Goal / mode:', spec.get('goal'), '/', spec.get('policy_mode'))
+    print('Planned units:', len(conditions) * replicates)
+    partial = defaultdict(lambda: [0, 0, 0])
+    for unit in units.values():
+      if unit.get('status') != 'complete' or not unit.get('attempts'):
+        continue
+      summary = unit['attempts'][-1].get('summary', {})
+      condition = summary.get('condition')
+      if not condition:
+        continue
+      partial[condition][0] += int(summary.get('successes', 0))
+      partial[condition][1] += int(summary.get('episodes', 0))
+      partial[condition][2] += 1
+    if partial:
+      print('Partial sampled results:')
+      for condition in conditions:
+        if condition not in partial:
+          continue
+        successes, episodes, completed = partial[condition]
+        rate = successes / episodes if episodes else float('nan')
+        print(
+            f'  {condition}: {successes}/{episodes} = {rate:.3f} '
+            f'({completed}/{replicates} replicates)')
   for filename in ('condition_summary.csv', 'trajectory_summary.csv'):
     if (root / filename).is_file():
       print('Current summary:', root / filename)

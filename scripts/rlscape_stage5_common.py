@@ -107,7 +107,8 @@ def build_eval_command(
       episodes=episodes, seed=environment_seed,
       episode_length=args.episode_length, grid_columns=args.grid_columns,
       grid_rows=args.grid_rows, adapt_steps=args.adapt_steps,
-      adapt_lr=args.adapt_lr, adapt_every_k=args.adapt_every_k,
+      adapt_lr=args.adapt_lr,
+      adapt_every_k=int(condition.get('adapt_every_k', args.adapt_every_k)),
       start_batch=args.start_batch, mvn_path=args.mvn_path,
       java_home=args.java_home,
       # Stage 5A selected its gates on the Stage 4A counterfactual+bounded
@@ -123,9 +124,12 @@ def build_eval_command(
       '--eval_adapt.paired_rng_stride', str(args.paired_rng_stride),
       '--eval_adapt.trace.enabled', 'True',
       '--eval_adapt.trace.filename', 'stage5_trace.jsonl',
+      '--eval_adapt.max_actor_updates_per_episode',
+      str(int(condition.get('max_actor_updates_per_episode', 0))),
+      '--eval_adapt.mix_beta', str(float(condition.get('mix_beta', 0.0))),
       '--eval_adapt.gate.enabled', str(bool(condition['gate_enabled'])),
       '--eval_adapt.gate.kind', condition['gate_kind'],
-      '--eval_adapt.gate.audit', 'False',
+      '--eval_adapt.gate.audit', str(bool(condition.get('gate_audit', False))),
       '--eval_adapt.gate.entropy_threshold',
       str(float(condition['entropy_threshold'])),
       '--eval_adapt.gate.js_threshold',
@@ -149,6 +153,17 @@ def build_eval_command(
         str(int(condition['virtual_active_every'])),
         '--eval_adapt.gate.virtual_deactivate_after',
         str(int(condition['virtual_deactivate_after'])),
+        '--eval_adapt.gate.virtual_accept_mode',
+        str(condition.get('virtual_accept_mode', 'positive')),
+    ]
+  if condition['gate_kind'] == 'random_schedule':
+    command += [
+        '--eval_adapt.gate.random_updates',
+        str(int(condition['random_updates'])),
+        '--eval_adapt.gate.random_window',
+        str(int(condition['random_window'])),
+        '--eval_adapt.gate.random_seed_offset',
+        str(int(condition.get('random_seed_offset', 500000))),
     ]
   if output_checkpoint is not None:
     command += [

@@ -69,3 +69,9 @@ def test_virtual_update_gate_requires_both_low_baseline_and_improvement():
       .1, .05, min_improvement=0, max_baseline_score=.5)
   assert damaged.baseline_pass
   assert not damaged.adapt
+
+  inverted = virtual_update_decision(
+      .1, .05, min_improvement=0, max_baseline_score=.5,
+      accept_mode='negative')
+  assert inverted.baseline_pass
+  assert inverted.adapt
