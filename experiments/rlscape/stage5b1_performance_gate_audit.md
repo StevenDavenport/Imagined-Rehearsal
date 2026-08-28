@@ -2,7 +2,7 @@
 
 ## Status and question
 
-Status: **implemented; awaiting execution**.
+Status: **complete; mixed diagnostic result**.
 
 Stage 5B showed that posterior JS disagreement was the most promising cheap
 signal, but a global binary threshold did not preserve reward-only IR on the
@@ -54,6 +54,19 @@ The principal diagnostic is cross-task transfer. A high within-task score with
 poor off-diagonal transfer means the threshold is task-specific rather than a
 general estimate of performance. Strong overlap between all labelled groups
 means JS cannot be the complete gate regardless of threshold tuning.
+
+## Result
+
+The audit contains 90 paired episodes: 21 `ir_needed`, 27 `ir_unnecessary`, 18
+`ir_harmful`, and 24 `not_repaired`. At the first-10-state window, pooled mean
+JS is chance for later underperformance (AUROC `.501`), while imagined failure
+reaches `.669` and rises to `.772` at 25 states. Entropy is inversely or weakly
+ranked. JS retains modest information about IR need, but per-task AUROCs and
+optimal thresholds vary sharply and transfer poorly. The result supports a
+separate performance estimator but rejects a portable global-JS threshold.
+Compact results and figures are in
+`results/rlscape/m4_reservoir_3goal_500k_seed0/stage5b1_performance_gate_audit`
+and Study X of the research diary.
 
 ## Candidate next mechanism
 

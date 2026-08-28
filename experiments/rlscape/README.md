@@ -32,12 +32,12 @@ The machine-readable companion is [`registry.json`](registry.json).
 | **3B** | Natural Forgetting Recovery | Complete | Supported: reward-only IR improved both natural checkpoints and recovered 1.50M bury from 14% to 91% sampled; standard IR remained unsafe | Study IV |
 | **4A** | Counterfactual Goal-Head Repair | Complete | Mixed: counterfactual labels repaired held-out goal semantics and bounded value repaired scale, but factual reward-only IR remained the strongest sampled teacher and bounded IR was still task-dependent | Study VI |
 | **4B** | Conservative Bounded-Value Dose and Stability | Complete | Mixed: beta=.05 gave a replicated +13.8 pp sampled gain and +4.0 pp worst-goal gain over reward-only, but every mixed condition violated the deterministic worst-goal safety floor | Study VII |
-| **5A** | Interpretable Gating for Imagined Rehearsal | Ready to run | Test entropy, MCPB JS, and consequence-aware gates against always-on IR with compute accounting | Future algorithm |
-| **5B** | IR Necessity Discrimination | Ready to run | Test whether frozen gates adapt on a weak task and abstain on a competent task | Future algorithm |
-| **5B.1** | Offline Performance-Gate Audit | Ready to run | Test whether prospective JS and imagined-performance signals separate later underperformance and paired IR need across tasks | Future algorithm |
+| **5A** | Interpretable Gating for Imagined Rehearsal | Complete | Rejected: fixed entropy, JS, and consequence gates saved compute but did not preserve always-on reward-only recovery | Study VIII |
+| **5B** | IR Necessity Discrimination | Complete | Rejected: JS activated more on weak bury but still lost recovery; the two-stage gate activated in the wrong task direction | Study IX |
+| **5B.1** | Offline Performance-Gate Audit | Complete | Mixed: imagined failure predicted underperformance better than JS, but thresholds were task-specific and intervention utility remained unresolved | Study X |
 | **5B.2** | Paired Virtual-Update Gate | Complete | Rejected: held-out imagined improvement was near chance for true IR need and approved severe bury damage | Study XI |
-| **5B.2a** | Bury-Bones Virtual-Gate Autopsy | Ready to run | Unresolved: separates partial dose, harmful virtual selection, and hallucinated learned reward | Planned Study XII |
-| **5C** | Persistent Self-Terminating Recovery | Ready to run | Test recovery speed, natural gate shutoff, retained-task safety, and compute across episode-persistent IR | Future algorithm |
+| **5B.2a** | Bury-Bones Virtual-Gate Autopsy | Complete | Mixed: a harmful partial-repair region and wrong-direction virtual selection are supported; reward-model exploitation remains unresolved after audit non-interference failed | Study XII |
+| **5C** | Persistent Self-Terminating Recovery | Planned/deferred | Runner exists, but execution is deferred until a gate succeeds under episode-local controls | Future algorithm |
 | **5D** | Hard-KL Update Safety | Reserved | Bound accepted actor drift with hard rollback after gating is understood | Future algorithm |
 | **5E** | Continual Gated IR Integration | Reserved | Combine current-task learning, reservoir preservation, and gated persistent IR | Future algorithm |
 | **6** | Full Continual-Learning Validation | Reserved | Multi-seed/task-order validation with transfer, forgetting, and recurrence | Future validation |
@@ -72,19 +72,27 @@ No mixed condition passed the full prespecified safety rule, so reward-only
 H=15 remains the approved Stage 5 base teacher while small value correction is
 retained as a gated/regularised candidate.
 
-Stage 5 is now an explicit algorithm ladder. Stage 5A prioritizes gating:
-factual actor entropy, mean posterior-conditioned entropy, MCPB
-Jensen--Shannon disagreement, and reward-conditioned action evidence are
-audited before fixed interpretable gates are tested on held-out episodes.
-Compute is measured against no-IR and always-on IR but does not constrain gate
-selection. Stage 5B then tests the missing negative case: whether a frozen gate
-distinguishes an IR-responsive weak task from a competent task on the same
-checkpoint. Stage 5B.1 is an offline diagnostic pause: it asks whether JS is
-calibrated to performance, whether its threshold transfers across tasks, and
-whether imagined performance supplies the missing axis. Stage 5C carries actor and adaptation-optimizer state across
-episodes and asks whether recovery becomes self-terminating. Hard-KL rollback
-moves to Stage 5D; only after those mechanisms have separate evidence does
-Stage 5E integrate them into continual training.
+Stage 5 is an explicit algorithm ladder. Stage 5A found that factual actor
+entropy, MCPB Jensen--Shannon disagreement, and reward-conditioned consequence
+evidence can reduce updates but cannot preserve always-on reward-only recovery.
+Stage 5B added the missing negative case and showed that JS has the right coarse
+activation direction on weak versus competent tasks, but insufficient
+behavioral selectivity; the consequence gate ordered those tasks incorrectly.
+Stage 5B.1 then separated two estimands. Imagined failure is the best current
+predictor of later underperformance, while no fixed signal reliably predicts
+whether IR will repair it across tasks. Stage 5B.2 tested that second quantity
+directly by tentatively updating on batch A and accepting only when an
+independent paired batch B predicted improvement. The virtual score was near
+chance for real IR need and approved catastrophic bury damage; its 25-step
+cadence also cost more wall time than always-on IR. Stage 5C is therefore
+deferred rather than persisting a known gate error. Stage 5B.2a isolates that
+bury failure: randomly distributed updates retain most reward-only recovery,
+short prefixes pass through a harmful partial-repair region, and positive
+virtual selection is worse than either. Exact beta=.005 is not a safe
+regularizer. The live imagined-reward audit failed action-level
+non-interference, so model exploitation remains unresolved. Hard-KL rollback remains a
+separate Stage 5D safety mechanism; only after necessity and update safety have
+separate evidence should Stage 5E integrate them into continual training.
 
 ## Where each layer lives
 

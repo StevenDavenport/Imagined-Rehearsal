@@ -103,55 +103,67 @@
       "id": "stage5a",
       "slug": "interpretable_ir_gating",
       "name": "Interpretable Gating for Imagined Rehearsal",
-      "status": "ready_to_run",
-      "hypothesis_status": "unresolved",
+      "status": "complete",
+      "hypothesis_status": "rejected",
       "runner": "scripts/rlscape_stage5a_gating.py",
       "protocol": "experiments/rlscape/stage5a_interpretable_gating.md",
-      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating"
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating",
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating",
+      "report_section": "Study VIII"
     },
     {
       "id": "stage5b",
       "slug": "ir_necessity_discrimination",
       "name": "IR Necessity Discrimination",
-      "status": "ready_to_run",
-      "hypothesis_status": "unresolved",
+      "status": "complete",
+      "hypothesis_status": "rejected",
       "runner": "scripts/rlscape_stage5b_need_discrimination.py",
-      "protocol": "experiments/rlscape/stage5b_ir_necessity_discrimination.md"
+      "protocol": "experiments/rlscape/stage5b_ir_necessity_discrimination.md",
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5b_need_discrimination_run1",
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/stage5b_need_discrimination",
+      "report_section": "Study IX"
     },
     {
       "id": "stage5b1",
       "slug": "offline_performance_gate_audit",
       "name": "Offline Performance-Gate Audit",
-      "status": "ready_to_run",
-      "hypothesis_status": "unresolved",
+      "status": "complete",
+      "hypothesis_status": "mixed",
       "runner": "scripts/rlscape_stage5b1_performance_gate_audit.py",
-      "protocol": "experiments/rlscape/stage5b1_performance_gate_audit.md"
+      "protocol": "experiments/rlscape/stage5b1_performance_gate_audit.md",
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5b1_performance_gate_audit",
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/stage5b1_performance_gate_audit",
+      "report_section": "Study X"
     },
     {
       "id": "stage5b2",
       "slug": "paired_virtual_update_gate",
       "name": "Paired Virtual-Update Gate",
-      "status": "ready_to_run",
-      "hypothesis_status": "unresolved",
+      "status": "complete",
+      "hypothesis_status": "rejected",
       "runner": "scripts/rlscape_stage5b2_virtual_update_gate.py",
-      "protocol": "experiments/rlscape/stage5b2_virtual_update_gate.md"
+      "protocol": "experiments/rlscape/stage5b2_virtual_update_gate.md",
+      "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5b2_virtual_update_gate",
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/stage5b2_virtual_update_gate",
+      "report_section": "Study XI"
     },
     {
       "id": "stage5b2a",
       "slug": "bury_bones_gate_autopsy",
       "name": "Bury-Bones Virtual-Gate Autopsy",
-      "status": "ready_to_run",
-      "hypothesis_status": "unresolved",
+      "status": "complete",
+      "hypothesis_status": "mixed",
       "runner": "scripts/rlscape_stage5b2a_bury_autopsy.py",
       "protocol": "experiments/rlscape/stage5b2a_bury_bones_gate_autopsy.md",
       "historical_artifact_root": "logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5b2a_bury_autopsy",
-      "report_section": "Planned Study XII"
+      "portable_results": "results/rlscape/m4_reservoir_3goal_500k_seed0/stage5b2a_bury_autopsy",
+      "report_section": "Study XII"
     },
     {
       "id": "stage5c",
       "slug": "persistent_self_terminating_recovery",
       "name": "Persistent Self-Terminating Recovery",
-      "status": "ready_to_run",
+      "status": "planned",
       "hypothesis_status": "unresolved",
       "runner": "scripts/rlscape_stage5c_persistent_recovery.py",
       "protocol": "experiments/rlscape/stage5c_persistent_recovery.md"

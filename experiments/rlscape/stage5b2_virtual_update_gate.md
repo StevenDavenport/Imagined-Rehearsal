@@ -2,7 +2,7 @@
 
 ## Status and question
 
-Status: **implemented; awaiting execution**.
+Status: **complete; hypothesis rejected**.
 
 Stage 5B.1 found that absolute JS disagreement did not transfer as a direct
 performance threshold. It also separated two questions that a useful IR gate
@@ -96,6 +96,21 @@ are never visible to the gate. Analysis reports false rejection of known repair
 opportunities, updates applied to already competent episodes, actual gated
 success, successful completion length, and compute relative to no IR and
 always-on IR.
+
+## Result
+
+All 2,700 recorded episodes completed with pairing intact. The 25-step gate
+matched always-on sampled kill (`.653`) and improved chop (`.867` sampled,
+`.907` deterministic), but collapsed bury to `.000/.200` versus
+`.660/.653` always-on. The 100-step gate was less expensive but recovered less
+and remained below no IR on bury. First virtual improvement ranked true IR need
+at AUROC `.470` (25-step) and `.528` (100-step), close to chance. The 25-step
+condition averaged `.1371` seconds per real step versus `.1296` for always-on
+IR because each tentative decision required before, training, and after
+rollouts. The virtual-score acceptance hypothesis is rejected. Compact results,
+probe diagnostics, completion lengths, and figures are in
+`results/rlscape/m4_reservoir_3goal_500k_seed0/stage5b2_virtual_update_gate`
+and Study XI of the research diary.
 
 ## Execution
 

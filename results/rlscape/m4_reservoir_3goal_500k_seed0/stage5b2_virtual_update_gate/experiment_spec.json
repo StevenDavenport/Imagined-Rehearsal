@@ -1,0 +1,50 @@
+{
+  "adaptation": {
+    "active_every": 1,
+    "deactivate_after": 3,
+    "dormant_cadences": [
+      25,
+      100
+    ],
+    "horizon": 15,
+    "lr": 4e-05,
+    "max_baseline_score": 1e+30,
+    "min_improvement": 0.0,
+    "objective": "reward_only",
+    "paired_before_after": true,
+    "persistence": "episode",
+    "posterior_samples": 128,
+    "score": "reward_return",
+    "steps": 1
+  },
+  "canonical_stage": "stage5b2",
+  "checkpoint": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/checkpoints/counterfactual_bounded",
+  "checkpoint_sha256": "3130286b0d827d5cd4f32b552d59f20aa4ce305b8247e4d97e310bc5f0ab40f7",
+  "conditions": [
+    "no_ir",
+    "always_reward_only",
+    "virtual_reward_dormant_25",
+    "virtual_reward_dormant_100"
+  ],
+  "deterministic_episodes": 25,
+  "digest": "8361904871de29e6f82cc193023fc75c5c94c24e7ad6f2cee70e8122c7f8a023",
+  "format": 1,
+  "git_commit": "908cdff071e0a569f7b623a37df34aad4964fb7e",
+  "goals": [
+    "kill_goblin",
+    "bury_bones",
+    "chop_logs"
+  ],
+  "modes": [
+    "sampled",
+    "deterministic"
+  ],
+  "python_version": "3.11.15",
+  "replicates": 3,
+  "retrospective_labels_visible_to_gate": false,
+  "rlscape_version": "0.1.6",
+  "sampled_episodes": 50,
+  "slug": "paired_virtual_update_gate",
+  "stage5b1_audit_sha256": "2491d908f8a1122407ff62f45c9c2be7152a56d2e7ba8942bd87a63b190cbc94",
+  "stage5b1_root": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5b1_performance_gate_audit"
+}

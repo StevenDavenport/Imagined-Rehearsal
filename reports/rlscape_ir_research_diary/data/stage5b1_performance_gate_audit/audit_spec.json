@@ -1,0 +1,36 @@
+{
+  "canonical_stage": "stage5b1",
+  "core_window": 10,
+  "digest": "e01c26b80fc82bba4fe5ec7b59d87af01c3b176568409e17db872e4a66bc73c1",
+  "environment_interaction": false,
+  "format": 1,
+  "goals": [
+    "bury_bones",
+    "chop_logs",
+    "kill_goblin"
+  ],
+  "policy_modes": [
+    "sampled",
+    "deterministic"
+  ],
+  "retrospective_labels_only": true,
+  "slug": "offline_performance_gate_audit",
+  "stage5a_audit_sha256": "7cbdfbbec0529c8a02b205f2302d3d021db873186b5c01a9c19f6380a0abd298",
+  "stage5a_gate_digest": "abfb4f0ad3571f624adac703e7a72245588cf5c08f0dad9b5ff6282c9678206e",
+  "stage5a_root": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating",
+  "stage5a_spec_digest": "9d0e0279168f25e8b6948b2ea06b67ba00b8d7ed8482a1f87082ebb3f591f0ea",
+  "stage5b_confirmation_sha256": "6f28aec1fad10a9c8f975bad27f7d4765e69a9862c92d535c32767a6923a190f",
+  "stage5b_root": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5b_need_discrimination_run1",
+  "stage5b_selection_digest": "8c1d84c24f90ec26f3300c634a692cc5c4071e7d491fbbf30e75b29d0e4c9301",
+  "stage5b_spec_digest": "0f9c3365894e012b23cba41990e8a7a62da3f4d3af3ba6c053eb565c3c6827f2",
+  "targets": [
+    "underperform",
+    "ir_needed"
+  ],
+  "windows": [
+    1,
+    5,
+    10,
+    25
+  ]
+}

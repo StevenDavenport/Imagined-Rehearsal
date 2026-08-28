@@ -1,0 +1,61 @@
+{
+  "adaptation": {
+    "historical_mixed_b005_was_beta": 0.05,
+    "horizon": 15,
+    "lr": 4e-05,
+    "matched_updates": 46,
+    "mixed_beta_exact": 0.005,
+    "persistence": "episode",
+    "posterior_samples": 128,
+    "reward_doses": [
+      16,
+      46,
+      80,
+      127
+    ],
+    "steps": 1
+  },
+  "agent_seed_base": 131000,
+  "audit_episodes": 20,
+  "canonical_stage": "stage5b2a",
+  "checkpoint": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/checkpoints/counterfactual_bounded",
+  "checkpoint_sha256": "3130286b0d827d5cd4f32b552d59f20aa4ce305b8247e4d97e310bc5f0ab40f7",
+  "conditions": [
+    "no_ir",
+    "no_ir_world_audit",
+    "always_reward_only",
+    "reward_cap_16",
+    "reward_cap_46",
+    "reward_cap_80",
+    "reward_cap_127",
+    "reward_random_46",
+    "virtual_positive_reward_d25",
+    "virtual_negative_reward_d25",
+    "always_mixed_beta_0p005",
+    "mixed_beta_0p005_cap_46",
+    "mixed_beta_0p005_random_46",
+    "virtual_positive_mixed_beta_0p005_d25"
+  ],
+  "deterministic_primary": false,
+  "diagnostics": {
+    "imagined_reward_location_and_timing": true,
+    "probe_noninterference_pairing": true,
+    "real_click_heatmaps": true,
+    "real_outcomes_visible_to_gate": false
+  },
+  "digest": "78f95c2bb7dd34ae3b4c1ef42bf56781e193e565fbd98ea844f8aa473c1f677a",
+  "environment_seed_base": 121000,
+  "episodes": 50,
+  "format": 1,
+  "git_commit": "afb5d7c253716b4e508e82af3be88fa94c1f049c",
+  "goal": "bury_bones",
+  "policy_mode": "sampled",
+  "python_version": "3.11.15",
+  "question": "Does virtual gating collapse bury through update dose, imagined selection, or reward-model exploitation?",
+  "replicates": 3,
+  "reproduces_stage5b2_seed_schedule": true,
+  "rlscape_version": "0.1.6",
+  "slug": "bury_bones_gate_autopsy",
+  "stage5b2_root": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5b2_virtual_update_gate",
+  "stage5b2_spec_sha256": "09295637576f1f4b8a108518964b3975c034d190250010060cfb655d51c594e5"
+}

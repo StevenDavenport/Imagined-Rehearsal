@@ -2,7 +2,7 @@
 
 ## Status and question
 
-Status: **implemented; awaiting execution**.
+Status: **complete; hypothesis rejected**.
 
 Stage 5A asks whether a state-dependent gate can improve episode-local IR by
 avoiding unnecessary or harmful actor updates. Compute saving is an important
@@ -78,6 +78,19 @@ There is no minimum compute-saving requirement. A gate advances when it
 improves sampled macro success over its always-on counterpart, stays within the
 -0.05 deterministic/worst-goal safety floor, and improves in at least two of
 three confirmation replicates.
+
+## Result
+
+All 234 confirmation units and 8,775 episodes completed. Always-on reward-only
+IR achieved `.822` sampled and `.653` deterministic macro success. Entropy-,
+JS-, and two-stage-gated reward-only achieved `.611/.516`, `.611/.596`, and
+`.549/.338`, respectively. No threshold family passed the prespecified
+advancement rule. The gates reduced direct updates and imagined work, but the
+two-stage consequence screen remained costly despite applying only about
+4--5 updates per 100 real steps. The fixed gate hypothesis is rejected; compact
+results and figures are in
+`results/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating` and Study VIII of
+the research diary.
 
 ## Execution
 

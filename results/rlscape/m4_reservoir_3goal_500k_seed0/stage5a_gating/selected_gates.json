@@ -1,0 +1,187 @@
+{
+  "canonical_stage": "stage5a",
+  "digest": "abfb4f0ad3571f624adac703e7a72245588cf5c08f0dad9b5ff6282c9678206e",
+  "entropy": {
+    "direction_threshold": 1.0,
+    "entropy_threshold": 0.3088764399290085,
+    "js_threshold": 1.0,
+    "min_success_rate": 0.03125
+  },
+  "format": 1,
+  "js": {
+    "direction_threshold": 1.0,
+    "entropy_threshold": 1.0,
+    "js_threshold": 0.0012551833060570061,
+    "min_success_rate": 0.03125
+  },
+  "qualification": {
+    "entropy": {
+      "candidates": [
+        {
+          "condition": "entropy_reward_only_q0",
+          "deterministic_worst_delta": -0.7000000000000001,
+          "safe": false,
+          "sampled_delta_mean": -0.05833333333333332,
+          "thresholds": {
+            "direction_threshold": 1.0,
+            "entropy_threshold": 0.1358404904603958,
+            "js_threshold": 1.0,
+            "min_success_rate": 0.03125
+          }
+        },
+        {
+          "condition": "entropy_reward_only_q1",
+          "deterministic_worst_delta": -0.8,
+          "safe": false,
+          "sampled_delta_mean": 0.016666666666666663,
+          "thresholds": {
+            "direction_threshold": 1.0,
+            "entropy_threshold": 0.3088764399290085,
+            "js_threshold": 1.0,
+            "min_success_rate": 0.03125
+          }
+        },
+        {
+          "condition": "entropy_reward_only_q2",
+          "deterministic_worst_delta": -0.8,
+          "safe": false,
+          "sampled_delta_mean": -0.025000000000000022,
+          "thresholds": {
+            "direction_threshold": 1.0,
+            "entropy_threshold": 0.6608128309249879,
+            "js_threshold": 1.0,
+            "min_success_rate": 0.03125
+          }
+        }
+      ],
+      "kind": "entropy",
+      "qualified": false,
+      "selected": {
+        "condition": "entropy_reward_only_q1",
+        "deterministic_worst_delta": -0.8,
+        "safe": false,
+        "sampled_delta_mean": 0.016666666666666663,
+        "thresholds": {
+          "direction_threshold": 1.0,
+          "entropy_threshold": 0.3088764399290085,
+          "js_threshold": 1.0,
+          "min_success_rate": 0.03125
+        }
+      }
+    },
+    "js": {
+      "candidates": [
+        {
+          "condition": "js_reward_only_q0",
+          "deterministic_worst_delta": -0.20000000000000007,
+          "safe": false,
+          "sampled_delta_mean": 0.2,
+          "thresholds": {
+            "direction_threshold": 1.0,
+            "entropy_threshold": 1.0,
+            "js_threshold": 0.0012551833060570061,
+            "min_success_rate": 0.03125
+          }
+        },
+        {
+          "condition": "js_reward_only_q1",
+          "deterministic_worst_delta": -0.8,
+          "safe": false,
+          "sampled_delta_mean": -0.25,
+          "thresholds": {
+            "direction_threshold": 1.0,
+            "entropy_threshold": 1.0,
+            "js_threshold": 0.00337091222172603,
+            "min_success_rate": 0.03125
+          }
+        },
+        {
+          "condition": "js_reward_only_q2",
+          "deterministic_worst_delta": -0.8,
+          "safe": false,
+          "sampled_delta_mean": -0.14166666666666666,
+          "thresholds": {
+            "direction_threshold": 1.0,
+            "entropy_threshold": 1.0,
+            "js_threshold": 0.006627405947074295,
+            "min_success_rate": 0.03125
+          }
+        }
+      ],
+      "kind": "js",
+      "qualified": false,
+      "selected": {
+        "condition": "js_reward_only_q0",
+        "deterministic_worst_delta": -0.20000000000000007,
+        "safe": false,
+        "sampled_delta_mean": 0.2,
+        "thresholds": {
+          "direction_threshold": 1.0,
+          "entropy_threshold": 1.0,
+          "js_threshold": 0.0012551833060570061,
+          "min_success_rate": 0.03125
+        }
+      }
+    },
+    "two_stage": {
+      "candidates": [
+        {
+          "condition": "two_stage_reward_only_q0",
+          "deterministic_worst_delta": -1.0,
+          "safe": false,
+          "sampled_delta_mean": -0.31666666666666665,
+          "thresholds": {
+            "direction_threshold": 0.025276806205511093,
+            "entropy_threshold": 0.3088764399290085,
+            "js_threshold": 0.0012551833060570061,
+            "min_success_rate": 0.03125
+          }
+        },
+        {
+          "condition": "two_stage_reward_only_q1",
+          "deterministic_worst_delta": -1.0,
+          "safe": false,
+          "sampled_delta_mean": -0.17500000000000004,
+          "thresholds": {
+            "direction_threshold": 0.11048844456672668,
+            "entropy_threshold": 0.3088764399290085,
+            "js_threshold": 0.0012551833060570061,
+            "min_success_rate": 0.03125
+          }
+        },
+        {
+          "condition": "two_stage_reward_only_q2",
+          "deterministic_worst_delta": -1.0,
+          "safe": false,
+          "sampled_delta_mean": -0.42500000000000004,
+          "thresholds": {
+            "direction_threshold": 0.33717454075813313,
+            "entropy_threshold": 0.3088764399290085,
+            "js_threshold": 0.0012551833060570061,
+            "min_success_rate": 0.03125
+          }
+        }
+      ],
+      "kind": "two_stage",
+      "qualified": false,
+      "selected": {
+        "condition": "two_stage_reward_only_q1",
+        "deterministic_worst_delta": -1.0,
+        "safe": false,
+        "sampled_delta_mean": -0.17500000000000004,
+        "thresholds": {
+          "direction_threshold": 0.11048844456672668,
+          "entropy_threshold": 0.3088764399290085,
+          "js_threshold": 0.0012551833060570061,
+          "min_success_rate": 0.03125
+        }
+      }
+    }
+  },
+  "two_stage": {
+    "direction_threshold": 0.11048844456672668,
+    "entropy_threshold": 0.3088764399290085,
+    "js_threshold": 0.0012551833060570061,
+    "min_success_rate": 0.03125
+  }
+}

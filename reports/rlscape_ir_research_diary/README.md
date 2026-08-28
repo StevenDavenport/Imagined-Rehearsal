@@ -16,7 +16,14 @@ chronological RLScape continual-learning investigation:
 6. **Stage 4A / Study VI:** matched factual/counterfactual reward-continuation
    repair, a separate bounded success head, and paired real-environment IR;
 7. **Stage 4B / Study VII:** fully PRNG-paired conservative bounded-value dose,
-   horizon, clipping, and update-cap assays across three adaptation replicates.
+   horizon, clipping, and update-cap assays across three adaptation replicates;
+8. **Stage 5A / Study VIII:** interpretable entropy, posterior-disagreement,
+   and consequence gates with explicit compute accounting;
+9. **Stage 5B / Study IX:** weak-versus-competent IR-necessity discrimination;
+10. **Stage 5B.1 / Study X:** prospective performance-signal and threshold-transfer audit;
+11. **Stage 5B.2 / Study XI:** paired virtual-update acceptance with exact rollback; and
+12. **Stage 5B.2a / Study XII:** sampled bury-bones autopsy separating update
+    dose, cadence, virtual selection, and an exact beta=.005 mixed signal.
 
 The canonical experiment names and remaining Stage 4--6 ladder are
 maintained in the repository at `experiments/rlscape/README.md`.
@@ -48,5 +55,9 @@ audit. Stage VI's specification, repair/audit summaries, complete 3,600-episode
 evaluation table, integrity records, and report-native figures were added on
 2026-08-17. Stage VII's immutable specification, complete 6,075-episode table,
 paired goal/replicate summaries, decision audit, and six report-native figure
-families were added on 2026-08-19. They make the report portable; the original
-JSONL logs remain the authoritative raw artifacts.
+families were added on 2026-08-19. Studies VIII--XI and their compact gate,
+compute, performance, and prospective-signal artifacts were added on
+2026-08-25. Study XII's 2,010-episode result, action and imagined-reward
+diagnostics, pairing audit, and five figure families were added on 2026-08-27.
+They make the report portable; the original JSONL logs remain the authoritative
+raw artifacts.

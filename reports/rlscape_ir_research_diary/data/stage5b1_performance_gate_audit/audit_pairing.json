@@ -1,0 +1,49 @@
+{
+  "canonical_stage": "stage5b1",
+  "cells": [
+    {
+      "equal": true,
+      "goal": "bury_bones",
+      "no_ir_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/no_ir/bury_bones/sampled/attempt_01",
+      "policy_mode": "sampled",
+      "reward_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/always_reward_only/bury_bones/sampled/attempt_01"
+    },
+    {
+      "equal": true,
+      "goal": "bury_bones",
+      "no_ir_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/no_ir/bury_bones/deterministic/attempt_01",
+      "policy_mode": "deterministic",
+      "reward_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/always_reward_only/bury_bones/deterministic/attempt_02"
+    },
+    {
+      "equal": true,
+      "goal": "chop_logs",
+      "no_ir_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/no_ir/chop_logs/sampled/attempt_01",
+      "policy_mode": "sampled",
+      "reward_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/always_reward_only/chop_logs/sampled/attempt_01"
+    },
+    {
+      "equal": true,
+      "goal": "chop_logs",
+      "no_ir_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/no_ir/chop_logs/deterministic/attempt_01",
+      "policy_mode": "deterministic",
+      "reward_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/always_reward_only/chop_logs/deterministic/attempt_01"
+    },
+    {
+      "equal": true,
+      "goal": "kill_goblin",
+      "no_ir_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/no_ir/kill_goblin/sampled/attempt_01",
+      "policy_mode": "sampled",
+      "reward_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/always_reward_only/kill_goblin/sampled/attempt_01"
+    },
+    {
+      "equal": true,
+      "goal": "kill_goblin",
+      "no_ir_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/no_ir/kill_goblin/deterministic/attempt_01",
+      "policy_mode": "deterministic",
+      "reward_logdir": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/evaluations/audit/replicate_00/always_reward_only/kill_goblin/deterministic/attempt_01"
+    }
+  ],
+  "equal": true,
+  "format": 1
+}

@@ -2,7 +2,7 @@
 
 ## Status and question
 
-Status: **ready to run; hypothesis unresolved**.
+Status: **complete; mixed mechanism result**.
 
 Stage 5B.2 produced a qualitatively exceptional failure. On sampled
 `bury_bones`, no IR achieved `.373`, always-on reward-only IR achieved `.660`,
@@ -61,6 +61,11 @@ task progress, factual `item_buried` events, update count, and episode length.
 The runner also verifies that merely probing the world model does not change
 the no-IR sampled action sequence.
 
+That final non-interference requirement failed in the completed run: only
+1,276 of 8,916 aligned no-IR actions matched. The model diagnostics are
+therefore retained as exploratory evidence but cannot establish a paired
+causal hallucination claim.
+
 ## Interpretation contract
 
 - Collapse under both the 46-update cap and random schedule supports a
@@ -77,6 +82,52 @@ the no-IR sampled action sequence.
 No single comparison is permitted to establish world-model hallucination by
 itself; the claim requires predicted-reward, action-attractor, and real-outcome
 evidence to agree.
+
+## Result
+
+All 42 units completed: three sampled-policy replicates, 2,010 recorded
+episodes, and no missing main condition. Aggregate bury-bones success was:
+
+| Condition | Success | Mean length | Mean committed updates |
+|---|---:|---:|---:|
+| No IR | .340 | 158.5 | 0.0 |
+| Always reward-only | .607 | 124.2 | 124.2 |
+| Reward cap 16 | .127 | 186.2 | 15.8 |
+| Reward cap 46 | .113 | 187.6 | 44.9 |
+| Reward cap 80 | .207 | 179.7 | 77.3 |
+| Reward cap 127 | .613 | 119.8 | 91.4 |
+| Reward random 46 | .540 | 134.0 | 30.9 |
+| Virtual-positive reward | .000 | 200.0 | 48.6 |
+| Virtual-negative reward | .173 | 179.9 | 16.1 |
+| Always mixed beta=.005 | .000 | 200.0 | 200.0 |
+| Mixed cap 46 | .127 | 184.0 | 44.7 |
+| Mixed random 46 | .540 | 135.7 | 31.2 |
+| Virtual-positive mixed beta=.005 | .260 | 172.6 | 39.2 |
+
+The comparisons separate the failure mechanisms. A short consecutive prefix
+passes through a harmful partial-repair region, but update count alone cannot
+explain the catastrophe: randomly distributing the same nominal 46-update
+budget reaches `.540`. Virtual-positive selection is worse than both the
+matched random schedule and the 46-prefix control. Reversing the decision
+improves success to `.173`, supporting wrong-direction ranking without making
+the inverse selector useful. The exact `beta=.005` value term is not a safe
+regularizer: always-on mixed IR fails every episode, while random scheduling
+makes reward-only and mixed variants tie at `.540`.
+
+Replicate effects are large. Always reward-only scores `.00/.86/.96`; random
+reward scores `.76/.00/.86`; and virtual-positive mixed scores `.00/.78/.00`.
+These are adaptation/environment replicates around one fixed learned model,
+not independent training seeds.
+
+## Decision
+
+The virtual-positive gate and exact `beta=.005` safety hypothesis are rejected.
+The partial-repair-region and harmful-selection hypotheses are supported.
+Random update placement is retained as a cadence control, not promoted as a
+necessity gate. Reward-model exploitation remains plausible but unresolved
+because the live world audit failed action-level non-interference. Stage 5C
+remains deferred until model probes use isolated randomness and a gate succeeds
+under episode-local controls.
 
 ## Outputs
 

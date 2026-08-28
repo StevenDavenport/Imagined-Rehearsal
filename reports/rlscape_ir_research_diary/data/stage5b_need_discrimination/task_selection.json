@@ -1,0 +1,51 @@
+{
+  "all_tasks": [
+    {
+      "benefit_reward_only": 0.12499999999999994,
+      "benefit_standard": -0.17500000000000002,
+      "best_ir_benefit": 0.12499999999999994,
+      "goal": "kill_goblin",
+      "no_ir_competence": 0.525,
+      "worst_ir_benefit": -0.17500000000000002
+    },
+    {
+      "benefit_reward_only": 0.5,
+      "benefit_standard": 0.175,
+      "best_ir_benefit": 0.5,
+      "goal": "bury_bones",
+      "no_ir_competence": 0.0,
+      "worst_ir_benefit": 0.175
+    },
+    {
+      "benefit_reward_only": -0.04999999999999999,
+      "benefit_standard": -0.3,
+      "best_ir_benefit": -0.04999999999999999,
+      "goal": "chop_logs",
+      "no_ir_competence": 0.8,
+      "worst_ir_benefit": -0.3
+    }
+  ],
+  "canonical_stage": "stage5b",
+  "criteria": {
+    "min_strong_success": 0.6,
+    "min_weak_benefit": 0.05
+  },
+  "digest": "8c1d84c24f90ec26f3300c634a692cc5c4071e7d491fbbf30e75b29d0e4c9301",
+  "format": 1,
+  "strong": {
+    "benefit_reward_only": -0.04999999999999999,
+    "benefit_standard": -0.3,
+    "best_ir_benefit": -0.04999999999999999,
+    "goal": "chop_logs",
+    "no_ir_competence": 0.8,
+    "worst_ir_benefit": -0.3
+  },
+  "weak": {
+    "benefit_reward_only": 0.5,
+    "benefit_standard": 0.175,
+    "best_ir_benefit": 0.5,
+    "goal": "bury_bones",
+    "no_ir_competence": 0.0,
+    "worst_ir_benefit": 0.175
+  }
+}

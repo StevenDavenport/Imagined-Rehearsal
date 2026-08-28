@@ -35,16 +35,20 @@
 \newcommand{\pct}[1]{#1\%}
 \newcommand{\pp}{\,pp}
 
-\title{\textbf{From Reservoir Replay to Critic-Free Imagined Rehearsal\\in Sequential RLScape}\\[3pt]
-\large A chronological experimental chapter on retention, model semantics,\\critic failure, and controlled actor recovery}
+\title{\textbf{From Reservoir Replay to Prospective Imagined-Rehearsal Gating\\in Sequential RLScape}\\[3pt]
+\large A chronological experimental chapter on retention, model semantics,\\critic failure, controlled actor recovery, and adaptation safety}
 \author{Steven Davenport\\Continual Reinforcement Learning Research Notes}
-\date{Experiments completed August 2026; expanded report generated 19 August 2026}
+\date{Experiments completed August 2026; expanded report generated 27 August 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This chapter records seven linked studies in a goal-conditioned DreamerV3 agent operating in RLScape. Study I compares a 200k-capacity global FIFO replay against a persistent, goal-stratified episode reservoir while one agent learns \emph{kill goblin}, \emph{bury bones}, and \emph{chop logs} for 500k environment steps each. Reservoir replay produced strong but transient balanced retention: at 1.25M steps its worst sampled-policy goal reached \pct{49} versus \pct{8} for FIFO, but by 1.5M all reservoir goals had collapsed to at most \pct{16}. Study II finds accurate factual completion recognition, weak one-hot goal semantics, a severely optimistic critic, and a six-step IR target that is \pct{94.4}--\pct{97.3} critic bootstrap. Study III causally isolates the actor: critic-free reward-only IR recovers a corrupted policy, reaching \pct{73.0} sampled success at $H=15$ and \pct{85.3} deterministic success at $H=20$. Study IV transfers this mechanism to natural continual-learning damage: at 1.5M, reward-only $H=15$ recovers bury bones from \pct{14} to \pct{91} sampled and from \pct{4} to \pct{86} deterministic. Study V locates the critic failure on real posterior states rather than at long imagination depth. Study VI then intervenes on the learned teachers. Counterfactual event labels raise held-out completion-goal accuracy from \pct{33.3} to \pct{97.4}; a separate bounded head reduces kill/bury/chop value bias from $+1.429/+1.616/+0.595$ to $-0.014/-0.009/+0.002$. Study VII reintroduces that bounded value conservatively under fully paired adaptation randomness. A five-percent correction raises sampled success from \pct{73.8} to \pct{87.6} and weakest-goal success from \pct{51.3} to \pct{78.7}, with positive macro change in all three replicates. Reward-only remains strongest under deterministic control, however, and no mixed condition passes the prespecified deterministic worst-goal safety floor. The combined evidence establishes that the repaired critic contains useful policy information in small doses, but reward-only IR remains the approved base teacher until gating, trust-region control, and training-time critic regularisation are tested.
+This chapter records twelve linked studies in a goal-conditioned DreamerV3 agent operating in RLScape. Studies I--VII establish the base mechanism. A goal-stratified episode reservoir yields transient multi-goal retention but not stable continual learning; the original critic is severely optimistic and supplies \pct{94.4}--\pct{97.3} of the six-step standard-IR target; and critic-free reward-only IR repairs both synthetic actor corruption and natural forgetting. Counterfactual supervision raises held-out completion-goal accuracy from \pct{33.3} to \pct{97.4}, while a separately bounded value head removes gross scale bias. A five-percent bounded-value correction then improves sampled reward-only success from \pct{73.8} to \pct{87.6}, but fails a deterministic weakest-goal safety rule.
+
+Studies VIII--XII ask when that effective but potentially harmful adaptation should run. Fixed entropy, Monte Carlo Posterior Batching (MCPB) Jensen--Shannon (JS), and two-stage consequence gates reduce updates and imagined transitions, but none preserves always-on reward-only performance. On a frozen competent chop task and weak bury task, JS activates more often on the weak task yet reduces bury success from \pct{65.3} to \pct{32.0} sampled and \pct{48.0} deterministic; the consequence gate activates in the wrong direction. An offline 90-episode audit explains why: ten-state JS ranks later underperformance at pooled AUROC $0.501$, whereas imagined failure reaches $0.669$ and rises to $0.772$ by 25 states. JS retains modest information about whether failed episodes are repairable, but its thresholds do not transfer across goals. A paired virtual-update gate then tentatively updates on one imagined batch and commits only when an independent, common-random-number batch predicts improvement. This prospective test succeeds on chop and partly on kill, but catastrophically fails on bury; first virtual improvement ranks true IR need at only AUROC $0.470$--$0.528$.
+
+Study XII autopsies that bury failure over 2,010 sampled episodes. Always-on reward-only IR raises success from \pct{34.0} to \pct{60.7}, and a 127-update cap reaches \pct{61.3}; caps of 16--80 updates instead fall to \pct{11.3}--\pct{20.7}. Randomly distributing at most 46 updates reaches \pct{54.0}, while the virtual-positive selector reaches exactly zero despite committing 48.6 updates per episode. Inverting its decision recovers only \pct{17.3}. An exact $\beta=.005$ value mixture is not a safe regularizer: always-on mixed IR also reaches zero, although random scheduling again reaches \pct{54.0}. Thus the catastrophe combines a partial-repair region with harmful selection and extreme seed sensitivity. A dedicated world-model audit does not pass its no-intervention check (only \pct{14.3} paired action agreement), so reward-model exploitation remains plausible but unproven. The combined result is a constructive negative: reward-only IR is a strong recovery operator, but the present world model cannot yet safely judge the real behavioral value of its own actor updates. Persistent Stage 5C adaptation remains deferred in favour of RNG-isolated model auditing, stronger performance estimation, uncertainty-aware acceptance, and hard update safety.
 \end{abstract}
 
 \tableofcontents
@@ -62,6 +66,10 @@ The long-term research direction is continual reinforcement learning over an RLS
   \item Does critic error begin on real posterior states, emerge with imagination depth, or arise because the actor exploits the learned model?
   \item Can explicit counterfactual event labels and a separately bounded success-value head repair the learned teaching signals, and does that repair improve real-environment IR?
   \item Can a small bounded-value correction improve reward-only IR under fully paired adaptation randomness without damaging the weakest goal or deterministic policy?
+  \item Can actor entropy, MCPB JS disagreement, or imagined consequence evidence decide when episode-local IR should run while reducing unnecessary compute?
+  \item Do those fixed gates distinguish an IR-responsive weak task from an already competent task, and which prospective signals actually predict later performance?
+  \item Can a tentative update be accepted or rolled back using only paired held-out imagination, without observing the real outcome?
+  \item Does the catastrophic bury failure arise from insufficient update dose, from the virtual selector choosing harmful updates, or from exploitation of a miscalibrated learned reward signal?
 \end{enumerate}
 
 The first experiment contributes a fully persisted three-goal sequential run, six immutable training checkpoints, 24 paired frozen/IR evaluation units, two action-selection modes, and a direct comparison to the previous FIFO run. It is an exploratory, single-seed systems experiment rather than a population-level statistical claim. The later experiments deliberately reuse the same pinned checkpoints. This converts a costly multi-day training run into a sequence of increasingly controlled mechanism tests.
@@ -75,6 +83,11 @@ The chapter is organized as a research diary without sacrificing paper-style sep
   \item \textbf{Study V --- critic provenance and calibration.} Evaluate identical real posterior states, recorded-action imagination, and actor-selected imagination to identify where critic optimism originates and how it changes with horizon.
   \item \textbf{Study VI --- counterfactual and bounded head repair.} Freeze the representation and actor, repair reward/continuation semantics and value scale from preserved experience, then repeat a paired real-environment IR assay.
   \item \textbf{Study VII --- conservative value dose and stability.} Interpolate exactly between reward-only and bounded-value teaching, repeat fully paired adaptation seeds, and test dose, horizon, correction clipping, and actor-update caps against a prespecified worst-goal rule.
+  \item \textbf{Study VIII --- interpretable gating.} Audit entropy, MCPB JS, and consequence signals, freeze thresholds, then compare gated and always-on variants with explicit compute accounting.
+  \item \textbf{Study IX --- necessity discrimination.} Test the frozen gates on one calibrated weak task and one competent task from the same immutable checkpoint.
+  \item \textbf{Study X --- offline performance-gate audit.} Use prospective state prefixes and retrospective paired outcomes to separate predicted underperformance from predicted IR utility.
+  \item \textbf{Study XI --- paired virtual-update gate.} Tentatively adapt on one imagined batch, validate on an independent paired batch, and commit or exactly roll back without real feedback.
+  \item \textbf{Study XII --- bury-bones virtual-gate autopsy.} Reproduce the sampled bury catastrophe, separate dose from update selection, invert the selector, add exact $\beta=.005$ mixed controls, and audit imagined-reward/action attractors.
 \end{enumerate}
 
 To keep implementation artifacts and thesis terminology aligned, the
@@ -98,12 +111,18 @@ Stage 3A & Critic provenance and calibration audit & Study V \\
 Stage 3B & Natural forgetting recovery & Study IV \\
 Stage 4A & Counterfactual goal-head repair & Study VI \\
 Stage 4B & Conservative bounded-value dose and stability & Study VII \\
+Stage 5A & Interpretable gating for imagined rehearsal & Study VIII \\
+Stage 5B & IR necessity discrimination & Study IX \\
+Stage 5B.1 & Offline performance-gate audit & Study X \\
+Stage 5B.2 & Paired virtual-update gate & Study XI \\
+Stage 5B.2a & Bury-bones virtual-gate autopsy & Study XII \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{figure}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
   >=Latex,node distance=4mm,font=\small,
   bx/.style={draw,rounded corners=2pt,minimum height=19mm,text width=2.65cm,align=center},
@@ -117,6 +136,11 @@ Stage 4B & Conservative bounded-value dose and stability & Study VII \\
 \node[bx,fill=lightorange,below=of s5] (s6) {\textbf{Study V}\\Critic provenance audit\\\scriptsize Real-state error; actor amplification};
 \node[bx,fill=lightgreen,left=of s6] (s7) {\textbf{Study VI}\\CF + bounded head repair\\\scriptsize Semantics repaired; value still conditional};
 \node[bx,fill=lightorange,left=of s7] (s8) {\textbf{Study VII}\\Conservative value dose\\\scriptsize Sampled gain; modal safety fails};
+\node[bx,fill=lightblue,below=of s8] (s9) {\textbf{Study VIII}\\Fixed gate audit\\\scriptsize Compute saved; recovery lost};
+\node[bx,fill=lightblue,right=of s9] (s10) {\textbf{Study IX}\\Necessity discrimination\\\scriptsize JS direction right; dose wrong};
+\node[bx,fill=lightorange,right=of s10] (s11) {\textbf{Study X}\\Performance-signal audit\\\scriptsize Failure $>$ JS; thresholds shift};
+\node[bx,fill=lightorange,right=of s11] (s12) {\textbf{Study XI}\\Virtual update test\\\scriptsize Imagined approval is not safe};
+\node[bx,fill=lightorange,below=of s12] (s13) {\textbf{Study XII}\\Bury failure autopsy\\\scriptsize Dose valley + harmful selection};
 \draw[ar] (s1)--(s2);
 \draw[ar] (s2)--(s3);
 \draw[ar] (s3)--(s4);
@@ -124,8 +148,14 @@ Stage 4B & Conservative bounded-value dose and stability & Study VII \\
 \draw[ar] (s5)--(s6);
 \draw[ar] (s6)--(s7);
 \draw[ar] (s7)--(s8);
+\draw[ar] (s8)--(s9);
+\draw[ar] (s9)--(s10);
+\draw[ar] (s10)--(s11);
+\draw[ar] (s11)--(s12);
+\draw[ar] (s12)--(s13);
 \end{tikzpicture}
-\caption{Chronological experimental logic. Each study was designed after observing the previous result; Studies II--VII reuse immutable checkpoints and therefore isolate mechanisms without another continual-training run.}
+}
+\caption{Chronological experimental logic. Each study was designed after observing the previous result; Studies II--XII reuse immutable checkpoints and therefore isolate mechanisms without another continual-training run.}
 \label{fig:evidencechain}
 \end{figure}
 
@@ -1408,6 +1438,693 @@ continual-training seed, with actor changes reset every episode. Persistent
 continual updates, independent world-model seeds, longer task sequences, and
 training-time critic regularisation remain untested.
 
+\section{Study VIII: interpretable gating and compute accounting}
+
+\subsection{Question, signals, and frozen selection}
+
+Stage 5A begins the gating programme. The checkpoint is the Stage VI
+counterfactual-plus-bounded clone, but the approved actor objective is still
+reward-only $H=15$. All model components, heads, normalizers, and persistent
+checkpoint parameters remain frozen; only an episode-local actor and its
+optimizer may change. The question is whether a prospective state signal can
+avoid unnecessary updates without losing the recovery supplied by always-on
+IR.
+
+Four signal families are measured at eligible factual posterior states. Let
+$\pi_m(a\mid s,g)$ be the action distribution induced by posterior sample $m$
+and $\bar\pi=M^{-1}\sum_m\pi_m$ for $M=128$. The main uncertainty statistic is
+the normalized MCPB disagreement
+\begin{equation}
+ D_{\mathrm{JS}}(s,g)=
+ H(\bar\pi)-\frac{1}{M}\sum_{m=1}^{M}H(\pi_m),
+\end{equation}
+reported separately from factual actor entropy $H(\pi)$ and mean posterior
+entropy. High entropy can mean that several actions are interchangeable;
+high JS instead means that posterior beliefs imply different policies. A more
+expensive $H=15$ consequence audit also measures imagined goal-success
+frequency and divergence between the actor mixture and the
+success-conditioned first-action distribution.
+
+Three fixed gate families follow. An entropy gate and a JS gate accept when
+their respective statistic exceeds a frozen quantile threshold. A two-stage
+gate first applies an entropy-or-JS screen, then pays for consequence
+imagination and accepts only when at least $4/128$ rollouts succeed and their
+successful-action divergence exceeds a second threshold. If accepted, the
+same consequence batch is reused for the update. Thresholds are selected in
+audit and qualification phases before a three-replicate confirmation phase;
+the selection rule maximizes sampled macro success subject to a deterministic
+weakest-goal floor of $-.05$ relative to the corresponding always-on
+objective. No gate candidate actually satisfies that rule, so the least-bad
+candidate from each family is retained for diagnostic confirmation rather
+than falsely described as qualified.
+
+Confirmation compares no IR and always-on, entropy-gated, JS-gated, and
+two-stage-gated variants of standard, reward-only, and $\beta=.05$ mixed IR.
+Each goal--condition--replicate receives 50 sampled and 25 deterministic
+episodes: 234 units and 8,775 recorded confirmation episodes. Reset schedules,
+posterior keys, and action keys are paired. Timers are synchronized and record
+gate time, update time, posterior samples, imagined transitions, wall time,
+throughput, and actor updates.
+
+\subsection{Fixed gates save work but lose the recovery signal}
+
+Table~\ref{tab:stage5amacro} summarizes the central anchors. Always-on
+reward-only is decisively strongest: sampled macro success is $.822$, versus
+$.611$ for both entropy- and JS-gated reward-only and $.549$ for the two-stage
+version. The result is not simply too much updating. Standard IR is a bad
+teacher, and gating it can improve its poor baseline; entropy-gated standard
+rises from $.418$ to $.469$ sampled and from $.289$ to $.449$ deterministic.
+That does not make standard IR useful relative to reward-only. The scientific
+failure is that the gates cannot preserve the beneficial objective while
+withholding only harmful or redundant applications.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study VIII confirmation macro success and update density. Success is averaged over three goals and three paired replicates. Update density is actor updates per real environment step.}
+\label{tab:stage5amacro}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Sampled & Deterministic & Updates/step S & Updates/step D \\
+\midrule
+No IR & .476 & .378 & .000 & .000 \\
+Always standard & .418 & .289 & .993 & .994 \\
+Entropy standard & .469 & .449 & .201 & .197 \\
+JS standard & .371 & .338 & .503 & .496 \\
+Two-stage standard & .480 & .436 & .042 & .040 \\
+Always reward-only & \textbf{.822} & \textbf{.653} & .990 & .991 \\
+Entropy reward-only & .611 & .516 & .245 & .273 \\
+JS reward-only & .611 & .596 & .527 & .477 \\
+Two-stage reward-only & .549 & .338 & .053 & .041 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.96\linewidth]{stage5a_gating/performance.pdf}
+\caption{Study VIII real-environment confirmation performance. Fixed gates frequently reduce success relative to their always-on reward-only or mixed anchors; improvements over standard IR do not close the gap to the approved reward-only teacher.}
+\label{fig:stage5aperformance}
+\end{figure}
+
+The compute result is real but must be described precisely. Entropy and JS
+gates remove roughly half to four-fifths of direct update rollouts, while the
+two-stage gate applies only about four to five updates per hundred real steps.
+However, its consequence screen is itself an imagination workload: despite a
+\pct{95} reduction in actor updates, it saves only about \pct{30} of imagined
+transitions relative to always-on reward-only. On this machine, gating still
+reduces the \emph{incremental} wall-time overhead of always-on adaptation, but
+behavioral damage dominates the trade-off.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.86\linewidth]{stage5a_gating/performance_compute.pdf}
+\caption{Study VIII performance--compute frontier. The upper-right reward-only anchor is expensive but behaviorally dominant. Moving left by thresholding reduces imagined work, yet no fixed gate lies on a frontier that preserves its success.}
+\label{fig:stage5acompute}
+\end{figure}
+
+\subsection{Study VIII decision}
+
+No gate advances. The result rejects entropy, a global JS threshold, and the
+tested consequence threshold as stand-alone necessity rules. It does not
+reject gating as a research direction. Stage VIII starts every episode from a
+checkpoint deliberately selected for actor repair and therefore omits the
+critical negative case: a policy which is already competent and should be left
+alone. Stage IX addresses that case directly.
+
+\section{Study IX: weak-versus-competent IR necessity discrimination}
+
+\subsection{Calibration and confirmation design}
+
+Stage 5B first evaluates all three goals with no IR, always-on standard IR,
+and always-on reward-only IR. A weak task must gain at least $.05$ from its
+best always-on treatment; a distinct strong task must achieve at least $.60$
+without adaptation. The frozen calibration selects \emph{bury bones} as weak
+(no-IR competence $0$, calibration reward-only gain $+.50$) and
+\emph{chop logs} as strong (no-IR competence $.80$). This selection is hashed
+before confirmation.
+
+The confirmation matrix contains no IR, always-on standard and reward-only,
+and JS- and two-stage-gated versions of each objective. It uses three paired
+replicates with 50 sampled and 25 deterministic episodes per cell: 84 units
+and 3,150 episodes after 270 calibration episodes. Actor changes remain
+episode-local. The intended signature is separation: retain the weak-task IR
+benefit while reducing strong-task updates and preventing damage.
+
+\subsection{The JS direction is plausible, but behavioral discrimination fails}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study IX success on the calibrated competent chop task and weak bury task. S/D denote sampled/deterministic policy evaluation.}
+\label{tab:stage5bnecessity}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Chop S & Chop D & Bury S & Bury D \\
+\midrule
+No IR & .820 & .747 & .427 & .000 \\
+Always standard & .407 & .373 & .167 & .040 \\
+JS standard & .713 & .373 & .080 & .133 \\
+Two-stage standard & .693 & .493 & .180 & .373 \\
+Always reward-only & .860 & .760 & \textbf{.653} & \textbf{.653} \\
+JS reward-only & .867 & \textbf{.840} & .320 & .480 \\
+Two-stage reward-only & \textbf{.900} & .720 & .280 & .240 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+JS does move in the expected qualitative direction: reward-only activation is
+$.582/.496$ updates per step on weak sampled/deterministic bury versus
+$.384/.398$ on strong chop. Yet it still withholds too much useful repair,
+losing $33.3$ sampled and $17.3$ deterministic percentage points relative to
+always-on reward-only on bury. The two-stage rule is worse as a necessity
+detector. It activates only $.013$ updates per weak bury step but about
+$.155$--$.167$ per strong chop step---the opposite of the required ordering.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b_need_discrimination/performance_sampled.pdf}
+\end{minipage}\hfill
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b_need_discrimination/performance_deterministic.pdf}
+\end{minipage}
+\caption{Study IX sampled (left) and deterministic (right) success. The gated conditions protect competent chop reasonably well but do not retain always-on recovery on weak bury.}
+\label{fig:stage5bperformance}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.88\linewidth]{stage5b_need_discrimination/activation_separation.pdf}
+\caption{Study IX gate activation against real success. JS activates more on weak bury, but this does not translate into sufficient recovery. The two-stage gate is nearly dormant on the task that most needs adaptation.}
+\label{fig:stage5bactivation}
+\end{figure}
+
+Episode lengths are retained in every unit in addition to binary success, so
+successful agents can be distinguished after reaching \pct{100}. In this
+experiment success remains the binding endpoint: no gated weak-task condition
+approaches the always-on rate, so shorter completion among the surviving
+successes cannot reverse the decision.
+
+\subsection{Study IX decision}
+
+Stage 5C persistent recovery is paused. Persisting a gate already shown to
+misclassify the weak and competent cases would turn a diagnostic failure into
+multi-episode policy damage. The next experiment therefore returns to the
+recorded prospective signals and asks which of two logically separate facts
+they contain: whether the current actor will underperform, and whether IR will
+actually repair it.
+
+\section{Study X: offline performance-gate audit}
+
+\subsection{Prospective features and retrospective labels}
+
+Stage 5B.1 is a non-interventional audit of 90 reset-matched episode pairs from
+the Stage VIII traces. Predictors use only the first $1$, $5$, $10$, or $25$
+factual states and therefore precede the outcome. Each no-IR episode is paired
+with its always-on reward-only counterpart and assigned one retrospective
+class:
+\begin{align*}
+\texttt{ir\_needed}:&\quad \text{no IR fails, IR succeeds},\\
+\texttt{ir\_unnecessary}:&\quad \text{both succeed},\\
+\texttt{ir\_harmful}:&\quad \text{no IR succeeds, IR fails},\\
+\texttt{not\_repaired}:&\quad \text{both fail}.
+\end{align*}
+The resulting counts are $21$, $27$, $18$, and $24$, respectively. Labels are
+used only after execution to measure separability; a deployable gate never
+observes them.
+
+The predictors include mean/max JS, factual and posterior actor entropy,
+imagined $H=15$ success fraction, successful-action concentration/divergence,
+and combinations. ``Predicted failure'' is one minus the imagined success
+fraction. AUROC is interpreted as ranking information, not a safe threshold.
+Task-specific optimal thresholds are then applied across every other task to
+measure transfer directly.
+
+\subsection{Imagined failure predicts performance; JS does not calibrate globally}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study X pooled feature AUROC. Underperformance asks whether no IR will fail; IR needed asks whether the paired reward-only intervention converts failure to success.}
+\label{tab:stage5b1auc}
+\begin{tabular}{lrrrr}
+\toprule
+& \multicolumn{2}{c}{First 10 states} & \multicolumn{2}{c}{First 25 states} \\
+Predictor & Underperform & IR needed & Underperform & IR needed \\
+\midrule
+Mean JS & .501 & .618 & .527 & .564 \\
+Factual actor entropy & .349 & .476 & .376 & .518 \\
+Posterior actor entropy & .340 & .467 & .366 & .506 \\
+Predicted failure & \textbf{.669} & .584 & \textbf{.772} & \textbf{.640} \\
+JS $\times$ predicted failure & .517 & \textbf{.629} & .548 & .575 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The simplest result is decisive: pooled ten-state JS is chance for later
+underperformance. Entropy is worse than chance because confident/uncertain
+behavior is task- and policy-mode-dependent, not a monotonic competence score.
+Imagined failure is the best current performance estimator, improving from
+AUROC $.669$ at ten states to $.772$ at 25. It is less effective at answering
+the second question---whether IR repairs the failure---where JS and the
+JS--failure interaction retain some modest information.
+
+The pooled numbers hide severe cell variation. At ten states, predicted
+failure AUROC ranges from $.484$ for sampled bury to $.875$ for deterministic
+kill. JS underperformance AUROC ranges from $.238$ for deterministic bury to
+$.684$ for sampled chop. Consequently, a threshold tuned on one task often
+has poor true-positive/false-positive behavior off diagonal. A fixed global
+threshold is therefore the wrong abstraction even when a feature has useful
+within-task ranking.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b1_performance_gate_audit/performance_plane_sampled.pdf}
+\end{minipage}\hfill
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b1_performance_gate_audit/performance_plane_deterministic.pdf}
+\end{minipage}
+\caption{Study X prospective signal planes. Mean JS and imagined success overlap substantially across later necessity classes; the geometry also changes with task and policy mode.}
+\label{fig:stage5b1plane}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b1_performance_gate_audit/threshold_transfer_sampled.pdf}
+\end{minipage}\hfill
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b1_performance_gate_audit/threshold_transfer_deterministic.pdf}
+\end{minipage}
+\caption{Study X JS-threshold transfer. Rows tune the threshold and columns evaluate it; weak off-diagonal behavior shows that the numerical boundary is task-specific.}
+\label{fig:stage5b1transfer}
+\end{figure}
+
+\subsection{Study X decision}
+
+Gating is separated into two estimands. First estimate ``will this actor
+underperform?''; imagined failure is the best available signal. Then estimate
+``would this particular update improve it?''; JS alone is insufficient. The
+historical traces do not contain a held-out pre/post score for an update, so
+Study XI adds exactly that missing prospective comparison.
+
+\section{Study XI: paired virtual-update acceptance}
+
+\subsection{Causal gate and lifecycle}
+
+At a probe state, Stage 5B.2 evaluates the current actor on held-out
+imagination batch $B$, performs one tentative reward-only update on independent
+batch $A$, and reevaluates the tentative actor on $B$ using identical posterior
+and action-sampling random numbers. Formally,
+\begin{equation}
+ \theta'=U_A(\theta),\qquad
+ \Delta_{\mathrm{virt}}=\widehat J_B(\theta')-\widehat J_B(\theta),
+ \qquad
+ \theta\leftarrow
+ \begin{cases}
+ \theta' & \Delta_{\mathrm{virt}}>0,\\
+ \theta  & \text{otherwise}.
+ \end{cases}
+\end{equation}
+The score is the mean reward-only imagined return. Rejection restores both
+actor and adaptation-optimizer state exactly. Batch separation prevents
+training-batch approval, while common random numbers reduce comparison
+variance. The world model, reward/continuation heads, all value heads,
+representation, dynamics, normalizers, and source checkpoint stay frozen.
+
+Every episode starts dormant and probes immediately. If rejected, it probes
+again after 25 or 100 real steps. An accepted probe activates stepwise IR;
+three consecutive rejections return the gate to dormancy. The absolute
+baseline-score screen is intentionally disabled because Study X rejected a
+portable threshold, but its score is still logged for diagnosis.
+
+The four conditions are no IR, always-on reward-only, and virtual gates with
+25- and 100-step dormant cadence. Each uses $H=15$, 128 posterior samples, one
+actor update at learning rate $4\times10^{-5}$, and zero entropy bonus. Three
+goals, sampled/deterministic modes, three paired replicates, and 50/25 episodes
+per cell produce 2,700 recorded episodes. The gate additionally logs every
+proposal, predicted change, acceptance, active/dormant transition, rollback,
+posterior sample, imagined transition, and synchronized runtime.
+
+\subsection{Mixed task behavior rejects the virtual score as a safety test}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study XI sampled real-environment success (150 episodes per goal and condition).}
+\label{tab:stage5b2sampled}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Kill & Bury & Chop & Mean \\
+\midrule
+No IR & .480 & .373 & .833 & .562 \\
+Always reward-only & \textbf{.653} & \textbf{.660} & .807 & \textbf{.707} \\
+Virtual, dormant 25 & \textbf{.653} & .000 & \textbf{.867} & .507 \\
+Virtual, dormant 100 & .487 & .160 & .853 & .500 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study XI deterministic real-environment success (75 episodes per goal and condition).}
+\label{tab:stage5b2det}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Kill & Bury & Chop & Mean \\
+\midrule
+No IR & .347 & .373 & .813 & .511 \\
+Always reward-only & \textbf{.533} & \textbf{.653} & .747 & \textbf{.644} \\
+Virtual, dormant 25 & .453 & .200 & \textbf{.907} & .520 \\
+Virtual, dormant 100 & .440 & .187 & .787 & .471 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The gate appears promising if only chop is inspected. The 25-step condition
+raises sampled chop from $.833$ no-IR and $.807$ always-on to $.867$, and
+deterministic chop to $.907$. It also matches always-on sampled kill at $.653$.
+Bury overturns that conclusion: the same gate reduces sampled success to zero
+and deterministic success to $.200$. The 100-step cadence is less destructive
+but also recovers less kill and remains below no IR on bury. This is precisely
+why all three tasks and both policy modes are required for a safety claim.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b2_virtual_update_gate/performance_sampled.pdf}
+\end{minipage}\hfill
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b2_virtual_update_gate/performance_deterministic.pdf}
+\end{minipage}
+\caption{Study XI real-environment success. Virtual acceptance is highly task dependent: strong chop gains coexist with catastrophic bury damage.}
+\label{fig:stage5b2performance}
+\end{figure}
+
+Retrospective paired labels expose why. With 100-step cadence, 534 episodes
+receive at least one IR update, 27 known repair opportunities receive none,
+and 272 already competent episodes are nevertheless updated. With 25-step
+cadence these counts are 645, 6, and 346. The first virtual improvement ranks
+true IR need at AUROC $.528$ and $.470$, respectively---chance. Even the
+maximum observed virtual improvement reaches only $.558$--$.561$. Initial
+predicted failure is more informative about real underperformance (AUROC
+$.602$ and $.659$), reproducing Study X's separation between performance need
+and intervention utility.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b2_virtual_update_gate/gate_plane_virtual_reward_dormant_25_sampled.pdf}
+\end{minipage}\hfill
+\begin{minipage}{.49\linewidth}
+\includegraphics[width=\linewidth]{stage5b2_virtual_update_gate/predicted_delta_by_class.pdf}
+\end{minipage}
+\caption{Study XI decision diagnostics. Predicted improvement overlaps across real necessity classes; a positive imagined pre/post score is not evidence of positive real-environment effect.}
+\label{fig:stage5b2diagnostics}
+\end{figure}
+
+\subsection{Compute and completion speed}
+
+No IR takes $.1197$ seconds per real step on average and always-on reward-only
+takes $.1296$. The 100-step virtual gate averages $.1275$: it saves part of the
+\emph{adaptation overhead}, but only about $.0022$ seconds per total step. The
+25-step gate averages $.1371$ and is therefore \pct{5.7} slower than always-on
+IR. Its accepted update density is only $.239$ per step, but each tentative
+decision requires a before rollout, a training rollout/update, and an after
+rollout. Avoided updates do not imply avoided compute.
+
+Successful-episode length is also reported rather than allowing a \pct{100}
+success rate to hide efficiency. For example, sampled kill successes average
+$72.0$ actions under the 25-step gate versus $81.2$ always-on; deterministic
+chop successes average $69.3$ versus $53.4$, despite the higher gated success
+rate. These secondary differences are useful but do not compensate for the
+bury failure.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.87\linewidth]{stage5b2_virtual_update_gate/performance_compute.pdf}
+\caption{Study XI virtual-gate performance versus tentative-update density. Sparse probing lowers proposals, but performance is task dependent and the 25-step condition is not a wall-time saving.}
+\label{fig:stage5b2compute}
+\end{figure}
+
+\subsection{Study XI decision and claim boundary}
+
+The simple virtual-improvement gate is rejected as a deployable safety
+mechanism. Its paired design is technically sound and its negative result is
+scientifically strong: even an independent held-out imagination batch, exact
+common-random-number comparison, and optimizer rollback do not make the model
+a reliable judge of its own policy update. The failure is not mere threshold
+calibration; the ordering statistic itself is close to chance for true IR
+benefit.
+
+This does not contradict the earlier result that reward-only imagination can
+train an actor. A model can provide a useful aggregate learning gradient while
+remaining too miscalibrated to rank the real consequence of individual
+updates. Stage 5C remains deferred. The next gate should combine an explicit
+underperformance estimate with uncertainty or conservative evidence about
+update utility, while hard KL/update rollback is developed as a separate
+damage bound rather than mistaken for a necessity detector.
+
+\section{Study XII: bury-bones virtual-gate autopsy}
+
+\subsection{Question and controlled design}
+
+Study XI's sampled bury result is too severe to treat as ordinary gate noise:
+the 25-step virtual gate falls from $.660$ under always-on reward-only IR to
+exactly zero. Study XII reproduces this cell and asks three narrower questions.
+First, is the actor passing through a harmful partially repaired state before
+enough IR updates accumulate? Second, does the virtual score select updates
+that are worse than an equal opportunity to update at random real steps?
+Third, does a small, nominally independent value signal regularize a reward
+model that may otherwise be exploited?
+
+The experiment starts every episode from the same repaired Stage VI
+counterfactual-plus-bounded checkpoint. Only the actor and its adaptation
+optimizer can change, and both reset at the next episode. Dynamics,
+representation, decoder, reward, continuation, original critic, slow critic,
+bounded value head, and all normalizers remain frozen. The task is bury bones,
+the policy is sampled, and episodes are capped at 200 real actions. Every IR
+proposal uses horizon $H=15$, 128 posterior starts, one actor update at learning
+rate $4\times10^{-5}$, and zero entropy bonus. The environment and agent seed
+bases, 121000 and 131000, exactly reproduce the Study XI sampled schedule.
+
+Let $u_t\in\{0,1\}$ indicate whether a candidate actor update is committed at
+real step $t$. Prefix-dose conditions use
+\begin{equation}
+  u_t=\mathbb{1}[t\leq B],\qquad B\in\{16,46,80,127\},
+\end{equation}
+whereas the random control samples a fixed set $S$ of at most 46 step indices
+per episode and uses $u_t=\mathbb{1}[t\in S]$. Because successful episodes can
+terminate before all selected steps, requested and realized update counts are
+reported separately. Virtual-positive commits when the paired held-out score
+from Study XI satisfies $\Delta_{\mathrm{virt}}>0$; virtual-negative reverses
+the decision. The latter is an intentionally anti-causal diagnostic, not a
+candidate algorithm.
+
+The reward-only actor loss is compared with an exact mixed loss
+\begin{equation}
+ \mathcal L_{.005}=.995\,\mathcal L_{\mathrm{reward}}
+                   +.005\,\mathcal L_{\mathrm{value}}.
+\end{equation}
+This coefficient is exactly $.005$; it must not be confused with the earlier
+historical label \texttt{mixed\_b005}, which denoted $\beta=.05$. Four mixed
+conditions repeat always-on, 46-prefix, random-46, and virtual-positive
+schedules. No IR, a diagnostic no-IR world-audit condition, and always-on
+reward-only complete the 14-condition matrix. Three paired replicates use 50
+episodes per main condition and 20 per world-audit condition, giving 2,010
+recorded episodes. Success, episode length, realized updates, full real-action
+histograms, virtual before/after scores, predicted reward events and peaks, and
+actions immediately preceding predicted peak reward are retained.
+
+\subsection{Behavioral result: update placement dominates nominal dose}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\caption{Study XII sampled bury-bones result over three paired replicates. Mean updates are realized actor commits per episode; successful episodes can terminate before a cap or random schedule is exhausted.}
+\label{tab:stage5b2aall}
+\begin{tabular}{lrrr}
+\toprule
+Condition & Success & Mean length & Mean updates \\
+\midrule
+No IR & .340 & 158.5 & 0.0 \\
+No IR + world audit & .233 & 175.0 & 0.0 \\
+Always reward-only & .607 & 124.2 & 124.2 \\
+Reward prefix cap 16 & .127 & 186.2 & 15.8 \\
+Reward prefix cap 46 & .113 & 187.6 & 44.9 \\
+Reward prefix cap 80 & .207 & 179.7 & 77.3 \\
+Reward prefix cap 127 & \textbf{.613} & \textbf{119.8} & 91.4 \\
+Reward random 46 & .540 & 134.0 & 30.9 \\
+Virtual-positive reward, dormant 25 & .000 & 200.0 & 48.6 \\
+Virtual-negative reward, dormant 25 & .173 & 179.9 & 16.1 \\
+Always mixed $\beta=.005$ & .000 & 200.0 & 200.0 \\
+Mixed $\beta=.005$ prefix cap 46 & .127 & 184.0 & 44.7 \\
+Mixed $\beta=.005$ random 46 & .540 & 135.7 & 31.2 \\
+Virtual-positive mixed $\beta=.005$, dormant 25 & .260 & 172.6 & 39.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Always-on reward-only IR improves success by $26.7$ percentage points over no
+IR, and the 127-update prefix reaches an essentially identical $.613$. The
+shorter caps do not interpolate smoothly between those endpoints: 16, 46, and
+80 updates all fall below no IR, reaching only $.127$, $.113$, and $.207$.
+Consecutive early updates can therefore move the actor into a partial-repair
+region that is worse than leaving it untouched. Sufficient continued updates
+eventually pass through that region.
+
+The random control is decisive. Randomly distributing at most 46 update
+opportunities reaches $.540$ and a mean length of 134.0, whereas committing the
+first 46 reaches $.113$ and length 187.6. Random successes terminate after a
+mean of 30.9 realized commits, so the result is not explained by receiving
+more optimization. Spreading adaptation across new posterior states is much
+safer than applying the same nominal budget consecutively near episode start.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{stage5b2a_bury_autopsy/performance.pdf}
+\caption{Study XII aggregate and replicate-level sampled success. Bars pool 150 episodes for main conditions and 60 for the audit; black points are replicate rates and reveal substantial seed interaction.}
+\label{fig:stage5b2aperformance}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.82\linewidth]{stage5b2a_bury_autopsy/dose_response.pdf}
+\caption{Prefix-dose response. Reward-only IR exhibits a pronounced partial-repair region before recovering near the 127-update cap. The exact $\beta=.005$ mixture is not a benign interpolation: always-on mixed adaptation collapses.}
+\label{fig:stage5b2adose}
+\end{figure}
+
+\subsection{Virtual selection is worse than random selection}
+
+Virtual-positive reward IR commits 48.6 updates per episode---close to the
+46-update prefix and more than the successful random schedule---yet produces
+zero successes in all three replicates. Reversing the decision reaches $.173$.
+This inversion remains below the $.340$ frozen actor and is not useful as a
+policy, but its strict improvement over the intended direction supports the
+specific conclusion that the learned score orders at least some proposals in
+the wrong real-world direction. The result strengthens Study XI: failure is
+not only an ill-chosen scalar threshold. Positive imagined improvement selects
+an especially harmful subset of candidate updates.
+
+The scatter in Figure~\ref{fig:stage5b2aimagreal} shows the missing link
+directly. Virtual-positive reward proposals receive positive imagined
+before/after changes over a broad range, but every corresponding real episode
+fails. Successful virtual-negative and mixed episodes occupy overlapping
+imagined-score ranges. Mean predicted change is therefore neither calibrated
+to real success nor a safe ordinal utility statistic.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.86\linewidth]{stage5b2a_bury_autopsy/imagined_vs_real.pdf}
+\caption{Imagined approval versus real outcome for the three virtual conditions. Positive model-predicted change does not separate real successes, and the intended reward-only selector occupies only the failure row.}
+\label{fig:stage5b2aimagreal}
+\end{figure}
+
+\subsection{A tiny value term is a qualitative intervention}
+
+The exact $\beta=.005$ control does not provide general protection. Always-on
+mixed IR fails all 150 episodes, compared with $.607$ reward-only, even though
+the value term carries only one two-hundredth of the weight used in Study VII's
+best sampled condition. Under random scheduling, reward-only and mixed IR both
+produce exactly 81 successes ($.540$). Under the virtual selector, the mixed
+variant reaches $.260$ while reward-only remains at zero, but this aggregate is
+driven entirely by replicate 1 ($.780$ versus zero in replicates 0 and 2).
+The value gradient can rotate the adaptation trajectory dramatically, but the
+direction is neither stable nor predictably conservative.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Selected Study XII success rates by paired replicate. Variation is across environment and adaptation random streams around one frozen learned model, not across independently trained models.}
+\label{tab:stage5b2areps}
+\begin{tabular}{lrrr}
+\toprule
+Condition & Replicate 0 & Replicate 1 & Replicate 2 \\
+\midrule
+No IR & .00 & .44 & .58 \\
+Always reward-only & .00 & .86 & .96 \\
+Reward prefix cap 46 & .00 & .00 & .34 \\
+Reward prefix cap 127 & .00 & .98 & .86 \\
+Reward random 46 & .76 & .00 & .86 \\
+Virtual-positive reward & .00 & .00 & .00 \\
+Virtual-negative reward & .00 & .30 & .22 \\
+Always mixed $\beta=.005$ & .00 & .00 & .00 \\
+Mixed random 46 & .74 & .00 & .88 \\
+Virtual-positive mixed $\beta=.005$ & .00 & .78 & .00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These interactions are scientifically important. Always-on reward-only is
+beneficial in two seeds and ineffective in one; random scheduling reverses
+which seed benefits; and virtual mixed repair appears in only one seed. Three
+episode-level replicates establish that the aggregate failure is not a single
+bad rollout, but they do not establish population stability across independently
+trained world models.
+
+\subsection{Action attractors and the failed no-intervention audit}
+
+The failed policies are not distinguished by one scalar action-concentration
+measure. The real late-episode top-click fraction is $.350$ for virtual-positive
+reward, compared with $.332$ for no IR and $.409$ for the successful random
+schedule. Figure~\ref{fig:stage5b2arealclicks} nevertheless shows that
+conditions redistribute probability among a small set of interface regions;
+virtual-positive reward places the strongest mass near grid column 23, row 6.
+The actions preceding the model's peak predicted reward instead concentrate
+near column 21, row 8 (Figure~\ref{fig:stage5b2aimagactions}). This visual
+misalignment is consistent with a distorted imagined strategy, but does not
+by itself establish a causal hallucinated-reward loop.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.98\linewidth]{stage5b2a_bury_autopsy/real_click_heatmaps.pdf}
+\caption{Late-episode real click distributions for selected conditions. Virtual-positive reward forms a strong spatial attractor, but action concentration alone does not distinguish recovery from collapse.}
+\label{fig:stage5b2arealclicks}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.98\linewidth]{stage5b2a_bury_autopsy/imagined_reward_action_heatmaps.pdf}
+\caption{Actions immediately preceding peak reward in frozen-model imagined rollouts after accepted virtual updates. All virtual variants concentrate on a narrow predicted-reward action region.}
+\label{fig:stage5b2aimagactions}
+\end{figure}
+
+The intended no-intervention check fails. Reset seeds are identical, but the
+no-IR world-audit condition matches only 1,276 of 8,916 paired real actions
+($.143$). Its success rate, $.233$ over 60 episodes, also differs from the
+$.340$ 150-episode no-IR reference, most visibly in replicate 2 ($.150$ versus
+$.580$). The likely implementation-level explanation is that computing live
+model probes perturbs or consumes a random stream used by the sampled actor;
+an error in action alignment is another possibility. Consequently, the
+29.5\,MB imagined-reward diagnostic table is retained for provenance,
+but it is not treated as a paired no-op counterfactual. The behavioral
+dose/scheduling/virtual comparisons remain valid paired-seed experiments, but
+this study cannot cleanly prove that a particular learned-reward hallucination
+caused them.
+
+\subsection{Study XII decision and claim boundary}
+
+The original virtual-positive gate remains rejected. Study XII localizes two
+mechanisms behind the bury catastrophe: consecutive early adaptation has a
+wide partial-repair region, and the positive imagined selector is substantially
+worse than random placement at a comparable nominal budget. Exact
+$\beta=.005$ mixed IR is also rejected as a generic safety regularizer. The
+best current operational reference remains externally invoked, episode-local
+reward-only IR; when it is known that repair is required, continuing through
+roughly 127 update opportunities is safer than stopping after a small prefix.
+Random scheduling is promising as an adaptation-cadence control, not yet as a
+necessity gate.
+
+The model-exploitation hypothesis remains open. Before another live model
+autopsy, probe computation must use an isolated RNG namespace and demonstrate
+exact no-IR action equality under sampled control. Only then should imagined
+reward peaks be correlated with later real actions and task progress. Stage 5C
+remains deferred: persistence would compound both the partial-repair valley
+and the demonstrated selection error.
+
 \section{Cross-study synthesis}
 
 The experiments support the following chain of evidence:
@@ -1431,9 +2148,35 @@ The experiments support the following chain of evidence:
   \item Under full environment and agent-PRNG pairing, small bounded-value corrections contain reproducible behavioral information: $\beta=.05$ improves sampled macro success by 13.8 percentage points over reward-only in all three replicates and improves every sampled goal.
   \item Value dose is non-monotonic. Pure bounded teaching is worse than reward-only, and neither correction clipping, an actor-update RMS cap, nor shortening $H$ makes the mixed objective uniformly safer.
   \item Sampled improvement is not modal-policy safety. Every mixed condition improves the sampled macro but harms the deterministic macro relative to reward-only; no condition passes the prespecified deterministic weakest-goal floor.
+  \item Fixed entropy, JS, and consequence gates reduce actor updates and imagined work, but none preserves always-on reward-only recovery. Compute reduction and behavioral selectivity are therefore separate properties.
+  \item JS has the right coarse activation direction in the weak-versus-competent assay, yet its global threshold removes too much weak-task repair. The two-stage consequence gate activates in the wrong task direction.
+  \item Prospective imagined failure predicts later real underperformance better than entropy or JS, reaching pooled AUROC $.772$ over the first 25 states. Its numerical calibration and the JS boundary nevertheless change substantially across tasks and policy modes.
+  \item Predicting underperformance is not the same as predicting IR utility. The paired necessity classes contain both harmful IR and unrepaired failures, so ``the actor looks weak'' cannot by itself justify an update.
+  \item A paired virtual pre/post update test does not solve that second problem. Its first predicted improvement ranks true repair need near chance, approves many competent episodes, and catastrophically damages bury despite exact rollback of rejected proposals.
+  \item Gating compute must include the decision itself. A 25-step virtual cadence is slower than always-on IR because each tentative decision evaluates before and after on held-out imagination in addition to the training rollout.
+  \item The bury catastrophe is not explained by update count alone. A 46-update prefix reaches \pct{11.3}, a matched random schedule reaches \pct{54.0}, and virtual-positive selection reaches zero while committing 48.6 updates per episode.
+  \item Actor repair has a harmful partial-dose region. Prefix caps of 16--80 all underperform the frozen actor, whereas a 127-update cap reaches \pct{61.3} and matches always-on reward-only IR.
+  \item Reversing the virtual selector improves reward-only success from zero to \pct{17.3} but remains harmful, supporting wrong-direction ranking without making the inverse a viable gate.
+  \item A value coefficient as small as $\beta=.005$ is not automatically conservative. Always-on mixed IR fails all 150 bury episodes, while random placement makes reward-only and mixed conditions tie at \pct{54.0}.
+  \item Live model auditing is itself an intervention unless its random streams are isolated. The Study XII no-IR audit matches only \pct{14.3} of paired sampled actions, so its imagined-reward traces cannot yet prove model exploitation.
 \end{enumerate}
 
 The initial hypothesis---that model exploitation slowly inflates critic targets during continual learning---is therefore only partly correct. Actor exploitation is measured directly, but the larger error precedes it: the critic is already badly calibrated at real posterior states. Nor does value grow progressively from $H=6$ to $H=20$. Study VI further separates critic scale from actor-teacher quality. Bounding removes the impossible value scale but does not eliminate bad task-specific gradients; counterfactual labels remove goal aliasing but do not improve over factual reward-only adaptation. Study VII then shows that this bounded head is not useless: at low weight it carries reproducible policy information that reward-only IR lacks. The remaining defect is dose- and policy-mode-dependent rather than a binary good/bad critic distinction. Recursive target bias, imagined-state generalization, objective construction, continual distribution shift, and modal-policy concentration therefore remain distinct candidate failure mechanisms rather than one undifferentiated ``weak conditioning'' explanation.
+
+The gating programme adds a second important distinction. The world model can
+supply a useful reward-only gradient over many states without supplying a
+calibrated one-step estimate of whether a particular policy update will help in
+the real environment. Aggregate actor learnability and update-level
+self-evaluation are not equivalent capabilities. Study X suggests a practical
+decomposition: first estimate the probability of underperformance, then
+estimate intervention benefit conditional on uncertainty about that estimate.
+Study XI shows that raw imagined mean improvement is not yet a sufficient
+second estimator. Study XII goes further: the same nominal update budget is
+useful when distributed randomly, harmful as an early prefix, and catastrophic
+when chosen by positive virtual improvement. Any next acceptance test must
+therefore account for both model error and adaptation cadence, and it must
+demonstrate that its own diagnostic computation does not perturb the sampled
+policy.
 
 \section{Revised experimental ladder}
 
@@ -1442,7 +2185,13 @@ The chronology changes the priorities proposed after Study I.
 \begin{enumerate}
   \item \textbf{Stage 4A (completed): counterfactual and bounded head repair.} Counterfactual labels repaired held-out reward/continuation semantics and the bounded head repaired value scale and ranking. The behavioral hypothesis was mixed: factual reward-only IR remained strongest, while bounded IR retained goal-specific harm.
   \item \textbf{Stage 4B (completed): conservative value-dose and stability assay.} Fully paired replication identified a large sampled benefit at $\beta=.05$, but every mixed condition failed the deterministic weakest-goal safety floor. Reward-only remains the approved base teacher; the small correction remains a candidate to activate only under a gate or stronger constraint.
-  \item \textbf{Stage 5: prespecified IR gate and trust region.} Use Studies IV, VI, and VII only to nominate signals; freeze the decision rule before evaluation. The gate must detect when adaptation is needed without privileged historical success, while an action-KL or parameter-update constraint limits both sampled and modal-policy harm. Evaluation should report recovered weak cells, damaged competent cells, compute avoided, false-positive gate activations, and sampled--deterministic divergence.
+  \item \textbf{Stage 5A (completed): interpretable gate and compute audit.} Entropy, global MCPB JS, and consequence gates reduce updates but do not preserve reward-only recovery. None passes its frozen advancement rule.
+  \item \textbf{Stage 5B (completed): necessity discrimination.} JS activates more often on weak bury than competent chop but still loses most of the weak-task gain; the two-stage gate orders the tasks incorrectly.
+  \item \textbf{Stage 5B.1 (completed): prospective signal audit.} Imagined failure is the strongest current underperformance predictor; JS contributes weak intervention information but has task-specific thresholds.
+  \item \textbf{Stage 5B.2 (completed): paired virtual-update gate.} Held-out imagined improvement fails as an update-utility estimator and the 25-step cadence costs more than always-on IR. This mechanism does not advance.
+  \item \textbf{Stage 5B.2a (completed): bury-bones virtual-gate autopsy.} Matched random scheduling preserves most reward-only recovery, early-prefix adaptation passes through a harmful partial-repair region, and virtual-positive selection is worse than either. Exact $\beta=.005$ is not a safe regularizer. The live world-model audit must be repaired before making a hallucinated-reward claim.
+  \item \textbf{Stage 5C (deferred): persistent recovery.} Do not carry actor changes across episodes until a gate can both recover a weak task and abstain on a competent one under episode-local controls. Persistence would otherwise amplify a known decision error.
+  \item \textbf{Stage 5D: hard update safety and conservative utility.} Bound accepted action-distribution drift with hard KL or update rollback independently of the necessity gate. In parallel, test whether uncertainty-aware or repeated virtual evidence, rather than mean imagined improvement, predicts real benefit. Performance estimation and update safety should remain distinct ablations.
   \item \textbf{Training-time critic regularisation.} Keep this as a separate intervention rather than changing the Stage 5 teacher post hoc. Candidate controls include bounded/return-range targets, held-out calibration and ranking audits, counterfactual goal supervision, and regularisation against optimistic drift across continual phases. Compare any retrained critic against the existing pinned baseline before using it in persistent IR.
   \item \textbf{Replay-mixture continual experiment.} Preserve Algorithm R retention but train primarily on the current task plus a controlled old-goal reservoir mixture, with update dose matched where possible. Compare gated reward-only/conservative IR against a no-IR baseline at pinned checkpoints.
   \item \textbf{Stage 6: full validation.} Replicate across training seeds and task orders, then extend from three to five RLScape goals. Add return phases only after the mechanism is stable, to quantify relearning speed, backward transfer, and real-sample savings.
@@ -1467,6 +2216,13 @@ The combined evidence is unusually deep for one training trajectory but remains 
   \item \textbf{No oracle return for imagined counterfactuals.} Realized returns calibrate factual recorded states. Actor-selected and alternative-goal paths are assessed through paired contrasts, not falsely labelled with unobserved ground truth.
   \item \textbf{Shared simple action interface.} All tasks use a 504-way left-click grid and the same compact arena. Results may change with harder RLScape tasks, longer temporal dependencies, or physical robotic control.
   \item \textbf{Objective comparisons are not compute neutral.} Longer horizons require more imagined transitions and reward-only conditions often finish episodes sooner. Scientific comparison should report both behavioral gain and test-time compute.
+  \item \textbf{Gate labels are retrospective.} The four necessity classes in Studies X and XI are scientifically valid audit labels but unavailable online. AUROC quantifies prospective signal information; it does not make the labels deployable inputs.
+  \item \textbf{One repaired checkpoint and three familiar goals.} Studies VIII--XI vary episode and adaptation randomness around the same Stage VI actor/world model. Gate behavior may differ across independent learned models or unseen tasks.
+  \item \textbf{Model-based self-validation shares model error.} The independent $A/B$ batches in Study XI prevent direct overfitting and common random numbers reduce variance, but both are generated by the same frozen world model. They are not independent evidence about model bias.
+  \item \textbf{Study XII is a single-task sampled-policy autopsy.} It deliberately concentrates 2,010 episodes on the anomalous bury cell and does not estimate whether the same dose valley or scheduling effect transfers to kill, chop, or deterministic control.
+  \item \textbf{World-audit non-interference failed.} The diagnostic no-IR condition shares reset seeds with no IR but only \pct{14.3} of aligned sampled actions. Its imagined reward/action traces are exploratory visualizations, not valid paired causal evidence about model exploitation.
+  \item \textbf{Update budgets are opportunities, not equal realized compute.} Random and capped conditions terminate successful episodes before exhausting their nominal budget. Both requested limits and realized actor commits are required to interpret the result.
+  \item \textbf{Compute measurements are host specific.} Relative timings are internally synchronized on the same 4090 host and are appropriate for within-study comparison, but absolute seconds per step will change with accelerator and compiler cache state.
 \end{itemize}
 
 \section{Chapter conclusion}
@@ -1479,7 +2235,29 @@ Study V explains the failed teacher more precisely. On identical real states, cr
 
 The behavioral result prevents an overly simple conclusion. Factual-only reward IR, not the semantically strongest counterfactual head, gives the best Stage VI sampled profile; Stage VII then shows that a small bounded correction can improve that general strategy, but only in sampled control. Every mixed treatment reduces deterministic macro success relative to reward-only, so no candidate passes the prespecified safety rule. The research direction therefore remains viable, but its center of gravity changes again: the immediate opportunity is not simply ``fix the critic and turn standard IR back on.'' It is \textbf{reward-only adaptation as the approved reference teacher, conservative value information activated only under evidence-based gating and policy constraints, fully paired stochastic assays, and replay that preserves old experience without overwhelming current-task learning}.
 
-This is a positive result in the intended scientific sense. It identifies conditions under which IR works strongly on synthetic and natural policy deficits, identifies and localizes the learned component that makes the default method fail, directly repairs goal semantics and value scale, and measures how much repaired value information can be useful. It also rejects automatic promotion of the strongest sampled treatment because deterministic weakest-task harm remains. The next constructive study should use the pinned repaired checkpoint for a prespecified gate and stronger trust-region assay, while a separate training-time branch investigates why the critic becomes optimistic and weakly goal conditioned. Another costly continual-training run is not yet required.
+Studies VIII--XII show why the phrase ``evidence-based gating'' must be treated
+as a research problem rather than an implementation detail. Global entropy and
+JS thresholds save compute but remove useful repair. Imagined failure is a
+meaningful early estimate of future underperformance, but cannot say whether
+IR will fix that failure. Even a tentative reward-only update validated on an
+independent, paired imagination batch does not answer that second question:
+the virtual score is near chance for true repair need and approves catastrophic
+bury damage. The safest current algorithm is consequently still episode-local
+always-on reward-only IR when repair is externally known to be required; it is
+not yet autonomous continual adaptation.
+
+The bury autopsy replaces one vague catastrophe with two concrete design
+constraints. First, adaptation is path dependent: stopping after a short
+prefix can be worse than no adaptation, while continuing to roughly 127
+opportunities recovers the actor. Second, an imagined utility score can select
+updates that are much worse than randomly timed updates at a similar nominal
+budget. The exact $\beta=.005$ experiment also shows that ``small'' objective
+weight does not imply small behavioral effect. Finally, the failed no-op audit
+demonstrates a methodological constraint for future online gating: diagnostic
+imagination must have a private random stream, otherwise measuring the policy
+changes the sampled policy being measured.
+
+This remains a positive result in the intended scientific sense. It identifies conditions under which IR works strongly on synthetic and natural policy deficits, identifies and localizes the learned component that makes the default method fail, directly repairs goal semantics and value scale, measures how much repaired value information can be useful, and rejects increasingly plausible but unsafe gating schemes under real-environment evaluation. It also identifies adaptation cadence as an independent control variable rather than an implementation detail. The next constructive work should first repair RNG-isolated model auditing, then combine an explicit underperformance estimator with conservative uncertainty about update utility, a cadence that avoids partial repair, and a hard, separately tested update constraint. A training-time branch should continue to investigate why the critic becomes optimistic and weakly goal conditioned. Another costly continual-training run is not yet required.
 
 \clearpage
 \appendix
@@ -1579,16 +2357,25 @@ latexmk -pdf report.tex
 \end{verbatim}
 regenerates the figures and paper from the compact audited summaries.
 
-\section{Study II--VI reproducibility manifest}
+\section{Study II--XI reproducibility manifest}
 
-\begin{table}[H]
-\centering
-\small
-\caption{Key configuration for the diagnostic audits and two recovery assays.}
-\begin{tabular}{>{\raggedright\arraybackslash}p{.24\linewidth}p{.68\linewidth}}
+{\small
+\begin{longtable}{>{\raggedright\arraybackslash}p{.24\linewidth}p{.68\linewidth}}
+\caption{Key configuration for the diagnostic, recovery, repair, and gating assays.}\\
 \toprule
 Item & Value \\
 \midrule
+\endfirsthead
+\caption[]{Key configuration for the diagnostic, recovery, repair, and gating assays (continued).}\\
+\toprule
+Item & Value \\
+\midrule
+\endhead
+\midrule
+\multicolumn{2}{r}{Continued on next page}\\
+\endfoot
+\bottomrule
+\endlastfoot
 Study II checkpoints & Strong 1.25M and weak 1.5M milestones from the reservoir run \\
 Study II state bank & 384 episodes: 64 successful and 64 failed per trained goal; 48,299 states; source bank pinned at 1.25M \\
 Head sweep & Reward, continuation, online value, slow value under all five one-hot goal IDs \\
@@ -1615,9 +2402,17 @@ Stage VII source/objective & Stage VI counterfactual-plus-bounded checkpoint; $A
 Stage VII conditions & Frozen; reward-only $H=15$; $\beta\in\{.05,.10,.25,1\}$ at $H=15$; $\beta=.25$ correction clip .50; update RMS cap $1.5\times10^{-5}$; $H=6$ control \\
 Stage VII adaptation & One actor update per nonterminal real step; 128 posterior samples; $\alpha=4\times10^{-5}$; zero entropy; three environment/agent-seed replicates \\
 Stage VII evaluation/integrity & Three goals; 50 sampled + 25 deterministic episodes per cell; 162/162 units and 6,075/6,075 episodes; zero failed attempts; reset, posterior, and action keys fully paired \\
-\bottomrule
-\end{tabular}
-\end{table}
+Stage VIII source/signals & Stage VI counterfactual-plus-bounded checkpoint; factual and posterior actor entropy; 128-sample MCPB JS; $H=15$ predicted success and successful-action divergence \\
+Stage VIII gates & Entropy, global JS, and two-stage consequence gates; audit $\rightarrow$ qualification $\rightarrow$ three-replicate confirmation; thresholds frozen before confirmation \\
+Stage VIII evaluation & No IR plus 12 always/gated objective conditions; three goals; 50 sampled + 25 deterministic episodes per replicate/cell; 234 confirmation units and 8,775 episodes; synchronized compute accounting \\
+Stage IX calibration & Weak task requires $\geq .05$ best IR gain; strong task requires $\geq .60$ no-IR competence; frozen selection chooses bury bones and chop logs \\
+Stage IX evaluation & Seven conditions; three paired replicates; 50 sampled + 25 deterministic episodes per cell; 270 calibration + 3,150 confirmation episodes; episode-local actor \\
+Stage X data/audit & 90 reset-matched no-IR/reward-only pairs; first $1/5/10/25$ factual-state prefixes; four retrospective necessity classes; feature AUROC, calibration, and cross-task threshold transfer \\
+Stage XI virtual gate & Independent training batch $A$ and held-out batch $B$; common random numbers before/after; commit iff mean reward-only return improves; exact actor/optimizer rollback otherwise \\
+Stage XI lifecycle & Probe on reset; dormant cadence 25 or 100; accepted proposals activate stepwise checks; three consecutive rejects return to dormancy; $H=15$, batch 128, $\alpha=4\times10^{-5}$, zero entropy \\
+Stage XI evaluation/integrity & Four conditions; three goals and two modes; three paired replicates; 2,700/2,700 recorded episodes; complete pairing and probe-level diagnostics \\
+\end{longtable}
+}
 
 \section{Complete Study III success table}
 
@@ -1868,7 +2663,128 @@ $\beta=1,H=15$ & .733 & .867 & .573 & .724 \\
 \end{tabular}
 \end{table}
 
-The expanded package contains the original compact Study I tables, Stage II CSV/JSON summaries and vector figures, the complete Study III result, comparison, corruption-selection, and specification files, all 60 Study IV result rows with paired effects, the complete compact Study V calibration and target-provenance artifacts, the Stage VI immutable specification, repair manifests, five held-out audit summaries and all 48 evaluation rows, and the Stage VII immutable specification, 162-unit/6,075-episode result table, pairing audit, replicate summaries, and prespecified decision record. The included \texttt{generate\_figures.py} regenerates the report-native plots from these audited compact inputs. Raw episode and transition logs remain on the experiment machine and are not duplicated into the report package.
+\section{Complete Study VIII--XII result tables}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study VIII confirmation macro success across all prespecified conditions. Each cell aggregates three goals and three paired replicates.}
+\begin{tabular}{lrr}
+\toprule
+Condition & Sampled & Deterministic \\
+\midrule
+No IR & .476 & .378 \\
+Always standard & .418 & .289 \\
+Always reward-only & \textbf{.822} & \textbf{.653} \\
+Always $\beta=.05$ & .618 & .596 \\
+Entropy standard & .469 & .449 \\
+Entropy reward-only & .611 & .516 \\
+Entropy $\beta=.05$ & .620 & .484 \\
+JS standard & .371 & .338 \\
+JS reward-only & .611 & .596 \\
+JS $\beta=.05$ & .544 & .453 \\
+Two-stage standard & .480 & .436 \\
+Two-stage reward-only & .549 & .338 \\
+Two-stage $\beta=.05$ & .609 & .444 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study IX actor-update activation per real step. The desired gate would activate more on weak bury than competent chop. JS has this coarse direction for reward-only; the two-stage gate reverses it.}
+\begin{tabular}{lrrrr}
+\toprule
+& \multicolumn{2}{c}{Chop (strong)} & \multicolumn{2}{c}{Bury (weak)} \\
+Condition & S & D & S & D \\
+\midrule
+JS standard & .453 & .371 & .479 & .508 \\
+JS reward-only & .384 & .398 & .582 & .496 \\
+Two-stage standard & .098 & .083 & .011 & .007 \\
+Two-stage reward-only & .167 & .155 & .013 & .013 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study X ten-state cell-level AUROC. Dash indicates that the cell lacks both positive and negative IR-need labels.}
+\begin{tabular}{llrrr}
+\toprule
+Goal & Mode & JS: underperform & Predicted failure & JS: IR needed \\
+\midrule
+Bury bones & Sampled & .609 & .484 & -- \\
+Bury bones & Deterministic & .238 & .762 & .238 \\
+Chop logs & Sampled & .684 & .789 & -- \\
+Chop logs & Deterministic & .583 & .583 & .714 \\
+Kill goblin & Sampled & .427 & .693 & .610 \\
+Kill goblin & Deterministic & .625 & .875 & 1.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study XI gate diagnostic and compute summary, averaged across goals and policy modes. Seconds per step include environment interaction, gating, and adaptation.}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Tentative/step & Commit/step & Seconds/step & Macro S/D \\
+\midrule
+No IR & .000 & .000 & .1197 & .562/.511 \\
+Always reward-only & .000 & .991 & .1296 & .707/.644 \\
+Virtual dormant 25 & .382 & .239 & .1371 & .507/.520 \\
+Virtual dormant 100 & .172 & .110 & .1275 & .500/.471 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study XI mean action count among successful episodes. Dash denotes zero successes in the cell. Length is secondary to success but distinguishes efficiency after competence saturates.}
+\begin{tabular}{llrrr}
+\toprule
+Mode & Condition & Kill & Bury & Chop \\
+\midrule
+Sampled & No IR & 83.4 & 75.1 & 79.6 \\
+& Always reward-only & 81.2 & 90.0 & 64.3 \\
+& Virtual dormant 25 & 72.0 & -- & 74.2 \\
+& Virtual dormant 100 & 71.4 & 83.1 & 73.6 \\
+\midrule
+Deterministic & No IR & 81.1 & 82.0 & 72.5 \\
+& Always reward-only & 71.3 & 64.9 & 53.4 \\
+& Virtual dormant 25 & 90.2 & 90.8 & 69.3 \\
+& Virtual dormant 100 & 70.9 & 81.8 & 57.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Study XII real-action concentration and update summary. Entropy is computed from the complete real-action histogram; top fraction is the mass on the most frequent click.}
+\begin{tabular}{lrrrr}
+\toprule
+Condition & Success & Updates/episode & Action entropy & Top fraction \\
+\midrule
+No IR & .340 & 0.0 & 2.205 & .332 \\
+Always reward-only & .607 & 124.2 & 2.083 & .358 \\
+Reward cap 46 & .113 & 44.9 & 2.379 & .304 \\
+Reward cap 127 & .613 & 91.4 & 2.110 & .355 \\
+Reward random 46 & .540 & 30.9 & 1.988 & .409 \\
+Virtual-positive reward & .000 & 48.6 & 2.287 & .350 \\
+Virtual-negative reward & .173 & 16.1 & 2.437 & .303 \\
+Always mixed $\beta=.005$ & .000 & 200.0 & 2.155 & .334 \\
+Mixed random 46 & .540 & 31.2 & 1.993 & .387 \\
+Virtual-positive mixed $\beta=.005$ & .260 & 39.2 & 2.339 & .330 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The expanded package contains the original compact Study I tables, Stage II CSV/JSON summaries and vector figures, the complete Study III result, comparison, corruption-selection, and specification files, all 60 Study IV result rows with paired effects, the complete compact Study V calibration and target-provenance artifacts, the Stage VI immutable specification, repair manifests, five held-out audit summaries and all 48 evaluation rows, the complete Stage VII dose assay, and all compact Stage VIII--XII specifications, pairing audits, confirmation rows, episode-level gate features, probe diagnostics, completion markers, and vector/raster figures. Study XII additionally retains the complete 2,010-episode diagnostics, real click histograms, action-pairing audit, and frozen-model predicted-reward/action table. The included \texttt{generate\_figures.py} regenerates the original report-native plots from audited compact inputs; the Stage VIII--XII launchers generated and froze their own figures beside the authoritative summary tables. Raw transition logs remain on the experiment machines and are not duplicated into the report package.
 
 \bibliographystyle{plainnat}
 \bibliography{references}

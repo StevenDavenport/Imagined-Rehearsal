@@ -1,0 +1,8 @@
+{
+  "canonical_stage": "stage5b2a",
+  "format": 1,
+  "probe_noninterference_action_match_fraction": 0.14311350381336924,
+  "probe_noninterference_compared_actions": 8916,
+  "probe_noninterference_matching_actions": 1276,
+  "reset_seeds_equal": true
+}

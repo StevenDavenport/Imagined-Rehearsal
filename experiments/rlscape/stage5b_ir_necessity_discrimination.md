@@ -2,7 +2,7 @@
 
 ## Status and question
 
-Status: **implemented; gated on completion of Stage 5A**.
+Status: **complete; hypothesis rejected**.
 
 Stage 5A starts every episode from a policy selected because it needs repair.
 That can show whether a gate schedules useful updates, but not whether it knows
@@ -59,6 +59,19 @@ updates and damage.
 
 Actor changes remain episode-local. The world model, reward/continuation heads,
 critic, normalizers, and source checkpoint are read-only.
+
+## Result
+
+Calibration selected bury bones as weak and chop logs as competent. All 84
+confirmation units and 3,150 episodes completed after 270 calibration episodes.
+Always-on reward-only achieved `.653/.653` sampled/deterministic success on
+bury. JS-gated reward-only fell to `.320/.480`, while two-stage reward-only fell
+to `.280/.240`. JS did activate more often on weak bury than strong chop, but
+withheld too much useful repair; the two-stage gate activated roughly ten times
+more often on strong chop than weak bury. The necessity-discrimination
+hypothesis is rejected. Compact results and figures are in
+`results/rlscape/m4_reservoir_3goal_500k_seed0/stage5b_need_discrimination` and
+Study IX of the research diary.
 
 ## Execution
 

@@ -1,0 +1,63 @@
+{
+  "adaptation": {
+    "entropy": 0.0,
+    "horizon": 15,
+    "lr": 4e-05,
+    "start_batch": 128,
+    "steps": 1
+  },
+  "audit_episodes": {
+    "deterministic": 10,
+    "sampled": 20
+  },
+  "canonical_stage": "stage5a",
+  "checkpoint": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/checkpoints/counterfactual_bounded",
+  "checkpoint_manifest_sha256": "a0f740f41d43e1f7cd07219e0b4858f63e9ed5cf6d8b0650a9019803a812a033",
+  "confirmation": {
+    "deterministic_episodes": 25,
+    "episodes": 8775,
+    "replicates": 3,
+    "sampled_episodes": 50,
+    "units": 234
+  },
+  "diagnostic_sources": [],
+  "digest": "9d0e0279168f25e8b6948b2ea06b67ba00b8d7ed8482a1f87082ebb3f591f0ea",
+  "features": [
+    "actor_entropy",
+    "posterior_entropy",
+    "js_disagreement",
+    "success_rate",
+    "success_action_concentration",
+    "success_action_divergence"
+  ],
+  "format": 1,
+  "gate_families": [
+    "entropy",
+    "js",
+    "two_stage"
+  ],
+  "git_commit": "e4280be2de538298131254f22a806340fa1503bb",
+  "goals": [
+    "kill_goblin",
+    "bury_bones",
+    "chop_logs"
+  ],
+  "hypothesis": "State-dependent gates improve IR and reduce unnecessary compute.",
+  "objectives": [
+    "standard",
+    "reward_only",
+    "mixed_b005"
+  ],
+  "python_version": "3.11.15",
+  "qualification_episodes": {
+    "deterministic": 10,
+    "sampled": 20
+  },
+  "rlscape_version": "0.1.6",
+  "selection": {
+    "compute_is_constraint": false,
+    "deterministic_worst_goal_floor": -0.05,
+    "primary": "sampled_macro_success"
+  },
+  "slug": "interpretable_ir_gating"
+}

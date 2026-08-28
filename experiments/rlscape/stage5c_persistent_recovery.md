@@ -2,7 +2,12 @@
 
 ## Status and question
 
-Status: **implemented; gated on completed Stages 5A and 5B**.
+Status: **implemented; execution deferred after Stage 5B.2**.
+
+Stage 5B.2 showed that the current prospective gate can approve severe
+real-environment damage despite paired held-out imagination. Persisting that
+decision across episodes would amplify a known error, so this workflow remains
+available but must not be launched until an episode-local gate qualifies.
 
 Stage 5C asks whether IR can repair an actor over multiple episodes and whether
 a frozen gate naturally stops updating once repair is no longer required. It

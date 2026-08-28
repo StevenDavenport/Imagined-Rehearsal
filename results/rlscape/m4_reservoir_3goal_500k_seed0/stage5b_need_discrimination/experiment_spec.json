@@ -1,0 +1,51 @@
+{
+  "adaptation": {
+    "horizon": 15,
+    "lr": 4e-05,
+    "persistence": "episode",
+    "posterior_samples": 128,
+    "steps": 1
+  },
+  "calibration": {
+    "deterministic_episodes": 10,
+    "min_strong_success": 0.6,
+    "min_weak_benefit": 0.05,
+    "sampled_episodes": 20
+  },
+  "canonical_stage": "stage5b",
+  "checkpoint": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage4a_counterfactual_head_repair/checkpoints/counterfactual_bounded",
+  "checkpoint_sha256": "3130286b0d827d5cd4f32b552d59f20aa4ce305b8247e4d97e310bc5f0ab40f7",
+  "conditions": [
+    "no_ir",
+    "always_standard",
+    "always_reward_only",
+    "js_standard",
+    "js_reward_only",
+    "two_stage_standard",
+    "two_stage_reward_only"
+  ],
+  "confirmation": {
+    "deterministic_episodes": 25,
+    "episodes": 3150,
+    "replicates": 3,
+    "sampled_episodes": 50,
+    "units": 84
+  },
+  "digest": "0f9c3365894e012b23cba41990e8a7a62da3f4d3af3ba6c053eb565c3c6827f2",
+  "format": 1,
+  "git_commit": "9a4bb516bf9f08e79f0246a2bc0ccf294f3cac31",
+  "goals": [
+    "kill_goblin",
+    "bury_bones",
+    "chop_logs"
+  ],
+  "modes": [
+    "sampled",
+    "deterministic"
+  ],
+  "python_version": "3.11.15",
+  "rlscape_version": "0.1.6",
+  "slug": "ir_necessity_discrimination",
+  "stage5a_gate_artifact": "/home/localadmin/imagined_rehearsal/logs/rlscape/m4_reservoir_3goal_500k_seed0/stage5a_gating/selected_gates.json",
+  "stage5a_gate_digest": "abfb4f0ad3571f624adac703e7a72245588cf5c08f0dad9b5ff6282c9678206e"
+}
