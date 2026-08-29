@@ -33,6 +33,12 @@ defaults:
     atari100k: {size: [64, 64], repeat: 4, sticky: False, gray: False, actions: needed, lives: unused, noops: 30, autostart: False, resize: pillow, clip_reward: False}
     dmlab: {size: [64, 64], repeat: 4, episodic: True, use_seed: True}
     minecraft: {size: [64, 64], break_speed: 100.0, logs: False, length: 36000}
+    minigrid:
+      use_seed: True
+      size: [64, 64]
+      episode_length: 100
+      tile_size: 8
+      audit_path: ''
     dmc: {size: [64, 64], repeat: 1, proprio: True, image: True, camera: -1, action_scale: 1.0}
     loconav: {size: [64, 64], repeat: 1, camera: -1}
     rlscape:
@@ -348,6 +354,64 @@ atari100k:
 crafter:
   task: crafter_reward
   run: {steps: 1.1e6, envs: 1, train_ratio: 512}
+
+minigrid:
+  <<: *size12m
+  task: minigrid_go_to_door
+  batch_size: 8
+  batch_length: 32
+  report_length: 32
+  replay_context: 0
+  replay.size: 100000
+  replay.online: False
+  run: {steps: 100000, envs: 1, train_ratio: 32, log_every: 120, report_every: 1000000, save_every: 900, ckpt_keep: 3, debug: True}
+  agent:
+    goal_conditioning:
+      enabled: True
+      key: goal_id
+      count: 6
+      exclude_keys: [goal_complete, is_physical_terminal]
+      canonicalize_noop_position: False
+  agent.report: False
+
+minigrid_size1m:
+  <<: *size1m
+
+minigrid_size12m:
+  <<: *size12m
+
+minigrid_size25m:
+  <<: *size25m
+
+minigrid_audition:
+  replay.save_wait: True
+  run.milestone_every: 25000
+
+minigrid_eval:
+  script: eval_only
+  run: {envs: 1, eval_episodes: 50, eval_policy_mode: deterministic, log_every: 120, debug: True}
+  eval_adapt.enabled: False
+  eval_adapt.paired_rng: True
+  eval_adapt.paired_rng_seed: 20260829
+  eval_adapt.paired_rng_stride: 1000
+
+minigrid_go_to_door:
+  task: minigrid_go_to_door
+
+minigrid_fetch:
+  task: minigrid_fetch
+
+minigrid_go_to_object:
+  task: minigrid_go_to_object
+
+minigrid_put_near:
+  task: minigrid_put_near
+
+minigrid_unlock_pickup:
+  task: minigrid_unlock_pickup
+
+minigrid_pickup_dist:
+  task: minigrid_pickup_dist
 
 dmc_proprio:
   <<: *size1m

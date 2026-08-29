@@ -7,6 +7,11 @@ The current working direction is documented in
 assumption below that CIR would begin as an additional actor update inside an
 otherwise jointly trained Continual-Dreamer agent.
 
+The next executable stage is the
+[controlled MiniGrid difficulty audition](experiments/minigrid/README.md): a
+restart-safe six-task, three-seed screen used to choose a fast, non-trivial
+continual sequence before CIR integration.
+
 The executed RLScape evidence chain, canonical stage names, maintained
 protocols, and future experiment reservations are indexed separately in the
 [RLScape experiment registry](experiments/rlscape/README.md). That registry is

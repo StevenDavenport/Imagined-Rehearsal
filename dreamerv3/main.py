@@ -286,6 +286,7 @@ def make_env(config, index, **overrides):
       'langroom': 'embodied.envs.langroom:LangRoom',
       'procgen': 'embodied.envs.procgen:ProcGen',
       'bsuite': 'embodied.envs.bsuite:BSuite',
+      'minigrid': 'embodied.envs.minigrid:MiniGrid',
       'rlscape': 'embodied.envs.rlscape:RLScape',
       'memmaze': lambda task, **kw: from_gym.FromGym(
           f'MemoryMaze-{task}-v0', **kw),
@@ -297,6 +298,9 @@ def make_env(config, index, **overrides):
   kwargs = config.env.get(suite, {})
   kwargs.update(overrides)
   if suite == 'rlscape' and not kwargs.get('audit_path'):
+    kwargs['audit_path'] = str(
+        elements.Path(config.logdir) / f'audit_env{index}.jsonl')
+  if suite == 'minigrid' and not kwargs.get('audit_path'):
     kwargs['audit_path'] = str(
         elements.Path(config.logdir) / f'audit_env{index}.jsonl')
   if kwargs.pop('use_seed', False):
