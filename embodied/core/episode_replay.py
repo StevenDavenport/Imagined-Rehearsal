@@ -19,8 +19,9 @@ class EpisodeReplay:
   """Goal-stratified episode reservoir for continual learning.
 
   Episodes are admitted independently within each goal using Algorithm R.
-  Sampling is uniform over goals represented in memory, then uniform over
-  retained episodes and valid fragment starts. Short episodes are never
+  Sampling is either uniform over goals represented in memory, or uses a
+  fixed current-versus-old allocation. Within a selected goal, episodes and
+  valid fragment starts are sampled uniformly. Short episodes are never
   discarded: independently sampled fragments are concatenated with explicit
   ``is_first`` boundaries until the requested sequence length is reached.
   """
@@ -30,13 +31,17 @@ class EpisodeReplay:
   def __init__(
       self, length, capacity, groups, directory, group_key='goal_id',
       retention='reservoir', online=False, save_wait=False, name='unnamed',
-      seed=0, **unused):
+      seed=0, sampling='uniform_groups', current_group=0,
+      current_fraction=0.5, **unused):
     del save_wait, unused
     self.length = int(length)
     self.capacity = int(capacity)
     self.groups = int(groups)
     self.group_key = str(group_key)
     self.retention = str(retention)
+    self.sampling = str(sampling)
+    self.current_group = int(current_group)
+    self.current_fraction = float(current_fraction)
     self.name = str(name)
     if self.length < 1 or self.capacity < 1 or self.groups < 1:
       raise ValueError((self.length, self.capacity, self.groups))
@@ -46,6 +51,14 @@ class EpisodeReplay:
           f'{self.groups} goals')
     if self.retention not in ('fifo', 'reservoir'):
       raise ValueError(f'Unknown episode retention: {self.retention!r}')
+    if self.sampling not in ('uniform_groups', 'current_old'):
+      raise ValueError(f'Unknown episode sampling: {self.sampling!r}')
+    if not 0 <= self.current_group < self.groups:
+      raise ValueError(
+          f'current_group={self.current_group} outside [0, {self.groups})')
+    if not 0 <= self.current_fraction <= 1:
+      raise ValueError(
+          f'current_fraction must be in [0, 1], got {self.current_fraction}')
     if online:
       raise ValueError('EpisodeReplay does not support online sampling')
     if not directory:
@@ -175,7 +188,7 @@ class EpisodeReplay:
     limiters.wait(
         lambda: bool(available()), f'Replay buffer {self.name} is empty')
     with self.lock:
-      groups = self.sampling_rng.choice(available(), size=batch, replace=True)
+      groups = self._sample_groups(available(), batch)
       sequences = [self._sample_sequence(int(group)) for group in groups]
       if mode == 'train':
         self.metrics['samples'] += batch
@@ -185,6 +198,18 @@ class EpisodeReplay:
       return {
           key: np.stack([sequence[key] for sequence in sequences])
           for key in sequences[0]}
+
+  def _sample_groups(self, available, batch):
+    available = np.asarray(available, np.int64)
+    if self.sampling == 'uniform_groups':
+      return self.sampling_rng.choice(available, size=batch, replace=True)
+    old = available[available != self.current_group]
+    if self.current_group not in available or not len(old):
+      return self.sampling_rng.choice(available, size=batch, replace=True)
+    current = self.sampling_rng.random(batch) < self.current_fraction
+    groups = self.sampling_rng.choice(old, size=batch, replace=True)
+    groups[current] = self.current_group
+    return groups
 
   def _available_groups(self):
     with self.lock:
@@ -255,6 +280,9 @@ class EpisodeReplay:
         'rejected': self.metrics['rejected'],
         'abandoned': self.metrics['abandoned'],
         'active_goals': sum(bool(count) for count in episodes),
+        'sampling/current_group': self.current_group,
+        'sampling/current_fraction': self.current_fraction,
+        'sampling/is_current_old': int(self.sampling == 'current_old'),
     }
     for group in range(self.groups):
       result[f'goal_{group}/episodes'] = episodes[group]
@@ -320,6 +348,13 @@ class EpisodeReplay:
         'capacity': self.capacity,
         'groups': self.groups,
         'group_key': self.group_key,
+        # The sampling policy is phase-local training configuration rather
+        # than replay contents. Record it for provenance, but deliberately do
+        # not require it to match on load: sequential phases must load the
+        # exact same reservoir while changing which goal is current.
+        'sampling': self.sampling,
+        'current_group': self.current_group,
+        'current_fraction': self.current_fraction,
         'episodes_seen': self.episodes_seen.tolist(),
         'transitions_seen': int(self.transitions_seen),
         'next_episode_id': int(self.next_episode_id),

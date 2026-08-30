@@ -246,6 +246,10 @@ def make_replay(config, folder, mode='train'):
         groups=int(config.replay.groups),
         group_key=str(config.replay.group_key),
         retention=str(config.replay.retention),
+        sampling=str(getattr(config.replay, 'sampling', 'uniform_groups')),
+        current_group=int(getattr(config.replay, 'current_group', 0)),
+        current_fraction=float(
+            getattr(config.replay, 'current_fraction', 0.5)),
         seed=int(config.seed),
     )
   if replay_kind != 'fifo':

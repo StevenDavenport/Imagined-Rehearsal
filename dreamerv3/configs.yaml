@@ -76,6 +76,9 @@ defaults:
     groups: 1
     group_key: goal_id
     retention: fifo
+    sampling: uniform_groups
+    current_group: 0
+    current_fraction: 0.5
     online: True
     fracs: {uniform: 1.0, priority: 0.0, recency: 0.0}
     prio: {exponent: 0.8, maxfrac: 0.5, initial: inf, zero_on_sample: True}
@@ -104,6 +107,12 @@ defaults:
     milestone_goal: ''
     milestone_phase: -1
     milestone_spec_digest: ''
+    snapshot_every: 0
+    snapshot_start: 0
+    snapshot_dir: ''
+    snapshot_goal: ''
+    snapshot_phase: -1
+    snapshot_spec_digest: ''
     report_batches: 1
     from_checkpoint: ''
     from_checkpoint_regex: ''
@@ -136,6 +145,7 @@ defaults:
 
   agent:
     loss_scales: {rec: 1.0, rew: 1.0, con: 1.0, dyn: 1.0, rep: 0.1, policy: 1.0, value: 1.0, repval: 0.3}
+    goal_loss_metrics: False
     goal_conditioning:
       enabled: False
       key: goal_id
@@ -256,6 +266,7 @@ defaults:
     goal_names: [kill_goblin, bury_bones, chop_logs, light_fire, catch_fish]
     chunk_length: 32
     horizon: 333
+    actor_distribution: False
 
   imagination_audit:
     selection: ''
@@ -389,6 +400,34 @@ minigrid_size25m:
 minigrid_audition:
   replay.save_wait: True
   run.milestone_every: 25000
+
+minigrid_sequential:
+  replay.save_wait: True
+  agent.goal_loss_metrics: True
+  logger.filter: 'score|length|fps|ratio|train/(loss/|loss_by_goal/|batch_goal/)|replay/(items|episodes|ram_gb|episodes_seen|admitted|replaced|rejected|abandoned|active_goals|goal_|sampling/)'
+  run: {steps: 800000, envs: 1, train_ratio: 32, log_every: 120, report_every: 1000000, save_every: 900, ckpt_keep: 3, debug: True, milestone_every: 200000, snapshot_every: 25000}
+
+minigrid_episode_reservoir:
+  replay.kind: episode_reservoir
+  replay.retention: reservoir
+  replay.online: False
+
+minigrid_head_audit:
+  script: head_audit
+  head_audit.goal_names: [go_to_door, fetch, go_to_object, put_near, unlock_pickup, pickup_dist]
+  head_audit.actor_distribution: True
+  jax.precompile: False
+
+minigrid_imagination_audit:
+  script: imagination_audit
+  imagination_audit.goal_names: [go_to_door, fetch, go_to_object, put_near, unlock_pickup, pickup_dist]
+  jax.precompile: False
+
+minigrid_critic_provenance:
+  script: critic_provenance
+  critic_provenance.goal_names: [go_to_door, fetch, go_to_object, put_near, unlock_pickup, pickup_dist]
+  critic_provenance.horizons: [1, 3, 6, 15]
+  jax.precompile: False
 
 minigrid_eval:
   script: eval_only

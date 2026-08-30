@@ -421,6 +421,55 @@ class TestEpisodeReplay:
         int(record['data']['value'][0]) for record in replay.slots[0]]
     assert retained(left) == retained(right)
 
+  def test_current_old_sampling_keeps_current_half_and_old_goals_uniform(
+      self, tmpdir):
+    replay = embodied.replay.EpisodeReplay(
+        length=1, capacity=6, groups=3, directory=tmpdir,
+        retention='reservoir', sampling='current_old', current_group=2,
+        current_fraction=0.5, seed=13)
+    for goal in range(3):
+      self.add_episode(replay, goal, goal, length=1)
+
+    batch = replay.sample(20_000)
+    counts = np.bincount(batch['goal_id'][:, 0], minlength=3) / 20_000
+    assert np.allclose(counts, [0.25, 0.25, 0.5], atol=0.02), counts
+    stats = replay.stats()
+    assert stats['sampling/current_group'] == 2
+    assert stats['sampling/current_fraction'] == 0.5
+    assert stats['sampling/is_current_old'] == 1
+
+  def test_current_old_sampling_falls_back_before_current_is_available(
+      self, tmpdir):
+    replay = embodied.replay.EpisodeReplay(
+        length=1, capacity=6, groups=3, directory=tmpdir,
+        retention='reservoir', sampling='current_old', current_group=2,
+        current_fraction=0.5, seed=17)
+    self.add_episode(replay, 0, 0, length=1)
+    self.add_episode(replay, 1, 1, length=1)
+    batch = replay.sample(2_000)
+    counts = np.bincount(batch['goal_id'][:, 0], minlength=3)
+    assert counts[2] == 0
+    assert abs(int(counts[0]) - int(counts[1])) < 150
+
+  def test_sampling_policy_can_change_when_exact_reservoir_is_restored(
+      self, tmpdir):
+    replay = embodied.replay.EpisodeReplay(
+        length=1, capacity=6, groups=3, directory=tmpdir,
+        retention='reservoir', sampling='uniform_groups', seed=19)
+    for goal in range(3):
+      self.add_episode(replay, goal, goal, length=1)
+    state = replay.save()
+
+    restored = embodied.replay.EpisodeReplay(
+        length=1, capacity=6, groups=3, directory=tmpdir,
+        retention='reservoir', sampling='current_old', current_group=1,
+        current_fraction=0.6, seed=999)
+    restored.load(state)
+    assert [len(restored.slots[x]) for x in range(3)] == [1, 1, 1]
+    counts = np.bincount(
+        restored.sample(10_000)['goal_id'][:, 0], minlength=3) / 10_000
+    assert np.allclose(counts, [0.2, 0.6, 0.2], atol=0.025), counts
+
   def test_exact_restore_future_admission_partials_and_export(self, tmpdir):
     source = pathlib.Path(str(tmpdir)) / 'source'
     replay = embodied.replay.EpisodeReplay(

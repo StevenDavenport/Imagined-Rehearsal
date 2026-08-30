@@ -110,6 +110,97 @@ def create(
     raise
 
 
+def create_checkpoint(
+    checkpoint,
+    root: str | pathlib.Path,
+    step: int,
+    *,
+    metadata: dict | None = None,
+) -> pathlib.Path:
+  """Create an immutable agent/optimizer checkpoint without replay data."""
+  step = int(step)
+  root = pathlib.Path(root).expanduser().resolve()
+  root.mkdir(parents=True, exist_ok=True)
+  final = archive_path(root, step)
+  if final.exists():
+    validate_checkpoint(final, expected_step=step, full=False)
+    return final
+
+  temporary = root / (
+      f'.{archive_name(step)}.tmp-{os.getpid()}-{uuid.uuid4().hex}')
+  if temporary.exists():
+    shutil.rmtree(temporary)
+  temporary.mkdir(parents=True)
+  try:
+    checkpoint_dir = temporary / 'checkpoint'
+    print(f'Creating immutable checkpoint snapshot: {final}', flush=True)
+    checkpoint.save(path=str(checkpoint_dir))
+    saved_step = checkpoint_step(checkpoint_dir)
+    if saved_step != step:
+      raise MilestoneError(
+          f'Snapshot checkpoint step mismatch: {saved_step} != {step}')
+    files = [
+        file_digest(path) for path in sorted(checkpoint_dir.iterdir())
+        if path.is_file()]
+    manifest = {
+        'format': 1,
+        'kind': 'checkpoint_snapshot',
+        'created_unix': time.time(),
+        'step': step,
+        'checkpoint': 'checkpoint',
+        'checkpoint_files': files,
+        'metadata': dict(metadata or {}),
+    }
+    write_json(temporary / 'manifest.json', manifest)
+    (temporary / 'archive_complete').write_bytes(b'')
+    temporary.replace(final)
+    validate_checkpoint(final, expected_step=step, full=False)
+    print(f'Published immutable checkpoint snapshot: {final}', flush=True)
+    return final
+  except BaseException:
+    if temporary.exists():
+      shutil.rmtree(temporary)
+    raise
+
+
+def validate_checkpoint(
+    path: str | pathlib.Path,
+    *,
+    expected_step: int | None = None,
+    full: bool = False,
+) -> dict:
+  """Validate an agent/optimizer-only checkpoint snapshot."""
+  path = pathlib.Path(path).expanduser().resolve()
+  marker = path / 'archive_complete'
+  manifest_path = path / 'manifest.json'
+  checkpoint_dir = path / 'checkpoint'
+  if not marker.is_file() or not manifest_path.is_file():
+    raise MilestoneError(f'Incomplete checkpoint snapshot: {path}')
+  manifest = json.loads(manifest_path.read_text())
+  if manifest.get('kind') != 'checkpoint_snapshot':
+    raise MilestoneError(f'Not a checkpoint snapshot: {path}')
+  step = checkpoint_step(checkpoint_dir)
+  if int(manifest.get('step', -1)) != step:
+    raise MilestoneError(
+        f'Snapshot manifest/checkpoint mismatch at {path}: '
+        f'{manifest.get("step")} != {step}')
+  if expected_step is not None and step != int(expected_step):
+    raise MilestoneError(
+        f'Unexpected snapshot step at {path}: {step} != {expected_step}')
+  records = manifest.get('checkpoint_files', ())
+  if not records:
+    raise MilestoneError(f'Snapshot checkpoint inventory is empty: {path}')
+  for record in records:
+    filename = checkpoint_dir / record['path']
+    if not filename.is_file():
+      raise MilestoneError(f'Snapshot file is missing: {filename}')
+    if filename.stat().st_size != int(record['bytes']):
+      raise MilestoneError(f'Snapshot file size changed: {filename}')
+    if full and file_digest(filename)['sha256'] != record['sha256']:
+      raise MilestoneError(f'Snapshot digest changed: {filename}')
+  return manifest
+
+
 def validate(
     path: str | pathlib.Path,
     *,

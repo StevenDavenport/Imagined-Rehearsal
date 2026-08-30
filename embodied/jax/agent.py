@@ -188,7 +188,8 @@ class Agent(embodied.Agent):
         (tp, tm, ts, ts, ts), (ts, ts), ar, **shared_kwargs)
     self._head_audit_chunk = transform.apply(
         nj.pure(self.model.head_audit_chunk), self.train_mesh,
-        (tp, tm, ts, ts, ts), (ts, ts), ar, **shared_kwargs)
+        (tp, tm, ts, ts, ts), (ts, ts), ar,
+        static_argnums=(5,), **shared_kwargs)
     self._imagination_audit = transform.apply(
         nj.pure(self.model.imagination_audit), self.train_mesh,
         (tp, tm, ts, ts), (ts,), ar, single_output=True,
@@ -622,7 +623,8 @@ class Agent(embodied.Agent):
           self.params, seed, carry, obs, prevact)
     return carry, self._take_outs(internal.fetch_async(outs))
 
-  def head_audit_chunk(self, carry, obs, prevact):
+  def head_audit_chunk(
+      self, carry, obs, prevact, actor_distribution=False):
     """Re-encode a sequence and sweep every goal-conditioned head."""
     obs = internal.device_put(obs, self.train_sharded)
     prevact = internal.device_put(prevact, self.train_sharded)
@@ -630,7 +632,7 @@ class Agent(embodied.Agent):
     self.n_probes.increment()
     with self.train_lock:
       carry, outs = self._head_audit_chunk(
-          self.params, seed, carry, obs, prevact)
+          self.params, seed, carry, obs, prevact, bool(actor_distribution))
     return carry, self._take_outs(internal.fetch_async(outs))
 
   def imagination_audit(

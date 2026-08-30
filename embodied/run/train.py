@@ -99,6 +99,9 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
   cp.step = step
   cp.agent = agent
   cp.replay = replay
+  snapshot_cp = elements.Checkpoint(logdir / 'snapshot_ckpt', keep=1)
+  snapshot_cp.step = step
+  snapshot_cp.agent = agent
   resume_milestone = str(getattr(args, 'resume_from_milestone', ''))
   if args.from_checkpoint and resume_milestone:
     raise ValueError(
@@ -157,6 +160,51 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
         'phase': int(getattr(args, 'milestone_phase', -1)),
         'spec_digest': str(getattr(args, 'milestone_spec_digest', '')),
     }
+    snapshot_every = int(getattr(args, 'snapshot_every', 0))
+    snapshot_root = str(getattr(args, 'snapshot_dir', ''))
+    if bool(snapshot_every) != bool(snapshot_root):
+      raise ValueError(
+          'run.snapshot_every and run.snapshot_dir must be set together')
+    if snapshot_every < 0:
+      raise ValueError('run.snapshot_every must be nonnegative')
+    snapshot_start = int(getattr(args, 'snapshot_start', 0))
+    if snapshot_start < 0:
+      raise ValueError('run.snapshot_start must be nonnegative')
+    if snapshot_start and not snapshot_every:
+      raise ValueError('run.snapshot_start requires run.snapshot_every')
+    if snapshot_start and snapshot_start % snapshot_every:
+      raise ValueError(
+          'run.snapshot_start must be divisible by run.snapshot_every')
+    snapshot_metadata = {
+        'goal': str(getattr(args, 'snapshot_goal', '')),
+        'phase': int(getattr(args, 'snapshot_phase', -1)),
+        'spec_digest': str(getattr(args, 'snapshot_spec_digest', '')),
+    }
+    next_snapshot = None
+    if snapshot_every:
+      current = int(step)
+      first_snapshot = snapshot_start
+      for expected in range(first_snapshot, current + 1, snapshot_every):
+        path = milestones.archive_path(snapshot_root, expected)
+        if path.exists():
+          milestones.validate_checkpoint(
+              path, expected_step=expected, full=False)
+        elif expected == current:
+          # Keep the mutable recovery checkpoint at least as recent as every
+          # immutable agent-only snapshot. Otherwise a hard crash could load
+          # an older agent/replay pair and silently retrain through a snapshot
+          # that already exists but came from a different trajectory.
+          cp.save()
+          milestones.create_checkpoint(
+              snapshot_cp, snapshot_root, expected,
+              metadata=snapshot_metadata)
+        else:
+          raise milestones.MilestoneError(
+              f'Missing past snapshot {path}; step {current} can no longer '
+              'reconstruct that exact training state')
+      next_snapshot = max(
+          first_snapshot,
+          ((current // snapshot_every) + 1) * snapshot_every)
     next_milestone = None
     if milestone_every:
       current = int(step)
@@ -201,6 +249,20 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
             cp, replay, milestone_root, next_milestone,
             metadata=milestone_metadata)
         next_milestone += milestone_every
+
+      if (
+          next_snapshot is not None and
+          next_snapshot <= int(args.steps) and
+          int(step) >= next_snapshot
+      ):
+        if int(step) != next_snapshot:
+          raise milestones.MilestoneError(
+              f'Training stepped past snapshot {next_snapshot}: {int(step)}')
+        cp.save()
+        milestones.create_checkpoint(
+            snapshot_cp, snapshot_root, next_snapshot,
+            metadata=snapshot_metadata)
+        next_snapshot += snapshot_every
 
       if should_report(step) and len(replay):
         agg = elements.Agg()

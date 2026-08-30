@@ -366,6 +366,10 @@ def regression_metrics(target, prediction) -> dict:
       'count': int(len(target)),
       'target_mean': float(target.mean()),
       'prediction_mean': float(prediction.mean()),
+      'prediction_min': float(prediction.min()),
+      'prediction_max': float(prediction.max()),
+      'prediction_outside_unit_interval_fraction': float(
+          ((prediction < 0) | (prediction > 1)).mean()),
       'bias': float(error.mean()),
       'mae': float(np.abs(error).mean()),
       'rmse': float(np.sqrt(np.square(error).mean())),
@@ -411,6 +415,7 @@ def summarize_predictions(arrays: dict, goal_names: list[str]) -> dict:
   value = arrays['value_prediction']
   slowvalue = arrays['slowvalue_prediction']
   bounded_value = arrays.get('bounded_value_prediction')
+  actor_probability = arrays.get('actor_probability')
   goals = list(range(len(goal_names)))
 
   head_rows = []
@@ -530,6 +535,31 @@ def summarize_predictions(arrays: dict, goal_names: list[str]) -> dict:
              if bounded_value is not None else {}),
       })
 
+  actor_rows = []
+  if actor_probability is not None:
+    for observed_goal in sorted(set(actual.tolist())):
+      observed = actual == observed_goal
+      for probed_goal in goals:
+        probability = actor_probability[observed, probed_goal]
+        mean_probability = probability.mean(0)
+        entropy = -np.sum(
+            probability * np.log(np.maximum(probability, 1e-8)), -1)
+        actor_rows.append({
+            'observed_goal': int(observed_goal),
+            'observed_goal_name': goal_names[observed_goal],
+            'probed_goal': int(probed_goal),
+            'probed_goal_name': goal_names[probed_goal],
+            'states': int(observed.sum()),
+            'entropy_mean': float(entropy.mean()),
+            'entropy_normalized_mean': float(
+                entropy.mean() / np.log(max(2, probability.shape[-1]))),
+            'mean_distribution_mode': int(mean_probability.argmax()),
+            'mean_distribution_concentration': float(mean_probability.max()),
+            'state_modal_action_concentration': float(np.bincount(
+                probability.argmax(-1), minlength=probability.shape[-1]
+            ).max() / len(probability)),
+        })
+
   correct_reward = reward_pred[np.arange(len(actual)), actual]
   correct_continuation = continuation[np.arange(len(actual)), actual]
   predicted_stop = np.clip(1 - correct_continuation / discount, 0, 1)
@@ -563,6 +593,8 @@ def summarize_predictions(arrays: dict, goal_names: list[str]) -> dict:
       'initial_value_cross_goal': initial_value_rows,
       'calibration': calibration,
       'completion_confusion': completion_rows,
+      'actor_cross_goal': actor_rows,
+      'actor_distribution_enabled': actor_probability is not None,
       'representation': {
           'posterior_entropy_mean': float(arrays['posterior_entropy'].mean()),
           'posterior_entropy_std': float(arrays['posterior_entropy'].std()),
@@ -634,6 +666,7 @@ def _write_tables(logdir: pathlib.Path, summary: dict) -> None:
       ('completion_confusion.csv', summary['completion_confusion']),
       ('value_calibration.csv', summary['calibration']),
       ('initial_value_cross_goal.csv', summary['initial_value_cross_goal']),
+      ('actor_cross_goal.csv', summary['actor_cross_goal']),
   ]:
     if not rows:
       continue
@@ -651,6 +684,7 @@ def head_audit(make_agent, args):
   selection = load_selection(str(config.selection))
   goal_names = [str(x) for x in config.goal_names]
   chunk_length = int(config.chunk_length)
+  actor_distribution = bool(getattr(config, 'actor_distribution', False))
   if chunk_length < 1:
     raise ValueError('head_audit.chunk_length must be positive')
 
@@ -677,6 +711,9 @@ def head_audit(make_agent, args):
           'value_entropy', 'slowvalue_entropy',
           'posterior_entropy', 'deter_rms', 'stoch_rms')
   }
+  if actor_distribution:
+    predicted['actor_probability'] = []
+    predicted['actor_entropy'] = []
   prediction_map = {
       'reward': 'reward_prediction',
       'continuation': 'continuation_prediction',
@@ -712,7 +749,11 @@ def head_audit(make_agent, args):
       prevact = {
           key: _pad(np.asarray(value[start:stop]), pad)[None]
           for key, value in previous.items()}
-      carry, outputs = agent.head_audit_chunk(carry, obs, prevact)
+      if actor_distribution:
+        carry, outputs = agent.head_audit_chunk(
+            carry, obs, prevact, actor_distribution=True)
+      else:
+        carry, outputs = agent.head_audit_chunk(carry, obs, prevact)
       for source, destination in prediction_map.items():
         episode_outputs[destination].append(np.asarray(outputs[source])[0, :valid])
       for key in (
@@ -720,6 +761,9 @@ def head_audit(make_agent, args):
           'value_entropy', 'slowvalue_entropy',
           'posterior_entropy', 'deter_rms', 'stoch_rms'):
         episode_outputs[key].append(np.asarray(outputs[key])[0, :valid])
+      if actor_distribution:
+        for key in ('actor_probability', 'actor_entropy'):
+          episode_outputs[key].append(np.asarray(outputs[key])[0, :valid])
 
     for key, pieces in episode_outputs.items():
       predicted[key].append(np.concatenate(pieces, 0))
@@ -755,6 +799,7 @@ def head_audit(make_agent, args):
       'integrity_equal': integrity_before == integrity_after,
       'chunk_length': chunk_length,
       'discount': discount,
+      'actor_distribution': actor_distribution,
   })
   _write_json(logdir / 'summary.json', summary)
   _write_tables(logdir, summary)

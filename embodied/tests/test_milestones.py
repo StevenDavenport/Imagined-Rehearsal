@@ -85,6 +85,26 @@ def test_milestone_validation_detects_changed_file(tmp_path):
     raise AssertionError('Changed archive unexpectedly validated')
 
 
+def test_checkpoint_snapshot_contains_agent_but_no_replay(tmp_path):
+  counter = elements.Counter()
+  counter.increment(25)
+  checkpoint = elements.Checkpoint()
+  checkpoint.step = counter
+  checkpoint.agent = Saveable(9)
+
+  archive = milestones.create_checkpoint(
+      checkpoint, tmp_path / 'snapshots', 25,
+      metadata={'goal': 'fetch', 'phase': 1})
+  manifest = milestones.validate_checkpoint(
+      archive, expected_step=25, full=True)
+
+  assert manifest['kind'] == 'checkpoint_snapshot'
+  assert manifest['metadata'] == {'goal': 'fetch', 'phase': 1}
+  assert manifest['checkpoint_files']
+  assert 'replay_files' not in manifest
+  assert not (archive / 'replay').exists()
+
+
 def test_training_loop_publishes_exact_requested_milestones(tmp_path):
   from embodied.envs.dummy import Dummy
 
@@ -120,6 +140,12 @@ def test_training_loop_publishes_exact_requested_milestones(tmp_path):
       milestone_goal='kill_goblin',
       milestone_phase=0,
       milestone_spec_digest='fixed',
+      snapshot_every=10,
+      snapshot_start=0,
+      snapshot_dir=str(tmp_path / 'snapshots'),
+      snapshot_goal='kill_goblin',
+      snapshot_phase=0,
+      snapshot_spec_digest='fixed',
   ))()
 
   train(
@@ -136,6 +162,11 @@ def test_training_loop_publishes_exact_requested_milestones(tmp_path):
   for step in (10, 20):
     manifest = milestones.validate(
         milestones.archive_path(tmp_path / 'milestones', step),
+        expected_step=step, full=True)
+    assert manifest['metadata']['goal'] == 'kill_goblin'
+  for step in (0, 10, 20):
+    manifest = milestones.validate_checkpoint(
+        milestones.archive_path(tmp_path / 'snapshots', step),
         expected_step=step, full=True)
     assert manifest['metadata']['goal'] == 'kill_goblin'
 

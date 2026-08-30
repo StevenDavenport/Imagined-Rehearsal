@@ -474,7 +474,7 @@ class Agent(embodied.jax.Agent):
         training=False)
     return (enc_carry, dyn_carry), feat
 
-  def head_audit_chunk(self, carry, obs, prevact):
+  def head_audit_chunk(self, carry, obs, prevact, actor_distribution=False):
     """Evaluate all goal-conditioned heads on one recorded sequence.
 
     The observations are encoded with the checkpoint under audit. Each
@@ -536,6 +536,22 @@ class Agent(embodied.jax.Agent):
         'stoch_rms': jnp.sqrt(
             jnp.mean(jnp.square(feat['stoch']), (-2, -1))),
     }
+    if actor_distribution:
+      policy = self.pol(inp, 3)
+      if len(policy) != 1:
+        raise ValueError(
+            'Actor-distribution head audit requires one action branch, got '
+            f'{tuple(policy)}')
+      distribution = next(iter(policy.values()))
+      distribution = getattr(distribution, 'output', distribution)
+      distribution = getattr(distribution, 'dist', distribution)
+      if not hasattr(distribution, 'logits'):
+        raise ValueError(
+            'Actor-distribution head audit requires a categorical policy')
+      probability = jax.nn.softmax(distribution.logits, -1)
+      result['actor_probability'] = probability
+      result['actor_entropy'] = -jnp.sum(
+          probability * jnp.log(jnp.maximum(probability, 1e-8)), -1)
     if getattr(self, 'bounded_value_enabled', False):
       result['bounded_value'] = self.bval(inp, 3).prob(1)
     return (enc_carry, dyn_carry), result
@@ -1006,6 +1022,16 @@ class Agent(embodied.jax.Agent):
 
     shapes = {k: v.shape for k, v in losses.items()}
     assert all(x == (B, T) for x in shapes.values()), ((B, T), shapes)
+    if self.goal_enabled and bool(getattr(
+        self.config, 'goal_loss_metrics', False)):
+      goal_ids = jnp.asarray(goal, i32)
+      for goal_id in range(self.goal_count):
+        mask = f32(goal_ids == goal_id)
+        count = jnp.maximum(mask.sum(), 1.0)
+        metrics[f'batch_goal/{goal_id}'] = mask.mean()
+        for key, value in losses.items():
+          metrics[f'loss_by_goal/{goal_id}/{key}'] = (
+              (value * mask).sum() / count)
     assert set(losses) == set(self.model_scales), (
         sorted(losses), sorted(self.model_scales))
     metrics.update({f'loss/{k}': v.mean() for k, v in losses.items()})
@@ -1108,6 +1134,17 @@ class Agent(embodied.jax.Agent):
     assert set(losses.keys()) == set(self.scales.keys()), (
         sorted(losses.keys()), sorted(self.scales.keys()))
     metrics.update({f'loss/{k}': v.mean() for k, v in losses.items()})
+    if self.goal_enabled and bool(getattr(
+        self.config, 'goal_loss_metrics', False)):
+      goal_ids = jnp.asarray(obs[self.goal_key], i32)
+      for goal_id in range(self.goal_count):
+        for key, value in losses.items():
+          selected_goals = goal_ids[:, -value.shape[1]:]
+          mask = f32(selected_goals == goal_id)
+          metrics[f'loss_by_goal/{goal_id}/{key}'] = (
+              (value * mask).sum() / jnp.maximum(mask.sum(), 1.0))
+        metrics[f'batch_goal/{goal_id}'] = f32(
+            goal_ids == goal_id).mean()
     loss = sum([v.mean() * self.scales[k] for k, v in losses.items()])
 
     carry = (enc_carry, dyn_carry, dec_carry)
