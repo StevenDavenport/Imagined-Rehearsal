@@ -83,6 +83,52 @@ Do not extend the smoke root into the full experiment. If the 12M audition
 saturates too early, repeat the whole matrix with `--model-size 1m` and a new
 root rather than mixing capacities.
 
+## Extending selected 100k runs to 200k
+
+The initial audition selected four runs for a longer learnability and stability
+check: `go_to_door`, `fetch`, `go_to_object`, and `put_near`. Continue them in a
+new experiment root so the completed 100k baseline remains immutable:
+
+```bash
+export MINIGRID_SOURCE_ROOT=/home/localadmin/experiment_logs/minigrid/audition_12m_v1
+export MINIGRID_EXTENSION_ROOT=/home/localadmin/experiment_logs/minigrid/audition_12m_200k_extension_v1
+
+python scripts/minigrid_audition.py \
+  --source-experiment-root "$MINIGRID_SOURCE_ROOT" \
+  --experiment-root "$MINIGRID_EXTENSION_ROOT" \
+  --tasks go_to_door fetch go_to_object put_near \
+  --seeds 0 1 2 \
+  --steps 200000 \
+  --checkpoint-every 25000 \
+  --dry-run
+```
+
+Inspect the dry-run commands, then launch the identical specification without
+`--dry-run`:
+
+```bash
+python scripts/minigrid_audition.py \
+  --source-experiment-root "$MINIGRID_SOURCE_ROOT" \
+  --experiment-root "$MINIGRID_EXTENSION_ROOT" \
+  --tasks go_to_door fetch go_to_object put_near \
+  --seeds 0 1 2 \
+  --steps 200000 \
+  --checkpoint-every 25000 \
+  --stream-output
+```
+
+The extension validates each source 100k milestone, hard-links or copies its
+replay chunks into the new run, and restores the complete agent, optimizer,
+step counter, and replay state. It creates and evaluates only the 125k, 150k,
+175k, and 200k milestones. A deterministic 100k environment-seed offset avoids
+repeating the source run's initial MiniGrid layout stream. Restarting the
+command uses the extension's own latest checkpoint; it does not reseed from
+100k or duplicate experience.
+
+The extension analysis combines the inherited 25k--100k source evidence with
+the new 125k--200k evidence, while the raw artifacts remain in their respective
+immutable roots. Never point `--experiment-root` at the source baseline.
+
 ## Monitoring and outputs
 
 While the supervisor is running:

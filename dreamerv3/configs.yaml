@@ -35,6 +35,7 @@ defaults:
     minecraft: {size: [64, 64], break_speed: 100.0, logs: False, length: 36000}
     minigrid:
       use_seed: True
+      seed_offset: 0
       size: [64, 64]
       episode_length: 100
       tile_size: 8
@@ -98,6 +99,7 @@ defaults:
     eval_warmup_episodes: 0
     eval_policy_mode: deterministic
     milestone_every: 0
+    milestone_start: 0
     milestone_dir: ''
     milestone_goal: ''
     milestone_phase: -1
@@ -105,6 +107,7 @@ defaults:
     report_batches: 1
     from_checkpoint: ''
     from_checkpoint_regex: ''
+    resume_from_milestone: ''
     episode_timeout: 180
     actor_addr: 'localhost:{auto}'
     replay_addr: 'localhost:{auto}'

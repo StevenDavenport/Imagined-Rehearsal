@@ -18,6 +18,7 @@ from embodied.envs.minigrid_registry import ALTERNATING_CHAIN  # noqa: E402
 from embodied.envs.minigrid_registry import PROGRESSIVE_CHAIN  # noqa: E402
 from embodied.envs.minigrid_registry import TASK_BY_NAME  # noqa: E402
 from scripts.minigrid_common import read_jsonl  # noqa: E402
+from scripts.minigrid_common import spec_digest  # noqa: E402
 from scripts.minigrid_common import write_csv  # noqa: E402
 from scripts.minigrid_common import write_json  # noqa: E402
 
@@ -104,14 +105,34 @@ def generate_report(experiment_root: pathlib.Path) -> dict[str, Any]:
   threshold = float(spec['difficulty_threshold'])
   window = int(spec['difficulty_window'])
   checkpoint_steps = tuple(int(step) for step in spec['checkpoint_steps'])
+  source_root = spec.get('source_experiment_root')
+  source_root = (
+      pathlib.Path(source_root).expanduser().resolve()
+      if source_root else None)
+  source_spec = (
+      json.loads((source_root / 'experiment_spec.json').read_text())
+      if source_root else None)
+  if source_spec and spec_digest(source_spec) != spec.get('source_spec_digest'):
+    raise RuntimeError(
+        f'Source experiment spec changed after extension: {source_root}')
+  inherited_steps = tuple(
+      int(step) for step in
+      (source_spec.get('checkpoint_steps', ()) if source_spec else ()))
 
   run_rows = []
   eval_rows = []
   for task in tasks:
     for seed in seeds:
       run_root = experiment_root / 'runs' / task / f'seed_{seed:04d}'
+      training_rows = []
+      if source_root:
+        training_rows.extend(read_jsonl(
+            source_root / 'runs' / task / f'seed_{seed:04d}' /
+            'training' / 'episodes.jsonl'))
+      training_rows.extend(read_jsonl(
+          run_root / 'training' / 'episodes.jsonl'))
       curve = _curve_metrics(
-          read_jsonl(run_root / 'training' / 'episodes.jsonl'),
+          training_rows,
           budget=budget, threshold=threshold, window=window)
       row = {
           'task': task,
@@ -119,18 +140,24 @@ def generate_report(experiment_root: pathlib.Path) -> dict[str, Any]:
           'seed': seed,
           **curve,
       }
-      for checkpoint in checkpoint_steps:
-        for mode in spec['policy_modes']:
-          condition = (
-              run_root / 'evaluations' /
-              f'step_{checkpoint:012d}' / mode)
-          status_path = condition / 'condition_status.json'
-          if not status_path.is_file():
-            continue
-          status = json.loads(status_path.read_text())
-          summary = status.get('summary')
-          if summary:
-            eval_rows.append(summary)
+      evaluation_sources = [(run_root, checkpoint_steps)]
+      if source_root:
+        evaluation_sources.insert(0, (
+            source_root / 'runs' / task / f'seed_{seed:04d}',
+            inherited_steps))
+      for evaluation_root, selected_steps in evaluation_sources:
+        for checkpoint in selected_steps:
+          for mode in spec['policy_modes']:
+            condition = (
+                evaluation_root / 'evaluations' /
+                f'step_{checkpoint:012d}' / mode)
+            status_path = condition / 'condition_status.json'
+            if not status_path.is_file():
+              continue
+            status = json.loads(status_path.read_text())
+            summary = status.get('summary')
+            if summary:
+              eval_rows.append(summary)
       final = [
           item for item in eval_rows
           if item['task'] == task and item['training_seed'] == seed and
@@ -221,6 +248,8 @@ def generate_report(experiment_root: pathlib.Path) -> dict[str, Any]:
   report = {
       'format': 1,
       'experiment_root': str(experiment_root),
+      'source_experiment_root': (
+          str(source_root) if source_root else None),
       'difficulty_threshold': threshold,
       'difficulty_window': window,
       'difficulty_tolerance': tolerance,

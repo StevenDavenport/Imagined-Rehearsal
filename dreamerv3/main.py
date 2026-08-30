@@ -303,8 +303,10 @@ def make_env(config, index, **overrides):
   if suite == 'minigrid' and not kwargs.get('audit_path'):
     kwargs['audit_path'] = str(
         elements.Path(config.logdir) / f'audit_env{index}.jsonl')
+  seed_offset = int(kwargs.pop('seed_offset', 0))
   if kwargs.pop('use_seed', False):
-    kwargs['seed'] = hash((config.seed, index)) % (2 ** 32 - 1)
+    kwargs['seed'] = (
+        hash((config.seed, index)) + seed_offset) % (2 ** 32 - 1)
   if kwargs.pop('use_logdir', False):
     kwargs['logdir'] = elements.Path(config.logdir) / f'env{index}'
   env = ctor(task, **kwargs)

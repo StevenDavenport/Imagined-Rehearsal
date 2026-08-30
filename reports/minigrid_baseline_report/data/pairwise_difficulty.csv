@@ -1,0 +1,16 @@
+auc_match,left,matched,right,threshold_step_match
+False,go_to_door,False,fetch,True
+False,go_to_door,False,go_to_object,False
+True,go_to_door,True,put_near,True
+True,go_to_door,False,unlock_pickup,False
+False,go_to_door,False,pickup_dist,False
+True,fetch,False,go_to_object,False
+False,fetch,False,put_near,False
+True,fetch,False,unlock_pickup,False
+False,fetch,False,pickup_dist,False
+False,go_to_object,False,put_near,False
+True,go_to_object,False,unlock_pickup,False
+False,go_to_object,False,pickup_dist,False
+True,put_near,False,unlock_pickup,False
+False,put_near,False,pickup_dist,False
+True,unlock_pickup,False,pickup_dist,False

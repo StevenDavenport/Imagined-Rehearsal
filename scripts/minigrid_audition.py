@@ -37,7 +37,7 @@ def build_train_command(
     *, args, task: str, seed: int, logdir: pathlib.Path,
     milestone_root: pathlib.Path, digest: str,
 ) -> list[str]:
-  return [
+  command = [
       str(args.python), str(args.repo_root / 'dreamerv3' / 'main.py'),
       '--configs', 'minigrid', f'minigrid_size{args.model_size}',
       f'minigrid_{task}', 'minigrid_audition',
@@ -53,6 +53,17 @@ def build_train_command(
       '--replay.size', str(args.replay_size),
       '--run.train_ratio', str(args.train_ratio),
   ]
+  if getattr(args, 'source_experiment_root', None):
+    source = milestones.archive_path(
+        args.source_experiment_root / 'runs' / task /
+        f'seed_{seed:04d}' / 'milestones', args.resume_step)
+    command.extend([
+        '--run.resume_from_milestone', str(source),
+        '--run.milestone_start',
+        str(args.resume_step + args.checkpoint_every),
+        '--env.minigrid.seed_offset', str(args.resume_step),
+    ])
+  return command
 
 
 def build_eval_command(
@@ -110,6 +121,11 @@ def parse_args(argv=None):
   parser = argparse.ArgumentParser(
       description='Run the controlled MiniGrid difficulty audition.')
   parser.add_argument('--experiment-root', type=pathlib.Path, required=True)
+  parser.add_argument(
+      '--source-experiment-root', type=pathlib.Path, default=None,
+      help=(
+          'Completed audition root whose terminal milestones seed a new, '
+          'longer experiment. The source is validated and never modified.'))
   parser.add_argument('--repo-root', type=pathlib.Path, default=ROOT)
   parser.add_argument(
       '--python', type=pathlib.Path, default=pathlib.Path(sys.executable))
@@ -175,6 +191,61 @@ def preflight(args):
     raise ValueError('difficulty threshold must be in (0, 1]')
   if not 0 <= args.difficulty_tolerance <= 1:
     raise ValueError('difficulty tolerance must be in [0, 1]')
+  args.resume_step = 0
+  args.source_spec = None
+  args.source_spec_digest = None
+  if args.source_experiment_root is not None:
+    args.source_experiment_root = args.source_experiment_root.resolve()
+    if args.source_experiment_root == args.experiment_root:
+      raise ValueError(
+          '--source-experiment-root and --experiment-root must differ')
+    source_spec_path = args.source_experiment_root / 'experiment_spec.json'
+    if not source_spec_path.is_file():
+      raise FileNotFoundError(source_spec_path)
+    args.source_spec = json.loads(source_spec_path.read_text())
+    args.source_spec_digest = spec_digest(args.source_spec)
+    args.resume_step = int(args.source_spec['steps'])
+    if args.resume_step >= args.steps:
+      raise ValueError(
+          f'Extension budget {args.steps} must exceed source budget '
+          f'{args.resume_step}')
+    if (args.steps - args.resume_step) % args.checkpoint_every:
+      raise ValueError(
+          'Extension step difference must be divisible by '
+          '--checkpoint-every')
+    expected = {
+        'model_size': args.model_size,
+        'episode_length': args.episode_length,
+        'replay_size': args.replay_size,
+        'train_ratio': args.train_ratio,
+        'action_space': 'Discrete(7)',
+        'observation': '64x64 partial RGB',
+    }
+    mismatches = {
+        key: (args.source_spec.get(key), value)
+        for key, value in expected.items()
+        if args.source_spec.get(key) != value}
+    if mismatches:
+      raise ValueError(
+          f'Source experiment is incompatible with extension: {mismatches}')
+    missing_tasks = sorted(set(args.tasks) - set(args.source_spec['tasks']))
+    missing_seeds = sorted(set(args.seeds) - set(args.source_spec['seeds']))
+    if missing_tasks or missing_seeds:
+      raise ValueError(
+          f'Source experiment lacks tasks={missing_tasks}, '
+          f'seeds={missing_seeds}')
+    for task in args.tasks:
+      for seed in args.seeds:
+        archive = milestones.archive_path(
+            args.source_experiment_root / 'runs' / task /
+            f'seed_{seed:04d}' / 'milestones', args.resume_step)
+        manifest = milestones.validate(
+            archive, expected_step=args.resume_step, full=False)
+        recorded = manifest.get('metadata', {}).get('spec_digest')
+        if recorded != args.source_spec_digest:
+          raise RuntimeError(
+              f'Source milestone spec digest mismatch at {archive}: '
+              f'{recorded!r} != {args.source_spec_digest!r}')
   args.experiment_root.mkdir(parents=True, exist_ok=True)
   if not args.dry_run:
     versions = package_versions()
@@ -199,11 +270,15 @@ def main(argv=None):
   args = parse_args(argv)
   preflight(args)
   checkpoints = tuple(range(
-      args.checkpoint_every, args.steps + 1, args.checkpoint_every))
+      args.resume_step + args.checkpoint_every,
+      args.steps + 1, args.checkpoint_every))
   versions = package_versions()
   spec = {
       'format': 1,
-      'name': 'minigrid_fixed_mission_difficulty_audition',
+      'name': (
+          'minigrid_fixed_mission_difficulty_extension'
+          if args.source_experiment_root else
+          'minigrid_fixed_mission_difficulty_audition'),
       'git_commit': git_revision(args.repo_root),
       'dependency_requirements': {
           'minigrid': '==3.1.0',
@@ -233,6 +308,17 @@ def main(argv=None):
       'difficulty_window': args.difficulty_window,
       'difficulty_tolerance': args.difficulty_tolerance,
   }
+  if args.source_experiment_root:
+    spec.update({
+        'source_experiment_root': str(args.source_experiment_root),
+        'source_spec_digest': args.source_spec_digest,
+        'resume_step': args.resume_step,
+        'inherited_checkpoint_steps': list(
+            args.source_spec.get('checkpoint_steps', ())),
+        'resume_semantics': (
+            'full milestone state: agent, optimizer, counters, and replay'),
+        'training_environment_seed_offset': args.resume_step,
+    })
   digest = spec_digest(spec)
   spec_path = args.experiment_root / 'experiment_spec.json'
   if spec_path.is_file():

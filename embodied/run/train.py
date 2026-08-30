@@ -99,7 +99,38 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
   cp.step = step
   cp.agent = agent
   cp.replay = replay
-  if args.from_checkpoint:
+  resume_milestone = str(getattr(args, 'resume_from_milestone', ''))
+  if args.from_checkpoint and resume_milestone:
+    raise ValueError(
+        'run.from_checkpoint and run.resume_from_milestone are mutually '
+        'exclusive')
+  if resume_milestone and not cp.exists():
+    source = elements.Path(resume_milestone)
+    manifest = milestones.validate(source, full=False)
+    replay_directory = getattr(replay, 'directory', None)
+    if not replay_directory:
+      raise ValueError(
+          'run.resume_from_milestone requires a persistent replay directory')
+    milestones.seed_replay(source, replay_directory)
+    elements.checkpoint.load(source / 'checkpoint', dict(
+        step=step.load, agent=agent.load, replay=replay.load))
+    source_step = int(manifest['step'])
+    if int(step) != source_step:
+      raise milestones.MilestoneError(
+          f'Resumed step mismatch: {int(step)} != {source_step}')
+    if source_step >= int(args.steps):
+      raise ValueError(
+          f'Resume milestone step {source_step} must be below run.steps '
+          f'{int(args.steps)}')
+    milestones.write_json(logdir / 'resume_provenance.json', {
+        'format': 1,
+        'source_milestone': str(source),
+        'source_step': source_step,
+        'source_manifest_metadata': manifest.get('metadata', {}),
+        'replay_files': len(manifest.get('replay_files', ())),
+    })
+    cp.save()
+  elif args.from_checkpoint:
     elements.checkpoint.load(args.from_checkpoint, dict(
         agent=bind(agent.load, regex=args.from_checkpoint_regex)))
   cp.load_or_save()
@@ -112,6 +143,15 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
           'run.milestone_every and run.milestone_dir must be set together')
     if milestone_every < 0:
       raise ValueError('run.milestone_every must be nonnegative')
+    milestone_start = int(getattr(args, 'milestone_start', 0))
+    if milestone_start < 0:
+      raise ValueError('run.milestone_start must be nonnegative')
+    if milestone_start and not milestone_every:
+      raise ValueError(
+          'run.milestone_start requires run.milestone_every')
+    if milestone_start and milestone_start % milestone_every:
+      raise ValueError(
+          'run.milestone_start must be divisible by run.milestone_every')
     milestone_metadata = {
         'goal': str(getattr(args, 'milestone_goal', '')),
         'phase': int(getattr(args, 'milestone_phase', -1)),
@@ -120,7 +160,8 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
     next_milestone = None
     if milestone_every:
       current = int(step)
-      for expected in range(milestone_every, current + 1, milestone_every):
+      first_milestone = milestone_start or milestone_every
+      for expected in range(first_milestone, current + 1, milestone_every):
         path = milestones.archive_path(milestone_root, expected)
         if path.exists():
           milestones.validate(path, expected_step=expected, full=False)
@@ -132,8 +173,9 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
           raise milestones.MilestoneError(
               f'Missing past milestone {path}; step {current} can no longer '
               'reconstruct that exact training state')
-      next_milestone = (
-          (current // milestone_every) + 1) * milestone_every
+      next_milestone = max(
+          first_milestone,
+          ((current // milestone_every) + 1) * milestone_every)
   except BaseException:
     driver.close()
     logger.close()

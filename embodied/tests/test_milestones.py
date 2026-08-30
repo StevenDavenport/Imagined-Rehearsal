@@ -138,3 +138,67 @@ def test_training_loop_publishes_exact_requested_milestones(tmp_path):
         milestones.archive_path(tmp_path / 'milestones', step),
         expected_step=step, full=True)
     assert manifest['metadata']['goal'] == 'kill_goblin'
+
+
+def test_training_resumes_complete_milestone_state_into_new_root(tmp_path):
+  from embodied.envs.dummy import Dummy
+
+  env = Dummy('disc', size=(8, 8), length=100)
+  source_agent = embodied.RandomAgent(env.obs_space, env.act_space)
+  source_replay = embodied.replay.Replay(
+      length=2, capacity=100, directory=tmp_path / 'source_replay',
+      chunksize=4, save_wait=True)
+  for index in range(30):
+    source_replay.add({'step': np.int32(index)})
+  source_step = elements.Counter()
+  source_step.increment(30)
+  source_checkpoint = elements.Checkpoint()
+  source_checkpoint.step = source_step
+  source_checkpoint.agent = source_agent
+  source_checkpoint.replay = source_replay
+  archive = milestones.create(
+      source_checkpoint, source_replay, tmp_path / 'source_milestones', 30,
+      metadata={'spec_digest': 'source-spec'})
+  source_manifest = milestones.validate(archive, full=True)
+
+  target = tmp_path / 'extended_training'
+  target_milestones = tmp_path / 'extended_milestones'
+  target_agent = embodied.RandomAgent(env.obs_space, env.act_space)
+
+  def make_stream(replay, mode):
+    del mode
+    while True:
+      yield replay.sample(1)
+
+  logger = elements.Logger(
+      elements.Counter(), [elements.logger.TerminalOutput()])
+  args = type('Args', (), dict(
+      logdir=str(target), usage={}, batch_size=1, batch_length=2,
+      train_ratio=0, log_every=1000, report_every=1000,
+      save_every=1000, envs=1, debug=True, report_batches=1,
+      consec_report=1, steps=40, ckpt_keep=2, from_checkpoint='',
+      from_checkpoint_regex='', resume_from_milestone=str(archive),
+      milestone_every=10, milestone_start=40,
+      milestone_dir=str(target_milestones), milestone_goal='fetch',
+      milestone_phase=0, milestone_spec_digest='extension-spec',
+  ))()
+
+  train(
+      lambda: target_agent,
+      lambda: embodied.replay.Replay(
+          length=2, capacity=100, directory=target / 'replay',
+          chunksize=4, save_wait=True),
+      lambda index: env,
+      make_stream,
+      lambda: logger,
+      args,
+  )
+
+  provenance = json.loads((target / 'resume_provenance.json').read_text())
+  assert provenance['source_step'] == 30
+  assert provenance['source_manifest_metadata']['spec_digest'] == 'source-spec'
+  assert provenance['replay_files'] == len(source_manifest['replay_files'])
+  assert milestones.validate(
+      milestones.archive_path(target_milestones, 40),
+      expected_step=40, full=True)
+  assert milestones.validate(archive, expected_step=30, full=True)

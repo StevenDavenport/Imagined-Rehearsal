@@ -143,6 +143,73 @@ def test_dry_run_plans_training_and_every_evaluation_without_spending_attempts(
   assert progress['evaluations'] == '0/4'
 
 
+def test_extension_dry_run_restores_source_and_plans_only_new_milestones(
+    tmp_path, monkeypatch):
+  source = tmp_path / 'source'
+  extension = tmp_path / 'extension'
+  source.mkdir()
+  source_spec = {
+      'format': 1,
+      'name': 'minigrid_fixed_mission_difficulty_audition',
+      'tasks': ['fetch'],
+      'seeds': [0],
+      'model_size': '12m',
+      'steps': 100_000,
+      'checkpoint_every': 25_000,
+      'checkpoint_steps': [25_000, 50_000, 75_000, 100_000],
+      'episode_length': 100,
+      'eval_episodes_per_mode': 50,
+      'policy_modes': ['sampled', 'deterministic'],
+      'eval_seed_base': 100_000,
+      'paired_rng_seed_base': 202_608_290,
+      'paired_rng_stride': 1000,
+      'replay_size': 100_000,
+      'replay_kind': 'fifo',
+      'train_ratio': 32.0,
+      'observation': '64x64 partial RGB',
+      'action_space': 'Discrete(7)',
+      'goal_conditioning': 'six-way one-hot heads; goal-agnostic RSSM',
+      'missions': 'fixed per task; randomized layouts and starts',
+      'difficulty_threshold': 0.7,
+      'difficulty_window': 20,
+      'difficulty_tolerance': 0.25,
+  }
+  (source / 'experiment_spec.json').write_text(json.dumps(source_spec))
+  digest = audition.spec_digest(source_spec)
+
+  def validate_source(path, *, expected_step=None, full=False):
+    del path, full
+    assert expected_step == 100_000
+    return {
+        'step': 100_000,
+        'metadata': {'spec_digest': digest},
+        'checkpoint_files': [{'path': 'agent.pkl'}],
+        'replay_files': [{'name': 'chunk.npz'}],
+    }
+
+  monkeypatch.setattr(audition.milestones, 'validate', validate_source)
+  assert audition.main([
+      '--source-experiment-root', str(source),
+      '--experiment-root', str(extension),
+      '--tasks', 'fetch', '--seeds', '0', '--steps', '200000',
+      '--checkpoint-every', '25000', '--dry-run',
+  ]) == 0
+
+  spec = json.loads((extension / 'experiment_spec.json').read_text())
+  payload = json.loads((extension / 'supervisor_status.json').read_text())
+  unit = payload['states']['fetch__seed_0000']
+  command = unit['training_command']
+  assert spec['resume_step'] == 100_000
+  assert spec['checkpoint_steps'] == [125_000, 150_000, 175_000, 200_000]
+  assert spec['source_spec_digest'] == digest
+  assert command[command.index('--run.resume_from_milestone') + 1].endswith(
+      'runs/fetch/seed_0000/milestones/step_000000100000')
+  assert command[command.index('--run.milestone_start') + 1] == '125000'
+  assert command[command.index('--env.minigrid.seed_offset') + 1] == '100000'
+  assert spec['training_environment_seed_offset'] == 100_000
+  assert len(unit['evaluations']) == 8
+
+
 def test_restart_adopts_the_exact_live_evaluation_attempt(
     tmp_path, monkeypatch):
   common = [

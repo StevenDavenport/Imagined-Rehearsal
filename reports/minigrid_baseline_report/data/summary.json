@@ -1,0 +1,280 @@
+{
+  "candidate_chains": {
+    "alternating": {
+      "all_pairwise_matched": false,
+      "tasks": [
+        "go_to_door",
+        "fetch",
+        "go_to_object",
+        "put_near"
+      ]
+    },
+    "progressive": {
+      "all_pairwise_matched": false,
+      "tasks": [
+        "fetch",
+        "put_near",
+        "unlock_pickup"
+      ]
+    }
+  },
+  "difficulty_threshold": 0.7,
+  "difficulty_tolerance": 0.25,
+  "difficulty_window": 20,
+  "experiment_root": "/home/localadmin/experiment_logs/minigrid/audition_12m_v1",
+  "format": 1,
+  "interpretation": "Training AUC and threshold crossings use rolling binary success, with a full window required before a crossing. Pairwise matching requires both normalized success AUC and median steps-to-threshold to agree within the predeclared tolerance. Early saturation means reaching 90% rolling success in the first quarter of the budget. Sampled and deterministic evaluation results remain separate.",
+  "pairwise_matches": [
+    {
+      "auc_match": false,
+      "left": "go_to_door",
+      "matched": false,
+      "right": "fetch",
+      "threshold_step_match": true
+    },
+    {
+      "auc_match": false,
+      "left": "go_to_door",
+      "matched": false,
+      "right": "go_to_object",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": true,
+      "left": "go_to_door",
+      "matched": true,
+      "right": "put_near",
+      "threshold_step_match": true
+    },
+    {
+      "auc_match": true,
+      "left": "go_to_door",
+      "matched": false,
+      "right": "unlock_pickup",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": false,
+      "left": "go_to_door",
+      "matched": false,
+      "right": "pickup_dist",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": true,
+      "left": "fetch",
+      "matched": false,
+      "right": "go_to_object",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": false,
+      "left": "fetch",
+      "matched": false,
+      "right": "put_near",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": true,
+      "left": "fetch",
+      "matched": false,
+      "right": "unlock_pickup",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": false,
+      "left": "fetch",
+      "matched": false,
+      "right": "pickup_dist",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": false,
+      "left": "go_to_object",
+      "matched": false,
+      "right": "put_near",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": true,
+      "left": "go_to_object",
+      "matched": false,
+      "right": "unlock_pickup",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": false,
+      "left": "go_to_object",
+      "matched": false,
+      "right": "pickup_dist",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": true,
+      "left": "put_near",
+      "matched": false,
+      "right": "unlock_pickup",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": false,
+      "left": "put_near",
+      "matched": false,
+      "right": "pickup_dist",
+      "threshold_step_match": false
+    },
+    {
+      "auc_match": true,
+      "left": "unlock_pickup",
+      "matched": false,
+      "right": "pickup_dist",
+      "threshold_step_match": false
+    }
+  ],
+  "task_summaries": [
+    {
+      "early_saturation_seeds": 0,
+      "family": "navigation",
+      "mean_final_deterministic_return": 0.38770000100135804,
+      "mean_final_deterministic_success": 0.45999999999999996,
+      "mean_final_sampled_return": 0.36928000112374626,
+      "mean_final_sampled_success": 0.46,
+      "mean_training_auc": 0.15434016666666664,
+      "mean_training_final_rolling_return": 0.3889999980727832,
+      "mean_training_final_rolling_success": 0.5,
+      "median_training_saturation_step": 65909,
+      "median_training_steps_to_threshold": 82361.0,
+      "saturated_seeds": 1,
+      "seeds": 3,
+      "solved_seeds": 2,
+      "std_final_deterministic_return": 0.3152574502333305,
+      "std_final_deterministic_success": 0.36769552621700474,
+      "std_final_sampled_return": 0.3033696634356633,
+      "std_final_sampled_success": 0.375588427226754,
+      "std_training_auc": 0.1386100789867829,
+      "std_training_final_rolling_return": 0.31637936136500056,
+      "std_training_final_rolling_success": 0.3894440481849307,
+      "task": "go_to_door"
+    },
+    {
+      "early_saturation_seeds": 0,
+      "family": "pickup",
+      "mean_final_deterministic_return": 0.14205333322286604,
+      "mean_final_deterministic_success": 0.21333333333333335,
+      "mean_final_sampled_return": 0.14758666674296061,
+      "mean_final_sampled_success": 0.22666666666666666,
+      "mean_training_auc": 0.05897898241898284,
+      "mean_training_final_rolling_return": 0.1446666682759921,
+      "mean_training_final_rolling_success": 0.21666666666666667,
+      "median_training_saturation_step": null,
+      "median_training_steps_to_threshold": 98020,
+      "saturated_seeds": 0,
+      "seeds": 3,
+      "solved_seeds": 1,
+      "std_final_deterministic_return": 0.16743135945761692,
+      "std_final_deterministic_success": 0.24567367696917708,
+      "std_final_sampled_return": 0.1763718508425644,
+      "std_final_sampled_success": 0.26398653164297775,
+      "std_training_auc": 0.02573945067111188,
+      "std_training_final_rolling_return": 0.1652425367673648,
+      "std_training_final_rolling_success": 0.23570226039551587,
+      "task": "fetch"
+    },
+    {
+      "early_saturation_seeds": 0,
+      "family": "navigation",
+      "mean_final_deterministic_return": 0.2814266665776571,
+      "mean_final_deterministic_success": 0.32666666666666666,
+      "mean_final_sampled_return": 0.30618666609128314,
+      "mean_final_sampled_success": 0.3666666666666667,
+      "mean_training_auc": 0.06594668785638307,
+      "mean_training_final_rolling_return": 0.20273333291212717,
+      "mean_training_final_rolling_success": 0.2333333333333333,
+      "median_training_saturation_step": null,
+      "median_training_steps_to_threshold": null,
+      "saturated_seeds": 0,
+      "seeds": 3,
+      "solved_seeds": 0,
+      "std_final_deterministic_return": 0.20753761404829071,
+      "std_final_deterministic_success": 0.23795424396766332,
+      "std_final_sampled_return": 0.23947556788069463,
+      "std_final_sampled_success": 0.28674417556808757,
+      "std_training_auc": 0.04333303455302465,
+      "std_training_final_rolling_return": 0.1591638422114868,
+      "std_training_final_rolling_success": 0.18408935028645435,
+      "task": "go_to_object"
+    },
+    {
+      "early_saturation_seeds": 0,
+      "family": "pickup_and_place",
+      "mean_final_deterministic_return": 0.7678000098466873,
+      "mean_final_deterministic_success": 0.88,
+      "mean_final_sampled_return": 0.7384866750240325,
+      "mean_final_sampled_success": 0.8466666666666667,
+      "mean_training_auc": 0.14739199999999997,
+      "mean_training_final_rolling_return": 0.7298666760325432,
+      "mean_training_final_rolling_success": 0.8666666666666667,
+      "median_training_saturation_step": 91033,
+      "median_training_steps_to_threshold": 68365,
+      "saturated_seeds": 3,
+      "seeds": 3,
+      "solved_seeds": 3,
+      "std_final_deterministic_return": 0.11080069643143235,
+      "std_final_deterministic_success": 0.10708252269472675,
+      "std_final_sampled_return": 0.15535849858411646,
+      "std_final_sampled_success": 0.1635712552851373,
+      "std_training_auc": 0.015088939004836259,
+      "std_training_final_rolling_return": 0.08605622665443577,
+      "std_training_final_rolling_success": 0.09428090415820632,
+      "task": "put_near"
+    },
+    {
+      "early_saturation_seeds": 0,
+      "family": "unlock_and_pickup",
+      "mean_final_deterministic_return": 0.0,
+      "mean_final_deterministic_success": 0.0,
+      "mean_final_sampled_return": 0.0,
+      "mean_final_sampled_success": 0.0,
+      "mean_training_auc": 0.0,
+      "mean_training_final_rolling_return": 0.0,
+      "mean_training_final_rolling_success": 0.0,
+      "median_training_saturation_step": null,
+      "median_training_steps_to_threshold": null,
+      "saturated_seeds": 0,
+      "seeds": 3,
+      "solved_seeds": 0,
+      "std_final_deterministic_return": 0.0,
+      "std_final_deterministic_success": 0.0,
+      "std_final_sampled_return": 0.0,
+      "std_final_sampled_success": 0.0,
+      "std_training_auc": 0.0,
+      "std_training_final_rolling_return": 0.0,
+      "std_training_final_rolling_success": 0.0,
+      "task": "unlock_pickup"
+    },
+    {
+      "early_saturation_seeds": 0,
+      "family": "pickup",
+      "mean_final_deterministic_return": 0.012020000219345092,
+      "mean_final_deterministic_success": 0.02,
+      "mean_final_sampled_return": 0.009913333257039388,
+      "mean_final_sampled_success": 0.013333333333333334,
+      "mean_training_auc": 0.02450249836778864,
+      "mean_training_final_rolling_return": 0.0,
+      "mean_training_final_rolling_success": 0.0,
+      "median_training_saturation_step": null,
+      "median_training_steps_to_threshold": null,
+      "saturated_seeds": 0,
+      "seeds": 3,
+      "solved_seeds": 0,
+      "std_final_deterministic_return": 0.008948936756023804,
+      "std_final_deterministic_success": 0.016329931618554522,
+      "std_final_sampled_return": 0.01401957034042935,
+      "std_final_sampled_success": 0.018856180831641266,
+      "std_training_auc": 0.013697992918719145,
+      "std_training_final_rolling_return": 0.0,
+      "std_training_final_rolling_success": 0.0,
+      "task": "pickup_dist"
+    }
+  ]
+}

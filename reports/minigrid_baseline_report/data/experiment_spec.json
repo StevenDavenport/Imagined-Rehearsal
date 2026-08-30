@@ -1,0 +1,51 @@
+{
+  "action_space": "Discrete(7)",
+  "checkpoint_every": 25000,
+  "checkpoint_steps": [
+    25000,
+    50000,
+    75000,
+    100000
+  ],
+  "dependency_requirements": {
+    "gymnasium": ">=1.0,<2",
+    "minigrid": "==3.1.0"
+  },
+  "difficulty_threshold": 0.7,
+  "difficulty_tolerance": 0.25,
+  "difficulty_window": 20,
+  "episode_length": 100,
+  "eval_episodes_per_mode": 50,
+  "eval_seed_base": 100000,
+  "evaluation_pairing": "same environment reset seeds across policy modes",
+  "format": 1,
+  "git_commit": "ae3cb917f661d6c3fe76422e476fc6179fbc694e",
+  "goal_conditioning": "six-way one-hot heads; goal-agnostic RSSM",
+  "missions": "fixed per task; randomized layouts and starts",
+  "model_size": "12m",
+  "name": "minigrid_fixed_mission_difficulty_audition",
+  "observation": "64x64 partial RGB",
+  "paired_rng_seed_base": 202608290,
+  "paired_rng_stride": 1000,
+  "policy_modes": [
+    "sampled",
+    "deterministic"
+  ],
+  "replay_kind": "fifo",
+  "replay_size": 100000,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "steps": 100000,
+  "tasks": [
+    "go_to_door",
+    "fetch",
+    "go_to_object",
+    "put_near",
+    "unlock_pickup",
+    "pickup_dist"
+  ],
+  "train_ratio": 32.0
+}

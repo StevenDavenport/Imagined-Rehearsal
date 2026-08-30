@@ -43,6 +43,7 @@ def file_digest(path: pathlib.Path) -> dict:
 
 
 def write_json(path: pathlib.Path, value) -> None:
+  path = pathlib.Path(str(path))
   temporary = path.with_suffix(path.suffix + '.tmp')
   temporary.write_text(
       json.dumps(value, indent=2, sort_keys=True) + '\n')
@@ -149,4 +150,55 @@ def validate(
         current = file_digest(filename)['sha256']
         if current != record['sha256']:
           raise MilestoneError(f'Milestone digest changed: {filename}')
+  return manifest
+
+
+def seed_replay(
+    archive: str | pathlib.Path,
+    destination: str | pathlib.Path,
+) -> dict:
+  """Materialize an immutable milestone replay into a fresh live directory.
+
+  Existing matching files are accepted so initialization is restart-safe. Any
+  unexpected replay chunk or size mismatch is rejected rather than mixed into
+  the resumed run. Hard links are preferred and preserve source immutability;
+  copying is the cross-filesystem fallback.
+  """
+  archive = pathlib.Path(archive).expanduser().resolve()
+  destination = pathlib.Path(destination).expanduser().resolve()
+  manifest = validate(archive, full=False)
+  records = tuple(manifest['replay_files'])
+  expected = {record['name']: record for record in records}
+  destination.mkdir(parents=True, exist_ok=True)
+  unexpected = sorted(
+      path.name for path in destination.glob('*.npz')
+      if path.name not in expected)
+  if unexpected:
+    raise MilestoneError(
+        f'Unexpected replay chunks in resume destination {destination}: '
+        f'{unexpected[:5]}')
+  source_root = archive / 'replay'
+  for record in records:
+    source = source_root / record['name']
+    target = destination / record['name']
+    expected_bytes = int(record['bytes'])
+    if target.is_file():
+      if target.stat().st_size != expected_bytes:
+        raise MilestoneError(f'Resume replay file size changed: {target}')
+      continue
+    temporary = destination / f'.{target.name}.resume-{os.getpid()}'
+    if temporary.exists():
+      temporary.unlink()
+    try:
+      try:
+        os.link(source, temporary)
+      except OSError:
+        shutil.copy2(source, temporary)
+      if temporary.stat().st_size != expected_bytes:
+        raise MilestoneError(
+            f'Resume replay copy size mismatch: {temporary}')
+      temporary.replace(target)
+    finally:
+      if temporary.exists():
+        temporary.unlink()
   return manifest
