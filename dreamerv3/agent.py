@@ -83,10 +83,19 @@ class Agent(embodied.jax.Agent):
     self.goal_key = str(self.goal_cfg.key)
     self.goal_count = int(self.goal_cfg.count)
     self.goal_exclude_keys = tuple(self.goal_cfg.exclude_keys)
+    self.counterfactual_heads = config.counterfactual_heads
+    self.counterfactual_heads_enabled = bool(
+        self.counterfactual_heads.enabled)
     if self.goal_enabled:
       assert self.goal_count > 0, self.goal_count
       for key in (self.goal_key, *self.goal_exclude_keys):
         assert key in obs_space, (key, tuple(obs_space))
+    if self.counterfactual_heads_enabled:
+      if not self.goal_enabled or self.goal_count < 2:
+        raise ValueError(
+            'Counterfactual head training requires at least two goals')
+      if float(self.counterfactual_heads.weight) < 0:
+        raise ValueError('Counterfactual head loss weight must be nonnegative')
 
     exclude = {'is_first', 'is_last', 'is_terminal', 'reward'}
     if self.goal_enabled:
@@ -1006,14 +1015,10 @@ class Agent(embodied.jax.Agent):
     metrics.update(mets)
     dec_carry, dec_entries, recons = self.dec(
         dec_carry, repfeat, reset, training)
-    goal = obs[self.goal_key] if self.goal_enabled else None
-    headinp = self._head_input(repfeat, goal)
-    inp = sg(headinp, skip=self.config.reward_grad)
-    losses['rew'] = self.rew(inp, 2).loss(obs['reward'])
-    con = f32(~obs['is_terminal'])
-    if self.config.contdisc:
-      con *= 1 - 1 / self.config.horizon
-    losses['con'] = self.con(headinp, 2).loss(con)
+    head_losses, head_metrics = self._reward_continuation_losses(
+        repfeat, obs)
+    losses.update(head_losses)
+    metrics.update(head_metrics)
     for key, recon in recons.items():
       space, value = self.obs_space[key], obs[key]
       assert value.dtype == space.dtype, (key, space, value.dtype)
@@ -1024,7 +1029,7 @@ class Agent(embodied.jax.Agent):
     assert all(x == (B, T) for x in shapes.values()), ((B, T), shapes)
     if self.goal_enabled and bool(getattr(
         self.config, 'goal_loss_metrics', False)):
-      goal_ids = jnp.asarray(goal, i32)
+      goal_ids = jnp.asarray(obs[self.goal_key], i32)
       for goal_id in range(self.goal_count):
         mask = f32(goal_ids == goal_id)
         count = jnp.maximum(mask.sum(), 1.0)
@@ -1058,14 +1063,10 @@ class Agent(embodied.jax.Agent):
     metrics.update(mets)
     dec_carry, dec_entries, recons = self.dec(
         dec_carry, repfeat, reset, training)
-    goal = obs[self.goal_key] if self.goal_enabled else None
-    headinp = self._head_input(repfeat, goal)
-    inp = sg(headinp, skip=self.config.reward_grad)
-    losses['rew'] = self.rew(inp, 2).loss(obs['reward'])
-    con = f32(~obs['is_terminal'])
-    if self.config.contdisc:
-      con *= 1 - 1 / self.config.horizon
-    losses['con'] = self.con(headinp, 2).loss(con)
+    head_losses, head_metrics = self._reward_continuation_losses(
+        repfeat, obs)
+    losses.update(head_losses)
+    metrics.update(head_metrics)
     for key, recon in recons.items():
       space, value = self.obs_space[key], obs[key]
       assert value.dtype == space.dtype, (key, space, value.dtype)
@@ -1646,6 +1647,92 @@ class Agent(embodied.jax.Agent):
     assert onehot.shape[:-1] == inp.shape[:-1], (
         onehot.shape, inp.shape)
     return jnp.concatenate([inp, onehot], -1)
+
+  def _reward_continuation_losses(self, repfeat, obs):
+    """Return factual head losses plus optional off-goal oracle supervision.
+
+    The factual objective is byte-for-byte equivalent to ordinary Dreamer.
+    Counterfactual examples query every nonmatching goal on the same frozen
+    posterior feature. Their reward is zero; their episode continues after a
+    completion for another goal, but still stops at a physical terminal. The
+    stop-gradient is deliberate: the intervention updates only the reward and
+    continuation heads, not the encoder or sequence model.
+    """
+    goal = obs[self.goal_key] if self.goal_enabled else None
+    headinp = self._head_input(repfeat, goal)
+    reward_dist = self.rew(
+        sg(headinp, skip=self.config.reward_grad), 2)
+    continuation_dist = self.con(headinp, 2)
+    factual_reward = reward_dist.loss(obs['reward'])
+    continuation_target = f32(~obs['is_terminal'])
+    if self.config.contdisc:
+      continuation_target *= 1 - 1 / self.config.horizon
+    factual_continuation = continuation_dist.loss(continuation_target)
+    losses = {
+        'rew': factual_reward,
+        'con': factual_continuation,
+    }
+    metrics = {}
+    if not self.counterfactual_heads_enabled:
+      return losses, metrics
+
+    actual_goal = jnp.asarray(goal, i32)
+    query_goal = jnp.broadcast_to(
+        jnp.arange(self.goal_count, dtype=i32),
+        (*actual_goal.shape, self.goal_count))
+    swept_feat = {
+        key: jnp.broadcast_to(
+            value[:, :, None],
+            (*value.shape[:2], self.goal_count, *value.shape[2:]))
+        for key, value in repfeat.items() if key in ('deter', 'stoch')
+    }
+    counterfactual_inp = sg(self._head_input(swept_feat, query_goal))
+    matching = query_goal == actual_goal[..., None]
+    nonmatching = ~matching
+
+    reward_target = jnp.asarray(obs['reward'], f32)[..., None] * f32(matching)
+    physical = jnp.asarray(obs['is_physical_terminal'], bool)[..., None]
+    complete = jnp.asarray(obs['goal_complete'], bool)[..., None]
+    terminal = physical | (complete & matching)
+    counterfactual_continuation_target = f32(~terminal)
+    if self.config.contdisc:
+      counterfactual_continuation_target *= 1 - 1 / self.config.horizon
+
+    swept_reward_dist = self.rew(counterfactual_inp, 3)
+    swept_continuation_dist = self.con(counterfactual_inp, 3)
+    swept_reward_loss = swept_reward_dist.loss(reward_target)
+    swept_continuation_loss = swept_continuation_dist.loss(
+        counterfactual_continuation_target)
+    mask = f32(nonmatching)
+    denominator = jnp.maximum(mask.sum(-1), 1.0)
+    counterfactual_reward = (swept_reward_loss * mask).sum(-1) / denominator
+    counterfactual_continuation = (
+        swept_continuation_loss * mask).sum(-1) / denominator
+    weight = f32(self.counterfactual_heads.weight)
+    losses['rew'] = factual_reward + weight * counterfactual_reward
+    losses['con'] = factual_continuation + weight * counterfactual_continuation
+
+    def masked_mean(value, selected):
+      selected = f32(selected)
+      return (value * selected).sum() / jnp.maximum(selected.sum(), 1.0)
+
+    reward_prediction = swept_reward_dist.pred()
+    continuation_prediction = swept_continuation_dist.prob(1)
+    completion = complete & jnp.ones_like(nonmatching)
+    metrics.update({
+        'counterfactual/reward_loss': counterfactual_reward.mean(),
+        'counterfactual/continuation_loss': (
+            counterfactual_continuation.mean()),
+        'counterfactual/event_reward_factual': masked_mean(
+            reward_prediction, completion & matching),
+        'counterfactual/event_reward_nonmatching': masked_mean(
+            reward_prediction, completion & nonmatching),
+        'counterfactual/event_continuation_factual': masked_mean(
+            continuation_prediction, completion & matching),
+        'counterfactual/event_continuation_nonmatching': masked_mean(
+            continuation_prediction, completion & nonmatching),
+    })
+    return losses, metrics
 
   def _carry_goal(self, carry):
     if not self.goal_enabled:

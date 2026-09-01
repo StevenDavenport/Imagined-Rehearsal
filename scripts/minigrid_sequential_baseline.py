@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import shutil
 import sys
 import time
@@ -100,6 +101,7 @@ def build_train_command(
       '--configs', 'minigrid', f'minigrid_size{args.model_size}',
       f'minigrid_{task}', 'minigrid_sequential',
   ]
+  command.extend(getattr(args, 'extra_train_configs', ()))
   definition = ARMS[arm]
   if definition['kind'] == 'episode_reservoir':
     command.append('minigrid_episode_reservoir')
@@ -202,6 +204,16 @@ def parse_args(argv=None):
   parser = argparse.ArgumentParser(
       description='Run the visibility-first sequential MiniGrid baseline.')
   parser.add_argument('--experiment-root', type=pathlib.Path, required=True)
+  parser.add_argument(
+      '--experiment-name',
+      default='minigrid_visibility_first_sequential_baseline')
+  parser.add_argument(
+      '--scientific-role',
+      default=(
+          'pre-CIR baseline; no imagined rehearsal, counterfactual training, '
+          'critic regularization, or objective changes'))
+  parser.add_argument('--primary-objectives', nargs='+')
+  parser.add_argument('--extra-train-configs', nargs='+', default=[])
   parser.add_argument('--repo-root', type=pathlib.Path, default=ROOT)
   parser.add_argument(
       '--python', type=pathlib.Path, default=pathlib.Path(sys.executable))
@@ -259,6 +271,7 @@ def preflight(args) -> None:
   args.arms = tuple(dict.fromkeys(args.arms))
   args.seeds = tuple(int(value) for value in args.seeds)
   args.policy_modes = tuple(dict.fromkeys(args.policy_modes))
+  args.extra_train_configs = tuple(dict.fromkeys(args.extra_train_configs))
   args.critic_horizons = tuple(int(value) for value in args.critic_horizons)
   if not args.python.is_file():
     raise FileNotFoundError(args.python)
@@ -270,6 +283,9 @@ def preflight(args) -> None:
     raise ValueError('--arms cannot be empty')
   if not args.policy_modes:
     raise ValueError('--policy-modes cannot be empty')
+  if any(not re.fullmatch(r'[a-zA-Z0-9_]+', value)
+         for value in args.extra_train_configs):
+    raise ValueError('--extra-train-configs must contain config names')
   positive = (
       args.phase_steps, args.snapshot_every, args.eval_all_every,
       args.episode_length, args.fifo_replay_size, args.episodes_per_goal,
@@ -446,12 +462,10 @@ def main(argv=None) -> int:
       range(0, total_steps + 1, args.phase_steps))
   spec = {
       'format': 1,
-      'name': 'minigrid_visibility_first_sequential_baseline',
+      'name': args.experiment_name,
       'git_commit': git_revision(args.repo_root),
-      'scientific_role': (
-          'pre-CIR baseline; no imagined rehearsal, counterfactual training, '
-          'critic regularization, or objective changes'),
-      'primary_objectives': [
+      'scientific_role': args.scientific_role,
+      'primary_objectives': args.primary_objectives or [
           'complete sequential acquisition',
           'measure catastrophic forgetting',
           'localize failure across replay, world model, reward, '
@@ -526,6 +540,8 @@ def main(argv=None) -> int:
           'minigrid': '==3.1.0', 'gymnasium': '>=1.0,<2',
           'jax': '==0.4.33'},
   }
+  if args.extra_train_configs:
+    spec['extra_train_configs'] = list(args.extra_train_configs)
   spec['evaluation_units_per_run'] = len(evaluation_units(spec))
   digest = spec_digest(spec)
   status_path, status = _write_initial_state(args, spec, digest)

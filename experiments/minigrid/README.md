@@ -275,3 +275,36 @@ Training metrics retain per-goal sample totals and per-goal dynamics,
 reconstruction, reward, continuation, policy, and value losses. This is
 intentional: behavioural retention must not conceal a component that is
 quietly losing the semantics or calibration CIR depends on.
+
+## Counterfactual-head Phase-A pilot
+
+Before a full sequential re-baseline, the pinned pilot reruns only seed 0 of
+the primary uniform-reservoir arm on `go_to_door` for 200,000 steps. It adds an
+equal-weight loss averaged over the five nonmatching goal queries: their
+reward target is zero, and completing the factual goal is labelled as
+continuing under those alternative queries. Physical terminals still stop
+every goal. The added path receives frozen posterior features, so it updates
+only the reward and continuation heads; the factual losses and all
+actor/critic, encoder, decoder, and RSSM objectives are unchanged.
+
+The pilot remains serial (`run.envs: 1`), checkpoints every 25,000 steps, runs
+50 sampled and 50 deterministic evaluations per checkpoint, and performs the
+same read-only head and critic-provenance audits at 0 and 200,000 steps. Use a
+fresh run root:
+
+```bash
+export MINIGRID_CF_PILOT_ROOT=/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1
+
+python scripts/minigrid_counterfactual_pilot.py \
+  --experiment-root "$MINIGRID_CF_PILOT_ROOT" \
+  --dry-run
+
+python scripts/minigrid_counterfactual_pilot.py \
+  --experiment-root "$MINIGRID_CF_PILOT_ROOT"
+```
+
+The supervisor is restart-safe. Its immutable spec explicitly records the
+counterfactual config, single task, seed, replay arm, snapshots, evaluation
+schedule, and diagnostic plan. The go/no-go comparison is against the existing
+standard-training `uniform_reservoir`, seed-0 Phase-A evidence at 200,000
+steps; the pilot is not itself evidence about catastrophic forgetting.

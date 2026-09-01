@@ -272,6 +272,28 @@ def generate_report(experiment_root: pathlib.Path) -> dict:
   actor_drift = (
       actor_drift_rows(root, spec)
       if spec.get('diagnostics_enabled', True) else [])
+  counterfactual_pilot = (
+      'minigrid_counterfactual_heads' in spec.get('extra_train_configs', ()))
+  if counterfactual_pilot:
+    guardrails = [
+        'This single-task pilot tests goal selectivity and factual acquisition; '
+        'it is not evidence about catastrophic forgetting.',
+        'Counterfactual oracle labels supervise only the reward and '
+        'continuation heads on frozen posterior features.',
+        'Actor and critic objectives are unchanged; counterfactual critic '
+        'values remain read-only diagnostics rather than supervised targets.',
+        'Sampled and deterministic policy results remain separate.',
+    ]
+  else:
+    guardrails = [
+        'Uniform reservoir is the primary CIR baseline, not an allocation '
+        'mistake.',
+        'The 50:50 arm tests whether ordinary current-biased replay already '
+        'solves any apparent CIR benefit.',
+        'Counterfactual critic values are diagnostics, not supervised '
+        'targets in this baseline.',
+        'Sampled and deterministic policy results remain separate.',
+    ]
   write_csv(analysis / 'evaluation_curves.csv', evaluations)
   write_csv(analysis / 'transfer_and_forgetting.csv', transfers)
   write_csv(analysis / 'arm_summary.csv', arms)
@@ -301,15 +323,7 @@ def generate_report(experiment_root: pathlib.Path) -> dict:
       'diagnostic_jobs_complete': sum(
           bool(row['complete']) for row in diagnostics),
       'actor_drift_comparisons': len(actor_drift),
-      'interpretation_guardrails': [
-          'Uniform reservoir is the primary CIR baseline, not an allocation '
-          'mistake.',
-          'The 50:50 arm tests whether ordinary current-biased replay already '
-          'solves any apparent CIR benefit.',
-          'Counterfactual critic values are diagnostics, not supervised '
-          'targets in this baseline.',
-          'Sampled and deterministic policy results remain separate.',
-      ],
+      'interpretation_guardrails': guardrails,
       'tables': {
           'evaluation_curves': str(analysis / 'evaluation_curves.csv'),
           'transfer_and_forgetting': str(

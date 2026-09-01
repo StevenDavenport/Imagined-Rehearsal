@@ -152,6 +152,9 @@ defaults:
       count: 0
       exclude_keys: [goal_complete, is_physical_terminal]
       canonicalize_noop_position: False
+    counterfactual_heads:
+      enabled: False
+      weight: 1.0
     opt: {lr: 4e-5, agc: 0.3, eps: 1e-20, beta1: 0.9, beta2: 0.999, momentum: True, wd: 0.0, schedule: const, warmup: 1000, anneal: 0}
     model_lr: 4e-5
     ac_grads: False
@@ -406,6 +409,11 @@ minigrid_sequential:
   agent.goal_loss_metrics: True
   logger.filter: 'score|length|fps|ratio|train/(loss/|loss_by_goal/|batch_goal/)|replay/(items|episodes|ram_gb|episodes_seen|admitted|replaced|rejected|abandoned|active_goals|goal_|sampling/)'
   run: {steps: 800000, envs: 1, train_ratio: 32, log_every: 120, report_every: 1000000, save_every: 900, ckpt_keep: 3, debug: True, milestone_every: 200000, snapshot_every: 25000}
+
+minigrid_counterfactual_heads:
+  agent.counterfactual_heads.enabled: True
+  agent.counterfactual_heads.weight: 1.0
+  logger.filter: 'score|length|fps|ratio|train/(loss/|loss_by_goal/|batch_goal/|counterfactual/)|replay/(items|episodes|ram_gb|episodes_seen|admitted|replaced|rejected|abandoned|active_goals|goal_|sampling/)'
 
 minigrid_episode_reservoir:
   replay.kind: episode_reservoir
