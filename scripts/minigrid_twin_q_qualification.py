@@ -883,18 +883,23 @@ def summarize(outdir: pathlib.Path, args) -> None:
 
 def train(args, outdir: pathlib.Path) -> None:
   load_runtime_dependencies()
-  train_host = load_cache(outdir / 'cache' / 'train')
-  heldout_host = load_cache(outdir / 'cache' / 'heldout')
-  print(
-      f'Loaded train states={len(train_host["deter"])} '
-      f'transitions={len(train_host["action"])}; '
-      f'heldout states={len(heldout_host["deter"])} '
-      f'transitions={len(heldout_host["action"])}', flush=True)
-  train_data = device_cache(train_host)
-  heldout_data = device_cache(heldout_host)
-  for arm in ARMS:
-    for seed in args.q_seeds:
-      train_run(args, outdir, arm, seed, train_data, heldout_data)
+  # Constructing the wrapped Dreamer encoder enables the process-wide strict
+  # transfer guard. The standalone offline learner intentionally moves its
+  # fixed cache and scalar PRNG seeds to the GPU, so make that boundary
+  # explicit for this stage. No Dreamer parameters remain in the learner.
+  with jax.transfer_guard('allow'):
+    train_host = load_cache(outdir / 'cache' / 'train')
+    heldout_host = load_cache(outdir / 'cache' / 'heldout')
+    print(
+        f'Loaded train states={len(train_host["deter"])} '
+        f'transitions={len(train_host["action"])}; '
+        f'heldout states={len(heldout_host["deter"])} '
+        f'transitions={len(heldout_host["action"])}', flush=True)
+    train_data = device_cache(train_host)
+    heldout_data = device_cache(heldout_host)
+    for arm in ARMS:
+      for seed in args.q_seeds:
+        train_run(args, outdir, arm, seed, train_data, heldout_data)
 
 
 def parser() -> argparse.ArgumentParser:
