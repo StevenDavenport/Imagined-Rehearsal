@@ -1,0 +1,9 @@
+goal,goal_name,target,bin,count,prediction_mean,target_mean,prediction_min,prediction_max
+0,go_to_door,inclusive,0,1194,0.0,0.17147159576416016,0.0,0.0
+0,go_to_door,exclusive,0,1194,0.0,0.16010643541812897,0.0,0.0
+1,fetch,inclusive,0,1705,0.0,0.03887859731912613,0.0,0.0
+1,fetch,exclusive,0,1705,0.0,0.03579765558242798,0.0,0.0
+2,go_to_object,inclusive,0,1364,0.0,0.13534139096736908,0.0,0.0
+2,go_to_object,exclusive,0,1364,0.0,0.12501001358032227,0.0,0.0
+3,put_near,inclusive,0,1616,0.0,0.0,0.0,0.0
+3,put_near,exclusive,0,1616,0.0,0.0,0.0,0.0

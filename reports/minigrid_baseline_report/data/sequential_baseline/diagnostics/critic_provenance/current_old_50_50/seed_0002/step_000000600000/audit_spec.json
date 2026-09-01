@@ -1,0 +1,31 @@
+{
+  "anchors_per_episode": 2,
+  "canonical_stage": "stage3a",
+  "checkpoint": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/runs/current_old_50_50/seed_0002/snapshots/step_000000600000/checkpoint",
+  "chunk_length": 32,
+  "format": 1,
+  "goal_names": [
+    "go_to_door",
+    "fetch",
+    "go_to_object",
+    "put_near",
+    "unlock_pickup",
+    "pickup_dist"
+  ],
+  "horizons": [
+    1,
+    3,
+    6,
+    15
+  ],
+  "mcpb_posterior_samples": 32,
+  "proposals": [
+    "actor",
+    "recorded_where_future_actions_exist"
+  ],
+  "read_only": true,
+  "seed_base": 202610301,
+  "selection": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/diagnostics/banks/seed_0002/selection.json",
+  "selection_sha256": "dbd8c11b83c301b8841a2b8e1dba0d1c82efa3c94f56288986054fe1b9664307",
+  "spec_digest": "534428a686e4af43c02faa70cbe0399d8b73f3aa63ed9fe827f1cd64e63a4e09"
+}

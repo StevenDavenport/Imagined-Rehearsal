@@ -1,0 +1,31 @@
+{
+  "all_inputs_unchanged": true,
+  "checkpoint_rows": 45,
+  "critic_jobs": 45,
+  "experiment_root": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1",
+  "final_step": 800000,
+  "format": 1,
+  "head_jobs": 45,
+  "head_rows": 450,
+  "imagination_rows": 1080,
+  "input_bytes": 220712048,
+  "input_files": 180,
+  "interpretation_guardrails": [
+    "All comparisons hold the posterior state fixed and change only the queried goal.",
+    "The trained-goal scope is primary; all six configured slots are reported separately.",
+    "Counterfactual critic values diagnose goal dependence but do not have factual Monte Carlo targets under another policy.",
+    "Same-checkpoint association is correlational; a counterfactual-head training intervention is required for a causal claim."
+  ],
+  "output": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/goal_conditioning_audit",
+  "read_only_inputs": true,
+  "spec_digest": "3c6cf198a6ae8cde41e85345a2b8652a130d58ecdf41cbabf0d7c5088cbac1d6",
+  "tables": {
+    "checkpoint_summary": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/goal_conditioning_audit/checkpoint_summary.csv",
+    "findings": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/goal_conditioning_audit/FINDINGS.md",
+    "head_goal_conditioning": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/goal_conditioning_audit/head_goal_conditioning.csv",
+    "head_goal_conditioning_aggregate": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/goal_conditioning_audit/head_goal_conditioning_aggregate.csv",
+    "imagination_goal_conditioning": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/goal_conditioning_audit/imagination_goal_conditioning.csv",
+    "imagination_goal_conditioning_aggregate": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/goal_conditioning_audit/imagination_goal_conditioning_aggregate.csv",
+    "input_inventory": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/goal_conditioning_audit/input_inventory.csv"
+  }
+}

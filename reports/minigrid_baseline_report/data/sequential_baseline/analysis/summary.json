@@ -1,0 +1,96 @@
+{
+  "actor_drift_comparisons": 144,
+  "arm_summaries": [
+    {
+      "arm": "current_old_50_50",
+      "mean_backward_transfer": -0.37166666666666665,
+      "mean_final_success": 0.07166666666666667,
+      "mean_forgetting_from_peak": 0.4066666666666667,
+      "mean_forward_transfer": -0.05833333333333334,
+      "mean_initial_success": 0.07166666666666667,
+      "mean_post_acquisition_success": 0.44333333333333336,
+      "policy_mode": "sampled",
+      "task_seed_pairs": 12
+    },
+    {
+      "arm": "current_old_50_50",
+      "mean_backward_transfer": -0.38166666666666665,
+      "mean_final_success": 0.07166666666666667,
+      "mean_forgetting_from_peak": 0.39166666666666666,
+      "mean_forward_transfer": -0.041666666666666664,
+      "mean_initial_success": 0.045000000000000005,
+      "mean_post_acquisition_success": 0.4533333333333333,
+      "policy_mode": "deterministic",
+      "task_seed_pairs": 12
+    },
+    {
+      "arm": "fifo_100k",
+      "mean_backward_transfer": -0.2783333333333333,
+      "mean_final_success": 0.17500000000000002,
+      "mean_forgetting_from_peak": 0.365,
+      "mean_forward_transfer": -0.049999999999999996,
+      "mean_initial_success": 0.07166666666666667,
+      "mean_post_acquisition_success": 0.45333333333333337,
+      "policy_mode": "sampled",
+      "task_seed_pairs": 12
+    },
+    {
+      "arm": "fifo_100k",
+      "mean_backward_transfer": -0.25666666666666665,
+      "mean_final_success": 0.17833333333333334,
+      "mean_forgetting_from_peak": 0.3283333333333333,
+      "mean_forward_transfer": -0.03,
+      "mean_initial_success": 0.045000000000000005,
+      "mean_post_acquisition_success": 0.435,
+      "policy_mode": "deterministic",
+      "task_seed_pairs": 12
+    },
+    {
+      "arm": "uniform_reservoir",
+      "mean_backward_transfer": -0.19833333333333333,
+      "mean_final_success": 0.0,
+      "mean_forgetting_from_peak": 0.22,
+      "mean_forward_transfer": -0.04833333333333333,
+      "mean_initial_success": 0.07166666666666667,
+      "mean_post_acquisition_success": 0.19833333333333333,
+      "policy_mode": "sampled",
+      "task_seed_pairs": 12
+    },
+    {
+      "arm": "uniform_reservoir",
+      "mean_backward_transfer": -0.18499999999999997,
+      "mean_final_success": 0.0,
+      "mean_forgetting_from_peak": 0.20666666666666667,
+      "mean_forward_transfer": -0.03333333333333333,
+      "mean_initial_success": 0.045000000000000005,
+      "mean_post_acquisition_success": 0.18499999999999997,
+      "policy_mode": "deterministic",
+      "task_seed_pairs": 12
+    }
+  ],
+  "component_loss_snapshots": 288,
+  "diagnostic_jobs": 90,
+  "diagnostic_jobs_complete": 90,
+  "evaluation_complete": true,
+  "evaluation_rows": 1512,
+  "expected_evaluation_rows": 1512,
+  "experiment": "minigrid_visibility_first_sequential_baseline",
+  "format": 1,
+  "interpretation_guardrails": [
+    "Uniform reservoir is the primary CIR baseline, not an allocation mistake.",
+    "The 50:50 arm tests whether ordinary current-biased replay already solves any apparent CIR benefit.",
+    "Counterfactual critic values are diagnostics, not supervised targets in this baseline.",
+    "Sampled and deterministic policy results remain separate."
+  ],
+  "replay_snapshots": 288,
+  "tables": {
+    "actor_same_state_drift": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/actor_same_state_drift.csv",
+    "arm_summary": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/arm_summary.csv",
+    "component_losses_by_goal": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/component_losses_by_goal.csv",
+    "diagnostic_inventory": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/diagnostic_inventory.csv",
+    "evaluation_curves": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/evaluation_curves.csv",
+    "replay_allocation": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/replay_allocation.csv",
+    "transfer_and_forgetting": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/analysis/transfer_and_forgetting.csv"
+  },
+  "transfer_rows": 72
+}
