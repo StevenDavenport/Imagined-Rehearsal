@@ -243,6 +243,15 @@ def test_model_head_audit_holds_latent_fixed_and_sweeps_goals():
   assert np.isfinite(output['continuation_entropy']).all()
   assert (output['continuation_entropy'] > 0).all()
 
+  _, latent_output = agent.head_audit_chunk(
+      ({}, {}),
+      {'is_first': jnp.zeros((1, 2), bool)},
+      {'action': jnp.zeros((1, 2), jnp.int32)},
+      latent=True)
+  assert 'deter' not in output and 'stoch' not in output
+  assert latent_output['deter'].shape == (1, 2, 2)
+  assert latent_output['stoch'].shape == (1, 2, 1, 2)
+
 
 def test_workflow_command_is_offline_checkpoint_audit(tmp_path):
   command = workflow.build_command(

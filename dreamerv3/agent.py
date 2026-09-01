@@ -483,7 +483,8 @@ class Agent(embodied.jax.Agent):
         training=False)
     return (enc_carry, dyn_carry), feat
 
-  def head_audit_chunk(self, carry, obs, prevact, actor_distribution=False):
+  def head_audit_chunk(
+      self, carry, obs, prevact, actor_distribution=False, latent=False):
     """Evaluate all goal-conditioned heads on one recorded sequence.
 
     The observations are encoded with the checkpoint under audit. Each
@@ -545,6 +546,12 @@ class Agent(embodied.jax.Agent):
         'stoch_rms': jnp.sqrt(
             jnp.mean(jnp.square(feat['stoch']), (-2, -1))),
     }
+    if latent:
+      # Opt-in because these tensors are much larger than the normal audit
+      # outputs. Offline critic qualification uses them as immutable features;
+      # no gradient or parameter update crosses this interface.
+      result['deter'] = feat['deter']
+      result['stoch'] = feat['stoch']
     if actor_distribution:
       policy = self.pol(inp, 3)
       if len(policy) != 1:
