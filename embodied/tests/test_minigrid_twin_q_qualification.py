@@ -5,6 +5,10 @@ import optax
 
 from scripts import minigrid_twin_q_qualification as twin_q
 
+twin_q.jax = jax
+twin_q.jnp = jnp
+twin_q.optax = optax
+
 
 def test_counterfactual_event_targets_keep_nonmatching_goal_alive():
   reward, continuation = twin_q.counterfactual_targets(
@@ -41,9 +45,6 @@ def test_factual_queries_are_dose_matched_and_counterfactual_queries_both_goals(
 
 
 def test_twin_q_step_bootstraps_without_existing_value_input():
-  twin_q.jax = jax
-  twin_q.jnp = jnp
-  twin_q.optax = optax
   states, transitions, actions = 8, 6, 3
   data = {
       'deter': jnp.zeros((states, 4), jnp.float16),
