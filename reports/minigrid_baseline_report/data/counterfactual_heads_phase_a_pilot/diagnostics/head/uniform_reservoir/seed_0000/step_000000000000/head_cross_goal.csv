@@ -1,0 +1,7 @@
+observed_goal,observed_goal_name,probed_goal,probed_goal_name,reward_mae,reward_auroc,reward_ap,reward_positive_mean,reward_negative_mean,continuation_mae,continuation_auroc,continuation_ap,continuation_positive_mean,continuation_negative_mean
+0,go_to_door,0,go_to_door,0.014572016373583319,0.5,0.06301015892379477,0.0,0.0,0.4974109829545266,0.48585005279831045,0.9718496260730148,0.49996859431581486,0.5119030559062958
+0,go_to_door,1,fetch,0.0,,,,0.0,0.54747818537639,,1.0,0.44951881341053623,
+0,go_to_door,2,go_to_object,0.0,,,,0.0,0.5275633661804621,,1.0,0.46943363260646415,
+0,go_to_door,3,put_near,0.0,,,,0.0,0.4973729607867606,,1.0,0.4996240380001657,
+0,go_to_door,4,unlock_pickup,0.0,,,,0.0,0.5386632850753917,,1.0,0.45833371371153453,
+0,go_to_door,5,pickup_dist,0.0,,,,0.0,0.5073338546196129,,1.0,0.4896631441673134,

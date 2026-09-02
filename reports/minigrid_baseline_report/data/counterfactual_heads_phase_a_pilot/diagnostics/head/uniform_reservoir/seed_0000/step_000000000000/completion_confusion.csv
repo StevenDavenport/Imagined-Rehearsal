@@ -1,0 +1,7 @@
+event_goal,event_goal_name,probed_goal,probed_goal_name,count,reward_mean,continuation_mean,value_mean,slowvalue_mean
+0,go_to_door,0,go_to_door,16,0.0,0.4945201873779297,0.0,0.0
+0,go_to_door,1,fetch,16,0.0,0.4354279041290283,0.0,0.0
+0,go_to_door,2,go_to_object,16,0.0,0.45697981119155884,0.0,0.0
+0,go_to_door,3,put_near,16,0.0,0.4902902841567993,0.0,0.0
+0,go_to_door,4,unlock_pickup,16,0.0,0.4476693272590637,0.0,0.0
+0,go_to_door,5,pickup_dist,16,0.0,0.4844793677330017,0.0,0.0

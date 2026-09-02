@@ -1,0 +1,3 @@
+arm,mean_backward_transfer,mean_final_success,mean_forgetting_from_peak,mean_forward_transfer,mean_initial_success,mean_post_acquisition_success,policy_mode,task_seed_pairs
+uniform_reservoir,0.0,0.88,0.0,0.0,0.02,0.88,sampled,1
+uniform_reservoir,0.0,0.86,0.0,0.0,0.0,0.86,deterministic,1

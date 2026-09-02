@@ -1,0 +1,11 @@
+{
+  "active_run": null,
+  "active_run_eta_seconds": 0.0,
+  "active_update": null,
+  "encoder_integrity": true,
+  "format": 1,
+  "name": "minigrid_offline_twin_q_qualification_v1",
+  "state": "complete",
+  "updated_at_unix": 1788299056.4991271,
+  "updates_per_run": 10000
+}

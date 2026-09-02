@@ -1,0 +1,79 @@
+{
+  "after": {
+    "actor": {
+      "arrays": 11,
+      "sha256": "b531a9c1f86dd925f658222b490a39a865debe9fc9f813e29c825af6abcda35e"
+    },
+    "all": {
+      "arrays": 506,
+      "sha256": "16a742de354ed5b1fe9e0f9ea400e952ed80dcf45d3aed4c19f0c09c6a01e46f"
+    },
+    "bounded_value": {
+      "arrays": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "critic": {
+      "arrays": 22,
+      "sha256": "844e458800e0c607354d915ede2ede24a0638397e022239f7326cd81881b5239"
+    },
+    "normalizers": {
+      "arrays": 2,
+      "sha256": "f78631d87c69282ec88618c71c51f9ef021e50d6fe2a7678055ddf1922f82637"
+    },
+    "optimizers": {
+      "arrays": 402,
+      "sha256": "01bc23b71529ccccec69a41dc3cd05b60406cd2bbb99ac3047518e82294cf1dc"
+    },
+    "representation": {
+      "arrays": 58,
+      "sha256": "b274d8abd1c19b9eabb876f11992442e6ae3d1f2630cc3df0fc294fb04355384"
+    },
+    "reward_continuation": {
+      "arrays": 10,
+      "sha256": "d79279a01cc75dff441291f26bcd9a27f3e95070a020481ee8e7fffe0be2fbcc"
+    },
+    "world_model": {
+      "arrays": 68,
+      "sha256": "55f34265cb6db9254032a4e889fceb226e69428735cb0d83f4a4e24f83b97b7b"
+    }
+  },
+  "before": {
+    "actor": {
+      "arrays": 11,
+      "sha256": "b531a9c1f86dd925f658222b490a39a865debe9fc9f813e29c825af6abcda35e"
+    },
+    "all": {
+      "arrays": 506,
+      "sha256": "16a742de354ed5b1fe9e0f9ea400e952ed80dcf45d3aed4c19f0c09c6a01e46f"
+    },
+    "bounded_value": {
+      "arrays": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "critic": {
+      "arrays": 22,
+      "sha256": "844e458800e0c607354d915ede2ede24a0638397e022239f7326cd81881b5239"
+    },
+    "normalizers": {
+      "arrays": 2,
+      "sha256": "f78631d87c69282ec88618c71c51f9ef021e50d6fe2a7678055ddf1922f82637"
+    },
+    "optimizers": {
+      "arrays": 402,
+      "sha256": "01bc23b71529ccccec69a41dc3cd05b60406cd2bbb99ac3047518e82294cf1dc"
+    },
+    "representation": {
+      "arrays": 58,
+      "sha256": "b274d8abd1c19b9eabb876f11992442e6ae3d1f2630cc3df0fc294fb04355384"
+    },
+    "reward_continuation": {
+      "arrays": 10,
+      "sha256": "d79279a01cc75dff441291f26bcd9a27f3e95070a020481ee8e7fffe0be2fbcc"
+    },
+    "world_model": {
+      "arrays": 68,
+      "sha256": "55f34265cb6db9254032a4e889fceb226e69428735cb0d83f4a4e24f83b97b7b"
+    }
+  },
+  "unchanged": true
+}

@@ -1,0 +1,803 @@
+{
+  "actor_cross_goal": [
+    {
+      "entropy_mean": 1.9458987712860107,
+      "entropy_normalized_mean": 0.9999941529832156,
+      "mean_distribution_concentration": 0.1434634029865265,
+      "mean_distribution_mode": 5,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 0,
+      "probed_goal_name": "go_to_door",
+      "state_modal_action_concentration": 0.42386831275720166,
+      "states": 972
+    },
+    {
+      "entropy_mean": 1.945899248123169,
+      "entropy_normalized_mean": 0.9999943980290408,
+      "mean_distribution_concentration": 0.14338654279708862,
+      "mean_distribution_mode": 5,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 1,
+      "probed_goal_name": "fetch",
+      "state_modal_action_concentration": 0.3611111111111111,
+      "states": 972
+    },
+    {
+      "entropy_mean": 1.9458999633789062,
+      "entropy_normalized_mean": 0.9999947655977786,
+      "mean_distribution_concentration": 0.14332345128059387,
+      "mean_distribution_mode": 5,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 2,
+      "probed_goal_name": "go_to_object",
+      "state_modal_action_concentration": 0.3549382716049383,
+      "states": 972
+    },
+    {
+      "entropy_mean": 1.9458993673324585,
+      "entropy_normalized_mean": 0.999994459290497,
+      "mean_distribution_concentration": 0.14336822926998138,
+      "mean_distribution_mode": 5,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 3,
+      "probed_goal_name": "put_near",
+      "state_modal_action_concentration": 0.3497942386831276,
+      "states": 972
+    },
+    {
+      "entropy_mean": 1.9458990097045898,
+      "entropy_normalized_mean": 0.9999942755061282,
+      "mean_distribution_concentration": 0.1433427482843399,
+      "mean_distribution_mode": 0,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 4,
+      "probed_goal_name": "unlock_pickup",
+      "state_modal_action_concentration": 0.3436213991769547,
+      "states": 972
+    },
+    {
+      "entropy_mean": 1.9458988904953003,
+      "entropy_normalized_mean": 0.9999942142446718,
+      "mean_distribution_concentration": 0.14333638548851013,
+      "mean_distribution_mode": 5,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 5,
+      "probed_goal_name": "pickup_dist",
+      "state_modal_action_concentration": 0.3271604938271605,
+      "states": 972
+    }
+  ],
+  "actor_distribution": true,
+  "actor_distribution_enabled": true,
+  "bounded_value_enabled": false,
+  "calibration": [
+    {
+      "bin": 0,
+      "count": 972,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.0,
+      "prediction_mean": 0.0,
+      "prediction_min": 0.0,
+      "target": "inclusive",
+      "target_mean": 0.18293149769306183
+    },
+    {
+      "bin": 0,
+      "count": 972,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.0,
+      "prediction_mean": 0.0,
+      "prediction_min": 0.0,
+      "target": "exclusive",
+      "target_mean": 0.16835950314998627
+    }
+  ],
+  "checkpoint": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/runs/uniform_reservoir/seed_0000/snapshots/step_000000000000/checkpoint",
+  "chunk_length": 32,
+  "completion_confusion": [
+    {
+      "continuation_mean": 0.4945201873779297,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 0,
+      "probed_goal_name": "go_to_door",
+      "reward_mean": 0.0,
+      "slowvalue_mean": 0.0,
+      "value_mean": 0.0
+    },
+    {
+      "continuation_mean": 0.4354279041290283,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 1,
+      "probed_goal_name": "fetch",
+      "reward_mean": 0.0,
+      "slowvalue_mean": 0.0,
+      "value_mean": 0.0
+    },
+    {
+      "continuation_mean": 0.45697981119155884,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 2,
+      "probed_goal_name": "go_to_object",
+      "reward_mean": 0.0,
+      "slowvalue_mean": 0.0,
+      "value_mean": 0.0
+    },
+    {
+      "continuation_mean": 0.4902902841567993,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 3,
+      "probed_goal_name": "put_near",
+      "reward_mean": 0.0,
+      "slowvalue_mean": 0.0,
+      "value_mean": 0.0
+    },
+    {
+      "continuation_mean": 0.4476693272590637,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 4,
+      "probed_goal_name": "unlock_pickup",
+      "reward_mean": 0.0,
+      "slowvalue_mean": 0.0,
+      "value_mean": 0.0
+    },
+    {
+      "continuation_mean": 0.4844793677330017,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 5,
+      "probed_goal_name": "pickup_dist",
+      "reward_mean": 0.0,
+      "slowvalue_mean": 0.0,
+      "value_mean": 0.0
+    }
+  ],
+  "completion_selectivity": {
+    "continuation_matching_mean": 0.4945201873779297,
+    "continuation_nonmatching_mean": 0.4629693627357483,
+    "count": 16,
+    "reward_margin": 0.0,
+    "reward_matching_mean": 0.0,
+    "reward_nonmatching_mean": 0.0,
+    "reward_top1_accuracy": 1.0
+  },
+  "continuation_factual": {
+    "auroc": 0.48585005279831045,
+    "average_precision": 0.9718496260730148,
+    "brier_clipped": 0.26051876749930475,
+    "count": 972,
+    "fpr_at_0p01": 1.0,
+    "fpr_at_0p1": 1.0,
+    "fpr_at_0p5": 0.44,
+    "mae": 0.4974109829545266,
+    "mean_prediction": 0.5002755506324424,
+    "mean_target": 0.9713540718633942,
+    "negative_mean": 0.5119030559062958,
+    "negative_p95": 0.7223702669143677,
+    "negatives": 25,
+    "positive_mean": 0.49996859431581486,
+    "positive_p95": 0.6980174124240872,
+    "positives": 947,
+    "tpr_at_0p01": 1.0,
+    "tpr_at_0p1": 1.0,
+    "tpr_at_0p5": 0.48785638859556496
+  },
+  "continuation_stop_by_state": {
+    "goal_completion": {
+      "count": 16,
+      "predicted_stop_mean": 0.5039903521537781,
+      "predicted_stop_p95": 0.6003280580043793
+    },
+    "ordinary": {
+      "count": 956,
+      "predicted_stop_mean": 0.4981209933757782,
+      "predicted_stop_p95": 0.6828891634941101
+    },
+    "physical_terminal": {
+      "count": 0,
+      "predicted_stop_mean": null,
+      "predicted_stop_p95": null
+    }
+  },
+  "discount": 0.996996996996997,
+  "episodes": 32,
+  "format": 1,
+  "goal_names": [
+    "go_to_door",
+    "fetch",
+    "go_to_object",
+    "put_near",
+    "unlock_pickup",
+    "pickup_dist"
+  ],
+  "head_cross_goal": [
+    {
+      "continuation": {
+        "auroc": 0.48585005279831045,
+        "average_precision": 0.9718496260730148,
+        "brier_clipped": 0.26051876749930475,
+        "count": 972,
+        "fpr_at_0p01": 1.0,
+        "fpr_at_0p1": 1.0,
+        "fpr_at_0p5": 0.44,
+        "mae": 0.4974109829545266,
+        "mean_prediction": 0.5002755506324424,
+        "mean_target": 0.9713540718633942,
+        "negative_mean": 0.5119030559062958,
+        "negative_p95": 0.7223702669143677,
+        "negatives": 25,
+        "positive_mean": 0.49996859431581486,
+        "positive_p95": 0.6980174124240872,
+        "positives": 947,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 0.48785638859556496
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 0,
+      "probed_goal_name": "go_to_door",
+      "reward": {
+        "auroc": 0.5,
+        "average_precision": 0.06301015892379477,
+        "brier_clipped": 0.01301246072884254,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 0.014572016373583319,
+        "mean_prediction": 0.0,
+        "mean_target": 0.014572016373583319,
+        "negative_mean": 0.0,
+        "negative_p95": 0.0,
+        "negatives": 956,
+        "positive_mean": 0.0,
+        "positive_p95": 0.0,
+        "positives": 16,
+        "tpr_at_0p01": 0.0,
+        "tpr_at_0p1": 0.0,
+        "tpr_at_0p5": 0.0
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 0.3122578132731394,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.54747818537639,
+        "mean_prediction": 0.44951881341053623,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.44951881341053623,
+        "positive_p95": 0.6451199054718018,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 0.31790123456790126
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 1,
+      "probed_goal_name": "fetch",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 0.0,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 0.0,
+        "mean_prediction": 0.0,
+        "mean_target": 0.0,
+        "negative_mean": 0.0,
+        "negative_p95": 0.0,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 0.29119406091711925,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.5275633661804621,
+        "mean_prediction": 0.46943363260646415,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.46943363260646415,
+        "positive_p95": 0.6627964377403259,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 0.3724279835390947
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 2,
+      "probed_goal_name": "go_to_object",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 0.0,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 0.0,
+        "mean_prediction": 0.0,
+        "mean_target": 0.0,
+        "negative_mean": 0.0,
+        "negative_p95": 0.0,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 0.25981062521551984,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.4973729607867606,
+        "mean_prediction": 0.4996240380001657,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.4996240380001657,
+        "positive_p95": 0.6905172020196914,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 0.4825102880658436
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 3,
+      "probed_goal_name": "put_near",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 0.0,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 0.0,
+        "mean_prediction": 0.0,
+        "mean_target": 0.0,
+        "negative_mean": 0.0,
+        "negative_p95": 0.0,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 0.30342215340171536,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.5386632850753917,
+        "mean_prediction": 0.45833371371153453,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.45833371371153453,
+        "positive_p95": 0.6579340130090713,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 0.3436213991769547
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 4,
+      "probed_goal_name": "unlock_pickup",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 0.0,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 0.0,
+        "mean_prediction": 0.0,
+        "mean_target": 0.0,
+        "negative_mean": 0.0,
+        "negative_p95": 0.0,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 0.2699214659714375,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.5073338546196129,
+        "mean_prediction": 0.4896631441673134,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.4896631441673134,
+        "positive_p95": 0.6834194660186768,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 0.4537037037037037
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 5,
+      "probed_goal_name": "pickup_dist",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 0.0,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 0.0,
+        "mean_prediction": 0.0,
+        "mean_target": 0.0,
+        "negative_mean": 0.0,
+        "negative_p95": 0.0,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    }
+  ],
+  "head_uncertainty": {
+    "continuation_entropy": {
+      "mean": 0.6651268601417542,
+      "p95": 0.6930326223373413
+    },
+    "reward_entropy": {
+      "mean": 5.541263103485107,
+      "p95": 5.541262626647949
+    },
+    "slowvalue_entropy": {
+      "mean": 5.541263103485107,
+      "p95": 5.541262626647949
+    },
+    "value_entropy": {
+      "mean": 5.541263103485107,
+      "p95": 5.541262626647949
+    }
+  },
+  "initial_value_cross_goal": [
+    {
+      "count": 32,
+      "failure_mean": 0.0,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.0,
+      "probed_goal": 0,
+      "probed_goal_name": "go_to_door",
+      "success_auroc": 0.5,
+      "success_average_precision": 1.0,
+      "success_mean": 0.0,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.0,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.0,
+      "probed_goal": 1,
+      "probed_goal_name": "fetch",
+      "success_auroc": 0.5,
+      "success_average_precision": 1.0,
+      "success_mean": 0.0,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.0,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.0,
+      "probed_goal": 2,
+      "probed_goal_name": "go_to_object",
+      "success_auroc": 0.5,
+      "success_average_precision": 1.0,
+      "success_mean": 0.0,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.0,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.0,
+      "probed_goal": 3,
+      "probed_goal_name": "put_near",
+      "success_auroc": 0.5,
+      "success_average_precision": 1.0,
+      "success_mean": 0.0,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.0,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.0,
+      "probed_goal": 4,
+      "probed_goal_name": "unlock_pickup",
+      "success_auroc": 0.5,
+      "success_average_precision": 1.0,
+      "success_mean": 0.0,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.0,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.0,
+      "probed_goal": 5,
+      "probed_goal_name": "pickup_dist",
+      "success_auroc": 0.5,
+      "success_average_precision": 1.0,
+      "success_mean": 0.0,
+      "successes": 16
+    }
+  ],
+  "integrity_after": {
+    "actor": {
+      "arrays": 11,
+      "sha256": "9b7f4046548b701df02539c17446ef7afd42e97942fcf5ad47e98061ab83d2d7"
+    },
+    "all": {
+      "arrays": 506,
+      "sha256": "39464e209c3e63301411a15ccfc5eecbb85e19ab26ebc25ef187356a4f25718f"
+    },
+    "bounded_value": {
+      "arrays": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "critic": {
+      "arrays": 22,
+      "sha256": "7c71631c7730dcc73edfbf13d0bb1570a4dbfe549201004770e6c9f7c48106e0"
+    },
+    "normalizers": {
+      "arrays": 2,
+      "sha256": "6a6cc375fcea331aa7ac85291c0675e0d8d78fe6a2bbff73e77f14b263b0661f"
+    },
+    "optimizers": {
+      "arrays": 402,
+      "sha256": "b66f8b52ac235e0c242f10c95cb3d9cffc7e9425a386d8a258ef8fa1bf10ba15"
+    },
+    "representation": {
+      "arrays": 58,
+      "sha256": "71765da407456ac0d1ddfdb462c030eabf4a46d9e248747f799a0b47d1cc46d6"
+    },
+    "reward_continuation": {
+      "arrays": 10,
+      "sha256": "72289ea0c221a36460dca5b65ce25f531a61613df7c7fd8449a7733c43bab902"
+    },
+    "world_model": {
+      "arrays": 68,
+      "sha256": "a8db0e5a5c59f6fd39d1feea7bbef3c59eac22731c70889c557dd56e0a420e31"
+    }
+  },
+  "integrity_before": {
+    "actor": {
+      "arrays": 11,
+      "sha256": "9b7f4046548b701df02539c17446ef7afd42e97942fcf5ad47e98061ab83d2d7"
+    },
+    "all": {
+      "arrays": 506,
+      "sha256": "39464e209c3e63301411a15ccfc5eecbb85e19ab26ebc25ef187356a4f25718f"
+    },
+    "bounded_value": {
+      "arrays": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "critic": {
+      "arrays": 22,
+      "sha256": "7c71631c7730dcc73edfbf13d0bb1570a4dbfe549201004770e6c9f7c48106e0"
+    },
+    "normalizers": {
+      "arrays": 2,
+      "sha256": "6a6cc375fcea331aa7ac85291c0675e0d8d78fe6a2bbff73e77f14b263b0661f"
+    },
+    "optimizers": {
+      "arrays": 402,
+      "sha256": "b66f8b52ac235e0c242f10c95cb3d9cffc7e9425a386d8a258ef8fa1bf10ba15"
+    },
+    "representation": {
+      "arrays": 58,
+      "sha256": "71765da407456ac0d1ddfdb462c030eabf4a46d9e248747f799a0b47d1cc46d6"
+    },
+    "reward_continuation": {
+      "arrays": 10,
+      "sha256": "72289ea0c221a36460dca5b65ce25f531a61613df7c7fd8449a7733c43bab902"
+    },
+    "world_model": {
+      "arrays": 68,
+      "sha256": "a8db0e5a5c59f6fd39d1feea7bbef3c59eac22731c70889c557dd56e0a420e31"
+    }
+  },
+  "integrity_equal": true,
+  "representation": {
+    "deter_rms_mean": 0.07324004918336868,
+    "posterior_entropy_mean": 2.600501537322998,
+    "posterior_entropy_std": 0.011478029191493988,
+    "stoch_rms_mean": 0.25
+  },
+  "reward_factual": {
+    "auroc": 0.5,
+    "average_precision": 0.06301015892379477,
+    "brier_clipped": 0.01301246072884254,
+    "count": 972,
+    "fpr_at_0p01": 0.0,
+    "fpr_at_0p1": 0.0,
+    "fpr_at_0p5": 0.0,
+    "mae": 0.014572016373583319,
+    "mean_prediction": 0.0,
+    "mean_target": 0.014572016373583319,
+    "negative_mean": 0.0,
+    "negative_p95": 0.0,
+    "negatives": 956,
+    "positive_mean": 0.0,
+    "positive_p95": 0.0,
+    "positives": 16,
+    "tpr_at_0p01": 0.0,
+    "tpr_at_0p1": 0.0,
+    "tpr_at_0p5": 0.0
+  },
+  "reward_factual_regression": {
+    "bias": -0.014572016373583319,
+    "count": 972,
+    "mae": 0.014572016373583319,
+    "pearson": null,
+    "prediction_max": 0.0,
+    "prediction_mean": 0.0,
+    "prediction_min": 0.0,
+    "prediction_outside_unit_interval_fraction": 0.0,
+    "rmse": 0.1140721733326868,
+    "spearman": null,
+    "target_mean": 0.014572016373583319
+  },
+  "selection": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/diagnostics/banks/seed_0000/selection.json",
+  "selection_sha256": "1d9f6dd25e43a2e09a222a10da0aa15afeda0be20b615176d05fb9ae29cf5d0a",
+  "states": 972,
+  "value": [
+    {
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "initial_failure_mean": 0.0,
+      "initial_success_mean": 0.0,
+      "initial_value_success_ap": 1.0,
+      "initial_value_success_auroc": 0.5,
+      "slowvalue_exclusive": {
+        "bias": -0.16835949481024173,
+        "count": 972,
+        "mae": 0.16835949481024173,
+        "pearson": null,
+        "prediction_max": 0.0,
+        "prediction_mean": 0.0,
+        "prediction_min": 0.0,
+        "prediction_outside_unit_interval_fraction": 0.0,
+        "rmse": 0.37018649505217704,
+        "spearman": null,
+        "target_mean": 0.16835949481024173
+      },
+      "slowvalue_inclusive": {
+        "bias": -0.18293151118382506,
+        "count": 972,
+        "mae": 0.18293151118382506,
+        "pearson": null,
+        "prediction_max": 0.0,
+        "prediction_mean": 0.0,
+        "prediction_min": 0.0,
+        "prediction_outside_unit_interval_fraction": 0.0,
+        "rmse": 0.387363526739235,
+        "spearman": null,
+        "target_mean": 0.18293151118382506
+      },
+      "value_exclusive": {
+        "bias": -0.16835949481024173,
+        "count": 972,
+        "mae": 0.16835949481024173,
+        "pearson": null,
+        "prediction_max": 0.0,
+        "prediction_mean": 0.0,
+        "prediction_min": 0.0,
+        "prediction_outside_unit_interval_fraction": 0.0,
+        "rmse": 0.37018649505217704,
+        "spearman": null,
+        "target_mean": 0.16835949481024173
+      },
+      "value_inclusive": {
+        "bias": -0.18293151118382506,
+        "count": 972,
+        "mae": 0.18293151118382506,
+        "pearson": null,
+        "prediction_max": 0.0,
+        "prediction_mean": 0.0,
+        "prediction_min": 0.0,
+        "prediction_outside_unit_interval_fraction": 0.0,
+        "rmse": 0.387363526739235,
+        "spearman": null,
+        "target_mean": 0.18293151118382506
+      },
+      "value_slow_gap_mae": 0.0,
+      "value_slow_gap_max": 0.0
+    }
+  ]
+}

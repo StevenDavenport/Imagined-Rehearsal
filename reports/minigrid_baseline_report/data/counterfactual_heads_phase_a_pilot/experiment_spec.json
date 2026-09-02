@@ -1,0 +1,121 @@
+{
+  "action_space": "Discrete(7)",
+  "arms": {
+    "uniform_reservoir": {
+      "description": "Primary CIR baseline: Algorithm-R episode reservoir per goal with uniform sampling over represented goals",
+      "kind": "episode_reservoir",
+      "sampling": "uniform_groups"
+    }
+  },
+  "current_old_fraction": 0.5,
+  "dependency_requirements": {
+    "gymnasium": ">=1.0,<2",
+    "jax": "==0.4.33",
+    "minigrid": "==3.1.0"
+  },
+  "diagnostics": {
+    "canonical_bank_source": "final uniform-reservoir replay, independently fixed per seed",
+    "checkpoint_steps": [
+      0,
+      200000
+    ],
+    "critic_provenance": {
+      "anchors_per_episode": 2,
+      "decomposition": [
+        "reward-only",
+        "bootstrap"
+      ],
+      "horizons": [
+        1,
+        3,
+        6,
+        15
+      ],
+      "posterior_samples": 32,
+      "proposals": [
+        "actor",
+        "recorded control"
+      ]
+    },
+    "failures_per_goal": 16,
+    "head_audit": [
+      "factual and counterfactual reward/continuation",
+      "online and slow critic calibration",
+      "same-state goal sweeps",
+      "same-state categorical actor distributions"
+    ],
+    "successes_per_goal": 16
+  },
+  "diagnostics_enabled": true,
+  "environment_seed_stride": 1000000,
+  "episode_length": 100,
+  "eval_all_every": 50000,
+  "eval_episodes_per_mode": 50,
+  "eval_seed_base": 300000,
+  "evaluation_enabled": true,
+  "evaluation_pairing": "identical environment reset seeds across arms and policy modes",
+  "evaluation_schedule": "active task every 25000 steps; all tasks every 50000 steps, including zero and phase boundaries",
+  "evaluation_units_per_run": 18,
+  "extra_train_configs": [
+    "minigrid_counterfactual_heads"
+  ],
+  "fifo_replay_size_transitions": 100000,
+  "format": 1,
+  "git_commit": "f5e6e256bed9d4e7cec59108a3f8405033ab71f1",
+  "goal_conditioning": "six-way one-hot heads; goal-agnostic RSSM",
+  "jax_platform": "cuda",
+  "live_instrumentation": [
+    "per-goal replay episodes/transitions/sample totals",
+    "per-goal dynamics/reconstruction/reward/continuation losses",
+    "per-goal policy/value losses"
+  ],
+  "model_size": "12m",
+  "name": "minigrid_counterfactual_heads_phase_a_pilot",
+  "observation": "64x64 partial RGB",
+  "paired_rng_seed_base": 202608300,
+  "paired_rng_stride": 1000,
+  "phase_boundaries": [
+    0,
+    200000
+  ],
+  "phase_checkpoint_contents": "agent plus exact replay state",
+  "phase_steps": 200000,
+  "policy_modes": [
+    "sampled",
+    "deterministic"
+  ],
+  "primary_objectives": [
+    "test whether oracle off-goal labels make reward and continuation predictions strongly goal-selective",
+    "verify that factual GoToDoor acquisition is not materially degraded",
+    "decide whether the intervention merits a full multi-seed sequential re-baseline"
+  ],
+  "reservoir_episodes_per_model_goal": 1000,
+  "reservoir_model_goal_slots": 6,
+  "scientific_role": "one-seed Phase-A causal pilot against the existing standard-training baseline; add counterfactual reward and continuation head supervision only, with no critic regularization or actor/critic objective changes",
+  "seeds": [
+    0
+  ],
+  "snapshot_contents": "agent, optimizer, normalizers, and global step",
+  "snapshot_every": 25000,
+  "snapshot_steps": [
+    0,
+    25000,
+    50000,
+    75000,
+    100000,
+    125000,
+    150000,
+    175000,
+    200000
+  ],
+  "task_goal_ids": {
+    "go_to_door": 0
+  },
+  "tasks": [
+    "go_to_door"
+  ],
+  "total_steps_per_run": 200000,
+  "total_training_steps": 200000,
+  "train_ratio": 32.0,
+  "training_environment_seed_policy": "phase_index * environment_seed_stride + recovered steps within phase; identical across arms absent a crash"
+}

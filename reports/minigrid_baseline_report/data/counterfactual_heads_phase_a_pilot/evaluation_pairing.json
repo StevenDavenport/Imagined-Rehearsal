@@ -1,0 +1,105 @@
+{
+  "format": 1,
+  "paired_across_arms_and_modes": true,
+  "records": [
+    {
+      "episodes": 50,
+      "equal": true,
+      "members": [
+        "uniform_reservoir/deterministic",
+        "uniform_reservoir/sampled"
+      ],
+      "seed": 0,
+      "step": 0,
+      "task": "go_to_door"
+    },
+    {
+      "episodes": 50,
+      "equal": true,
+      "members": [
+        "uniform_reservoir/deterministic",
+        "uniform_reservoir/sampled"
+      ],
+      "seed": 0,
+      "step": 25000,
+      "task": "go_to_door"
+    },
+    {
+      "episodes": 50,
+      "equal": true,
+      "members": [
+        "uniform_reservoir/deterministic",
+        "uniform_reservoir/sampled"
+      ],
+      "seed": 0,
+      "step": 50000,
+      "task": "go_to_door"
+    },
+    {
+      "episodes": 50,
+      "equal": true,
+      "members": [
+        "uniform_reservoir/deterministic",
+        "uniform_reservoir/sampled"
+      ],
+      "seed": 0,
+      "step": 75000,
+      "task": "go_to_door"
+    },
+    {
+      "episodes": 50,
+      "equal": true,
+      "members": [
+        "uniform_reservoir/deterministic",
+        "uniform_reservoir/sampled"
+      ],
+      "seed": 0,
+      "step": 100000,
+      "task": "go_to_door"
+    },
+    {
+      "episodes": 50,
+      "equal": true,
+      "members": [
+        "uniform_reservoir/deterministic",
+        "uniform_reservoir/sampled"
+      ],
+      "seed": 0,
+      "step": 125000,
+      "task": "go_to_door"
+    },
+    {
+      "episodes": 50,
+      "equal": true,
+      "members": [
+        "uniform_reservoir/deterministic",
+        "uniform_reservoir/sampled"
+      ],
+      "seed": 0,
+      "step": 150000,
+      "task": "go_to_door"
+    },
+    {
+      "episodes": 50,
+      "equal": true,
+      "members": [
+        "uniform_reservoir/deterministic",
+        "uniform_reservoir/sampled"
+      ],
+      "seed": 0,
+      "step": 175000,
+      "task": "go_to_door"
+    },
+    {
+      "episodes": 50,
+      "equal": true,
+      "members": [
+        "uniform_reservoir/deterministic",
+        "uniform_reservoir/sampled"
+      ],
+      "seed": 0,
+      "step": 200000,
+      "task": "go_to_door"
+    }
+  ]
+}

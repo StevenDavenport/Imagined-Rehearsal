@@ -38,6 +38,9 @@ DATA = ROOT / "data"
 REPORT_PDF = ROOT / "report.pdf"
 SEQ_DATA = DATA / "sequential_baseline"
 SEQ_ANALYSIS = SEQ_DATA / "analysis"
+PILOT_DATA = DATA / "counterfactual_heads_phase_a_pilot"
+PILOT_ANALYSIS = PILOT_DATA / "analysis"
+TWINQ_DATA = DATA / "twin_q_qualification"
 
 BLUE = colors.HexColor("#4C78A8")
 ORANGE = colors.HexColor("#F58518")
@@ -117,6 +120,40 @@ if SEQ_DATA.is_dir():
   SEQ_DIAGNOSTIC_ROWS = seq_csv("diagnostic_inventory.csv")
   SEQ_SPEC = json.loads((SEQ_DATA / "experiment_spec.json").read_text())
   SEQ_STATUS = json.loads((SEQ_DATA / "supervisor_status.json").read_text())
+
+
+def load_csv(path: Path) -> list[dict[str, str]]:
+  with path.open(newline="") as stream:
+    return list(csv.DictReader(stream))
+
+
+PILOT_EVAL_ROWS = load_csv(PILOT_ANALYSIS / "evaluation_curves.csv")
+PILOT_SPEC = json.loads((PILOT_DATA / "experiment_spec.json").read_text())
+PILOT_STATUS = json.loads((PILOT_DATA / "supervisor_status.json").read_text())
+
+BASELINE_PHASE_A_HEAD = (
+    SEQ_DATA / "diagnostics" / "head" / "uniform_reservoir" / "seed_0000" /
+    "step_000000200000")
+PILOT_PHASE_A_HEAD = (
+    PILOT_DATA / "diagnostics" / "head" / "uniform_reservoir" / "seed_0000" /
+    "step_000000200000")
+PILOT_PHASE_A_CRITIC = (
+    PILOT_DATA / "diagnostics" / "critic_provenance" /
+    "uniform_reservoir" / "seed_0000" / "step_000000200000")
+
+BASELINE_COMPLETION_ROWS = load_csv(
+    BASELINE_PHASE_A_HEAD / "completion_confusion.csv")
+PILOT_COMPLETION_ROWS = load_csv(
+    PILOT_PHASE_A_HEAD / "completion_confusion.csv")
+PILOT_CRITIC_ROWS = load_csv(
+    PILOT_PHASE_A_CRITIC / "aggregate_summary.csv")
+
+TWINQ_AGGREGATE_ROWS = load_csv(TWINQ_DATA / "aggregate.csv")
+TWINQ_RUN_ROWS = load_csv(TWINQ_DATA / "final_runs.csv")
+TWINQ_SPEC = json.loads((TWINQ_DATA / "experiment_spec.json").read_text())
+TWINQ_STATUS = json.loads((TWINQ_DATA / "supervisor_status.json").read_text())
+TWINQ_INTEGRITY = json.loads(
+    (TWINQ_DATA / "encoder_integrity.json").read_text())
 
 
 def mean_eval(task: str, checkpoint: int, mode: str) -> tuple[float, float]:
@@ -261,6 +298,68 @@ def critic_weighted_mean(arm: str, horizon: int, proposal: str, field: str,
   ]
   total = sum(int(row["rows"]) for row in selected)
   return sum(float(row[field]) * int(row["rows"]) for row in selected) / total
+
+
+def phase_a_eval(source: str, step: int, mode: str) -> float:
+  rows = PILOT_EVAL_ROWS if source == "pilot" else SEQ_EVAL_ROWS
+  selected = [
+      row for row in rows
+      if row["arm"] == "uniform_reservoir"
+      and row["task"] == "go_to_door"
+      and int(row["seed"]) == 0
+      and int(row["step"]) == step
+      and row["policy_mode"] == mode
+  ]
+  if len(selected) != 1:
+    raise ValueError(
+        f"Expected one {source} Phase-A evaluation row for {step=} {mode=}; "
+        f"found {len(selected)}")
+  return float(selected[0]["success_rate"])
+
+
+def completion_goal_rows(source: str) -> list[dict[str, str]]:
+  rows = PILOT_COMPLETION_ROWS if source == "pilot" else BASELINE_COMPLETION_ROWS
+  selected = [
+      row for row in rows
+      if int(row["event_goal"]) == 0 and int(row["probed_goal"]) < 6
+  ]
+  if len(selected) != 6:
+    raise ValueError(
+        f"Expected six {source} GoToDoor completion-goal rows; "
+        f"found {len(selected)}")
+  return sorted(selected, key=lambda row: int(row["probed_goal"]))
+
+
+def pilot_critic_row(horizon: int, relationship: str) -> dict[str, str]:
+  selected = [
+      row for row in PILOT_CRITIC_ROWS
+      if row["proposal"] == "actor"
+      and row["control_scope"] == "all"
+      and int(row["horizon"]) == horizon
+      and row["relationship"] == relationship
+  ]
+  if len(selected) != 1:
+    raise ValueError(
+        f"Expected one pilot critic row for {horizon=} {relationship=}; "
+        f"found {len(selected)}")
+  return selected[0]
+
+
+def twinq_aggregate(arm: str, metric: str) -> tuple[float, float]:
+  selected = [row for row in TWINQ_AGGREGATE_ROWS if row["arm"] == arm]
+  if len(selected) != 1:
+    raise ValueError(f"Expected one twin-Q aggregate row for {arm!r}")
+  row = selected[0]
+  return float(row[f"{metric}_mean"]), float(row[f"{metric}_std"])
+
+
+def twinq_run_mean(arm: str, metric: str) -> tuple[float, float]:
+  values = [
+      float(row[metric]) for row in TWINQ_RUN_ROWS if row["arm"] == arm]
+  if len(values) != 3:
+    raise ValueError(
+        f"Expected three twin-Q run values for {arm!r} {metric!r}")
+  return fmean(values), pstdev(values)
 
 
 class ReportDocTemplate(BaseDocTemplate):
@@ -1012,6 +1111,244 @@ class ImaginedReturnProvenance(Flowable):
     c.restoreState()
 
 
+class PilotLearningComparison(Flowable):
+
+  def __init__(self, width=515, height=236):
+    super().__init__()
+    self.width = width
+    self.height = height
+
+  def draw(self):
+    c = self.canv
+    c.saveState()
+    panel_w, gap = 232, 27
+    y0, ph = 40, 147
+    steps = tuple(range(0, 200_001, 25_000))
+    for index, mode in enumerate(("sampled", "deterministic")):
+      x0 = 7 + index * (panel_w + gap)
+      px, pw = x0 + 31, panel_w - 39
+      c.setFillColor(DARK)
+      c.setFont("Times-Bold", 8.8)
+      c.drawCentredString(x0 + panel_w / 2, self.height - 15,
+                          mode.capitalize() + " policy")
+      for tick in (0, .25, .5, .75, 1):
+        yy = y0 + tick * ph
+        c.setStrokeColor(GRID)
+        c.setLineWidth(.4)
+        c.line(px, yy, px + pw, yy)
+        c.setFillColor(MID)
+        c.setFont("Times-Roman", 6.5)
+        c.drawRightString(px - 5, yy - 2, f"{tick:.2g}")
+      for step in (0, 50_000, 100_000, 150_000, 200_000):
+        xx = px + step / 200_000 * pw
+        c.setStrokeColor(GRID)
+        c.line(xx, y0, xx, y0 + ph)
+        c.setFillColor(MID)
+        c.setFont("Times-Roman", 6.4)
+        c.drawCentredString(xx, y0 - 11, str(step // 1000))
+      c.setStrokeColor(DARK)
+      c.line(px, y0, px, y0 + ph)
+      c.line(px, y0, px + pw, y0)
+      for source, color, dashed in (
+          ("baseline", ORANGE, True), ("pilot", BLUE, False)):
+        points = [
+            (px + step / 200_000 * pw,
+             y0 + phase_a_eval(source, step, mode) * ph)
+            for step in steps
+        ]
+        c.setStrokeColor(color)
+        c.setFillColor(color)
+        c.setLineWidth(1.7)
+        if dashed:
+          c.setDash(3, 1.5)
+        for left, right in zip(points, points[1:]):
+          c.line(*left, *right)
+        c.setDash()
+        for xx, yy in points:
+          c.circle(xx, yy, 1.9, fill=1, stroke=0)
+      c.setFillColor(DARK)
+      c.setFont("Times-Roman", 7)
+      c.drawCentredString(px + pw / 2, 9, "Environment steps (thousands)")
+      if index == 0:
+        c.saveState()
+        c.translate(10, y0 + ph / 2)
+        c.rotate(90)
+        c.drawCentredString(0, 0, "Success rate")
+        c.restoreState()
+    c.setStrokeColor(ORANGE)
+    c.setDash(3, 1.5)
+    c.line(142, self.height - 32, 162, self.height - 32)
+    c.setDash()
+    c.setFillColor(DARK)
+    c.setFont("Times-Roman", 7)
+    c.drawString(168, self.height - 35, "Standard heads")
+    c.setStrokeColor(BLUE)
+    c.line(281, self.height - 32, 301, self.height - 32)
+    c.drawString(307, self.height - 35, "Counterfactual heads")
+    c.restoreState()
+
+
+class PilotGoalSweep(Flowable):
+
+  def __init__(self, width=515, height=274):
+    super().__init__()
+    self.width = width
+    self.height = height
+
+  def draw(self):
+    c = self.canv
+    c.saveState()
+    baseline = completion_goal_rows("baseline")
+    pilot = completion_goal_rows("pilot")
+    panel_w, gap = 160, 13
+    x_origin, y0, ph = 2, 54, 164
+    labels = ("Door", "Fetch", "Object", "Put", "Unlock", "Pickup")
+    panels = (
+        ("Completion reward", lambda row: float(row["reward_mean"])),
+        ("Stop probability", lambda row: 1 - float(row["continuation_mean"])),
+        ("Online critic value", lambda row: float(row["value_mean"])),
+    )
+    for index, (title, accessor) in enumerate(panels):
+      x0 = x_origin + index * (panel_w + gap)
+      px, pw = x0 + 27, panel_w - 33
+      c.setFillColor(DARK)
+      c.setFont("Times-Bold", 8.2)
+      c.drawCentredString(x0 + panel_w / 2, self.height - 14, title)
+      for tick in (0, .25, .5, .75, 1):
+        yy = y0 + tick * ph
+        c.setStrokeColor(GRID)
+        c.setLineWidth(.4)
+        c.line(px, yy, px + pw, yy)
+        c.setFillColor(MID)
+        c.setFont("Times-Roman", 5.8)
+        c.drawRightString(px - 4, yy - 2, f"{tick:.2g}")
+      group_w = pw / 6
+      c.setFillColor(LIGHTBLUE)
+      c.rect(px, y0, group_w, ph, fill=1, stroke=0)
+      for goal in range(6):
+        centre = px + (goal + .5) * group_w
+        bar_w = group_w * .31
+        for offset, rows, color in (
+            (-bar_w, baseline, ORANGE), (0, pilot, BLUE)):
+          value = max(0.0, min(1.0, accessor(rows[goal])))
+          c.setFillColor(color)
+          c.rect(centre + offset, y0, bar_w, value * ph,
+                 fill=1, stroke=0)
+        c.saveState()
+        c.translate(centre + 2, y0 - 6)
+        c.rotate(55)
+        c.setFillColor(MID)
+        c.setFont("Times-Roman", 5.5)
+        c.drawRightString(0, 0, labels[goal])
+        c.restoreState()
+      c.setStrokeColor(DARK)
+      c.line(px, y0, px, y0 + ph)
+      c.line(px, y0, px + pw, y0)
+    c.setFillColor(LIGHTBLUE)
+    c.rect(26, 16, 9, 9, fill=1, stroke=0)
+    c.setFillColor(DARK)
+    c.setFont("Times-Roman", 6.8)
+    c.drawString(40, 17, "Factual GoToDoor query")
+    c.setFillColor(ORANGE)
+    c.rect(176, 16, 9, 9, fill=1, stroke=0)
+    c.setFillColor(DARK)
+    c.drawString(190, 17, "Standard heads")
+    c.setFillColor(BLUE)
+    c.rect(306, 16, 9, 9, fill=1, stroke=0)
+    c.setFillColor(DARK)
+    c.drawString(320, 17, "Counterfactual heads")
+    c.restoreState()
+
+
+class TwinQQualificationFigure(Flowable):
+
+  def __init__(self, width=515, height=238):
+    super().__init__()
+    self.width = width
+    self.height = height
+
+  def draw(self):
+    c = self.canv
+    c.saveState()
+    panels = (
+        (
+            "Calibration and consistency (lower is better)", .52,
+            (
+                ("Return", "MAE", "factual_return_mae"),
+                ("Bellman", "MAE", "bellman_mae_all_queries"),
+                ("Twin-Q", "gap", "q_disagreement_mean"),
+            ),
+            (0, .1, .2, .3, .4, .5),
+        ),
+        (
+            "Goal selectivity (higher is better)", .85,
+            (
+                ("Match-minus", "nonmatch", "matching_minus_nonmatching_mean"),
+                ("Initial-goal", "rank accuracy", "successful_initial_goal_rank_accuracy"),
+            ),
+            (0, .2, .4, .6, .8),
+        ),
+    )
+    panel_w, gap = 244, 21
+    y0, ph = 49, 137
+    for panel_index, (title, ymax, metrics, ticks) in enumerate(panels):
+      x0 = 2 + panel_index * (panel_w + gap)
+      px, pw = x0 + 31, panel_w - 38
+      c.setFillColor(DARK)
+      c.setFont("Times-Bold", 8.2)
+      c.drawCentredString(x0 + panel_w / 2, self.height - 15, title)
+      for tick in ticks:
+        yy = y0 + tick / ymax * ph
+        c.setStrokeColor(GRID)
+        c.setLineWidth(.4)
+        c.line(px, yy, px + pw, yy)
+        c.setFillColor(MID)
+        c.setFont("Times-Roman", 5.8)
+        c.drawRightString(px - 4, yy - 2, f"{tick:.1f}")
+      c.setStrokeColor(DARK)
+      c.line(px, y0, px, y0 + ph)
+      c.line(px, y0, px + pw, y0)
+      group_w = pw / len(metrics)
+      bar_w = min(18, group_w * .25)
+      for metric_index, (label1, label2, metric) in enumerate(metrics):
+        centre = px + (metric_index + .5) * group_w
+        for arm_index, (arm, color) in enumerate((
+            ("factual_only", ORANGE), ("counterfactual", BLUE))):
+          mean, sd = twinq_aggregate(arm, metric)
+          left = centre + (-1.1 if arm_index == 0 else .1) * bar_w
+          height = max(0, min(ph, mean / ymax * ph))
+          c.setFillColor(color)
+          c.rect(left, y0, bar_w, height, fill=1, stroke=0)
+          error = sd / ymax * ph
+          xmid = left + bar_w / 2
+          c.setStrokeColor(DARK)
+          c.setLineWidth(.55)
+          c.line(xmid, y0 + height - error, xmid, y0 + height + error)
+          c.line(xmid - 2, y0 + height - error,
+                 xmid + 2, y0 + height - error)
+          c.line(xmid - 2, y0 + height + error,
+                 xmid + 2, y0 + height + error)
+          c.setFillColor(DARK)
+          c.setFont("Times-Roman", 5.5)
+          c.drawCentredString(
+              xmid, min(y0 + ph + 5, y0 + height + error + 4),
+              f"{mean:.3f}")
+        c.setFillColor(DARK)
+        c.setFont("Times-Roman", 6.2)
+        c.drawCentredString(centre, y0 - 11, label1)
+        c.drawCentredString(centre, y0 - 19, label2)
+    c.setFillColor(ORANGE)
+    c.rect(157, 12, 9, 9, fill=1, stroke=0)
+    c.setFillColor(DARK)
+    c.setFont("Times-Roman", 6.8)
+    c.drawString(171, 13, "Factual-only twin Q")
+    c.setFillColor(BLUE)
+    c.rect(286, 12, 9, 9, fill=1, stroke=0)
+    c.setFillColor(DARK)
+    c.drawString(300, 13, "Counterfactual twin Q")
+    c.restoreState()
+
+
 def styles():
   base = getSampleStyleSheet()
   return {
@@ -1153,14 +1490,14 @@ def callout(title: str, text: str, background=LIGHTBLUE, border=BLUE):
 def build_story():
   story = []
   story += [Spacer(1, 15 * mm), P("MiniGrid Experiments for<br/>Continual Imagined Rehearsal", "Title")]
-  story += [P("Independent task audition and visibility-first sequential baseline:<br/>acquisition, forgetting, replay allocation, reward semantics, and critic provenance", "Subtitle")]
+  story += [P("Task audition, visibility-first sequential baseline, counterfactual-head pilot, and twin-Q qualification:<br/>acquisition, forgetting, goal semantics, and critic provenance", "Subtitle")]
   story += [Spacer(1, 4 * mm), P("Steven Davenport", "Meta"),
             P("Continual Reinforcement Learning Research Notes", "Meta"),
             Spacer(1, 3 * mm),
-            P("Studies completed 30 August and 1 September 2026; report updated 1 September 2026", "Meta")]
+            P("Studies completed 30 August and 1 September 2026; report updated 2 September 2026", "Meta")]
   story += [Spacer(1, 5 * mm), P("Abstract", "AbstractTitle")]
   abstract = (
-      "This report records two MiniGrid studies in the Continual Imagined Rehearsal (CIR) programme. Study I trained "
+      "This report records four MiniGrid studies in the Continual Imagined Rehearsal (CIR) programme. Study I trained "
       "six fixed-mission tasks independently for 100,000 environment steps over three seeds. It established that the "
       "reduced 12M DreamerV3 agent was neither uniformly saturated nor uniformly incapable, but rejected the assumption "
       "that the candidate tasks had equal difficulty: PutNear was reliable, GoToDoor, Fetch, and GoToObject were "
@@ -1172,15 +1509,28 @@ def build_story():
       "and the active task every 25k under both sampled and deterministic policies, yielding 1,512 conditions and "
       "75,600 episodes. Ninety read-only audits probed identical replay states at five phase boundaries. The complete "
       "workflow took 30.17 hours on one RTX 4090 with no failed scientific unit.<br/><br/>"
-      "The central result is a joint acquisition-retention failure. FIFO learned GoToDoor and PutNear but erased "
+      "Study II exposed a joint acquisition-retention failure. FIFO learned GoToDoor and PutNear but erased "
       "GoToDoor; 50:50 replay acquired three tasks but retained only 28.7% GoToDoor success; uniform replay preserved "
       "teaching exposure but progressively starved the current task and ended at zero success on every task. Forward "
       "transfer was absent. Mechanistically, reward-event AUROC often approached one while same-state completion-goal "
       "top-1 accuracy remained weak. More seriously, the critic became grossly overoptimistic: uniform-reservoir value "
       "predictions reached 3.63 against a fixed realized-return mean of 0.077, the slow critic tracked the same error, "
-      "and imagined targets were dominated by bootstrap value. Actor-selected imagination amplified the error. These "
-      "findings make unregularized critic-bootstrapped IR unsafe as the next intervention and motivate counterfactual "
-      "reward supervision plus bounded or reward-only rehearsal before gating is tested."
+      "and imagined targets were dominated by bootstrap value. Actor-selected imagination amplified the error.<br/><br/>"
+      "Study III then reran the matched seed-0 GoToDoor Phase-A case with one intervention: equal-weight oracle "
+      "counterfactual supervision for reward and continuation on stop-gradient posterior features. Final success rose "
+      "from 56% to 88% sampled and from 48% to 86% deterministic in this single seed. On completion states, factual "
+      "reward was 0.844 while five wrong-goal rewards averaged 1.87e-6; factual stop probability was 0.99994 while "
+      "wrong-goal stop probability averaged 0.00286. The unchanged critic remained flat at approximately 0.814-0.818 "
+      "across all six goal queries, and wrong-goal imagined returns remained bootstrap-dominated. Counterfactual head "
+      "training therefore causally repairs the measured reward/continuation semantics without making the critic a safe "
+      "teacher. The pilot contains one task and one training seed and is not evidence about forgetting.<br/><br/>"
+      "Study IV froze the 400k two-goal representation and actor, then trained new discrete-action twin-Q critics from "
+      "replay without the existing value head or a reward oracle. Across three Q initializations, counterfactual "
+      "one-step relabelling reduced factual return MAE from 0.441 to 0.357, all-query Bellman MAE from 0.090 to 0.055, "
+      "and twin disagreement from 0.056 to 0.043 relative to a dose-matched factual-only control. The same-state "
+      "matching-minus-nonmatching value gap doubled from 0.157 to 0.322 and successful initial-state goal ranking rose "
+      "from chance to 75.5%. This qualifies ordinary counterfactual TD as a promising critic-training mechanism, but "
+      "the offline two-goal study has no counterfactual return oracle and does not yet validate actor learning or CIR."
   )
   story += [P(abstract, "Small"), PageBreak()]
 
@@ -1668,73 +2018,337 @@ def build_story():
       "behavior is still poor. These data reinforce a crucial distinction: replay can keep old examples and stabilize "
       "parameters without retaining a competent goal-conditioned policy.")]
 
-  story += [heading("9. Implications for continual imagined rehearsal")]
-  story += [heading("9.1 What the baseline establishes", 2)]
+  story += [heading("9. Study III: counterfactual-head Phase-A pilot")]
+  story += [heading("9.1 Question and single-factor intervention", 2)]
+  story += [P(
+      "Study II showed that factual reward detection can coexist with weak goal semantics, but its read-only audit was "
+      "correlational. Study III makes the causal intervention: rerun only the seed-0 uniform-reservoir GoToDoor phase "
+      "from scratch while changing reward and continuation supervision. The question is whether explicit negative "
+      "labels for the five nonmatching goal queries repair same-state semantics without preventing factual task "
+      "acquisition.")]
+  pilot_design = [
+      ["Component", "Matched standard Phase A", "Counterfactual-head pilot"],
+      ["Task / seed / budget", "GoToDoor / 0 / 200k", "GoToDoor / 0 / 200k"],
+      ["Agent / replay", "12M Dreamer; uniform reservoir", "identical"],
+      ["Factual reward and continuation", "ordinary observed targets", "unchanged"],
+      ["Five wrong-goal queries", "no explicit target", "reward = 0; factual completion continues"],
+      ["Physical terminal", "stops the factual goal", "stops every goal"],
+      ["Counterfactual feature path", "not present", "stop-gradient posterior features"],
+      ["Actor / critic objectives", "ordinary Dreamer", "unchanged; no regularization"],
+      ["Evaluation", "9 checkpoints x 2 modes x 50 episodes", "same reset and policy-RNG schedule"],
+  ]
+  story += [report_table(pilot_design, [124, 188, 201], font_size=6.6),
+            caption("Table 11", "Matched Phase-A intervention contract. The counterfactual loss is averaged over the five nonmatching goals and has equal weight to the factual head loss.")]
+  story += [P(
+      "The added path receives stopped posterior features, so it can update only the reward and continuation heads. It "
+      "cannot alter the encoder or RSSM through the counterfactual loss. The actor, online critic, slow critic, their "
+      "targets, and their objectives remain untouched. This isolates head semantics from generic critic regularization "
+      "and from the CIR behavior-learning mechanism itself.")]
+
+  story += [heading("9.2 Execution integrity and factual acquisition", 2)]
+  story += [P(
+      "The run completed 200,000/200,000 environment steps, all 18 checkpoint-policy evaluation conditions, and all "
+      "four read-only diagnostic jobs with no failed scientific attempt. Nine immutable snapshots cover 0-200k at "
+      "25k intervals. Every evaluation contains exactly 50 episodes and 50 resets with unchanged checkpoint hashes; "
+      "the 0k and 200k head and critic audits also preserve parameter hashes. The supervisor reached terminal status "
+      "<i>complete</i> 39.35 minutes after its recorded creation time on the RTX 4090.")]
+  story += [PilotLearningComparison(), caption(
+      "Figure 12",
+      "GoToDoor success for the matched standard-training and counterfactual-head seed-0 Phase-A runs. Each point is "
+      "50 episodes; sampled and deterministic modes use the same reset identities and paired policy random-key "
+      "schedule in both runs. This is one training seed, so the earlier acquisition and final gap are descriptive, not "
+      "a population-level performance claim.")]
+  pilot_behavior = [
+      ["Policy mode", "Initial standard", "Initial pilot", "Final standard", "Final pilot", "Final difference"],
+      ["Sampled", "2%", "2%", "56%", "88%", "+32 pp"],
+      ["Deterministic", "0%", "0%", "48%", "86%", "+38 pp"],
+  ]
+  story += [report_table(pilot_behavior, [92, 82, 77, 85, 77, 88], font_size=6.9,
+                               alignments=[TA_LEFT] + [TA_CENTER] * 5),
+            caption("Table 12", "Matched seed-0 GoToDoor evaluation at 0 and 200k. Every cell contains 50 episodes; sampled and deterministic results are not pooled.")]
+  story += [P(
+      "Factual learning was therefore not degraded in the prespecified case. The pilot first reached high checkpoint "
+      "success at 75k and remained between 84% and 100% through 200k, whereas the matched standard run remained at "
+      "zero through 150k before reaching 56% sampled and 48% deterministic success. This is compatible with a useful "
+      "acquisition effect, but one seed cannot distinguish a robust benefit from training-path sensitivity.")]
+
+  story += [heading("9.3 Counterfactual supervision repairs reward and continuation semantics", 2)]
+  story += [PilotGoalSweep(), caption(
+      "Figure 13",
+      "Six-goal queries on GoToDoor completion states at 200k. Within each run, the posterior state is held fixed and "
+      "only the queried goal changes; each bar summarizes 16 completion events. The standard and pilot diagnostics use "
+      "their own immutable final-replay state banks, so cross-run heights are descriptive while each within-run goal "
+      "contrast is exact. Stop probability is one minus predicted continuation.")]
+  story += [P(
+      "The repair is nearly complete on the measured completion semantics. Factual reward reaches 0.844063 with AUROC "
+      "and average precision both 1.0. The five nonmatching completion rewards lie between 1.78e-6 and 1.92e-6, giving "
+      "a factual-minus-nonmatching margin of 0.844061 and six-way completion-goal top-1 accuracy of 100%. The standard "
+      "reference instead assigns 0.659 factual reward and 0.661-0.672 to wrong goals on its GoToDoor completion bank.")]
+  story += [P(
+      "Continuation changes in the intended direction as well. Under the factual query, completion continuation is "
+      "0.0000585, or stop probability 0.9999415. Under the five wrong-goal queries, continuation is 0.997119-0.997157, "
+      "or stop probability only 0.002843-0.002882. Standard training predicts a stop probability above 0.999 for both "
+      "factual and wrong goals. Counterfactual supervision has therefore taught the heads that the same physical event "
+      "completes GoToDoor but does not terminate the other task objectives.")]
+
+  story += [heading("9.4 The unchanged critic does not inherit goal selectivity", 2)]
+  story += [P(
+      "The clean head repair does not propagate automatically into the critic. On the same pilot completion states, the "
+      "online critic predicts 0.817672 for GoToDoor and 0.813715-0.817463 for the five wrong goals; the complete "
+      "six-query range is only 0.003957. The slow critic is similarly flat at 0.815326-0.819497. Across all 972 audited "
+      "GoToDoor states, the online critic predicts a mean inclusive return of 0.750510 against a realized mean of "
+      "0.182932, a +0.567578 bias. Correct reward semantics are therefore not sufficient to calibrate or goal-separate "
+      "the unchanged Dreamer value objective in this run.")]
+  pilot_imagination = [[
+      "H", "Factual full", "Factual reward", "Factual bootstrap", "Wrong-goal full", "Wrong-goal reward", "Wrong bootstrap"]]
+  for horizon in (1, 3, 6, 15):
+    factual = pilot_critic_row(horizon, "factual")
+    wrong = pilot_critic_row(horizon, "counterfactual")
+    pilot_imagination.append([
+        str(horizon),
+        f"{float(factual['return_mean']):.3f}",
+        f"{float(factual['reward_only_mean']):.3f}",
+        f"{100 * float(factual['bootstrap_fraction']):.1f}%",
+        f"{float(wrong['return_mean']):.3f}",
+        (f"{float(wrong['reward_only_mean']):.2e}" if horizon == 1
+         else f"{float(wrong['reward_only_mean']):.4f}"),
+        f"{100 * float(wrong['bootstrap_fraction']):.2f}%",
+    ])
+  story += [report_table(pilot_imagination, [30, 76, 81, 84, 83, 85, 74], font_size=6.4,
+                               alignments=[TA_CENTER] * 7),
+            caption("Table 13", "Actor-selected imagined-return decomposition at the pilot 200k checkpoint. Full return equals predicted reward contribution plus critic bootstrap under the continuation-weighted target; wrong-goal rows pool the five nonmatching queries.")]
+  story += [P(
+      "The imagination audit makes the residual failure operational. At H=15 the corrected wrong-goal reward-only "
+      "contribution is 0.0033, yet the full wrong-goal return is 0.516 because 98.96% of its magnitude is attributed to "
+      "critic bootstrap. At H=1 the wrong-goal reward contribution is effectively zero while the full target remains "
+      "0.796. An actor trained with the standard bootstrapped IR objective would still receive a large positive signal "
+      "for goals that the reward and continuation heads now correctly reject.")]
+
+  story += [heading("9.5 Interpretation and claim boundary", 2)]
+  story += [callout(
+      "Causal result.",
+      "Explicit counterfactual labels repair the measured reward and continuation goal semantics while preserving "
+      "factual GoToDoor learning. Because the critic objective was unchanged, its flat cross-goal values isolate the "
+      "next unresolved mechanism rather than weakening the head result.", LIGHTGREEN, GREEN)]
+  story += [P(
+      "This pilot does not show that counterfactual heads reduce catastrophic forgetting, generalize across tasks or "
+      "training seeds, or make critic-bootstrapped rehearsal safe. It also supplies no oracle counterfactual actor or "
+      "critic target. Extending the same labels mechanically into those objectives would overlap with the CIR method "
+      "and requires a separately derived target and controls against bootstrap leakage.")]
+
+  story += [PageBreak(), heading("10. Study IV: offline counterfactual twin-Q qualification")]
+  story += [heading("10.1 Question and controlled critic target", 2)]
+  story += [P(
+      "Study III rejects the proposed upstream-propagation explanation: explicitly fixing reward and continuation "
+      "conditioning did not make the unchanged Dreamer critic selective or calibrated. Study IV asks the next narrow "
+      "question: can an ordinary counterfactual one-step temporal-difference objective train a goal-selective critic "
+      "without an oracle value, the existing optimistic critic, or a 15-step imagined return?")]
+  story += [P(
+      "The source is the seed-0 50:50-current/old checkpoint immediately after Fetch at 400k. Its frozen policy solved "
+      "Fetch at 84% sampled and 90% deterministic success but scored zero on GoToDoor in both modes, supplying an "
+      "intentionally asymmetric acquired/forgotten two-goal state distribution. The encoder, RSSM, actor, reward and "
+      "continuation heads, and both original value heads are frozen. New near-zero discrete-action twin-Q networks "
+      "receive posterior features and a GoToDoor or Fetch query and emit values for all seven actions.")]
+  twin_q_design = [
+      ["Component", "Pinned setting", "Scientific role"],
+      ["Source", "50:50 arm; seed 0; 400k", "Frozen post-Fetch checkpoint and exact replay"],
+      ["Replay banks", "256 train / 128 held-out episodes", "64/32 successes and failures per goal; episode-disjoint"],
+      ["Transitions", "12,242 train / 6,097 held-out", "One-step recorded posterior transitions"],
+      ["Critic", "Two 2x256 MLP Q networks; 7 actions", "Independent initialization; minimum target"],
+      ["Bootstrap", "Frozen-actor exact action expectation", "EMA twin-Q targets only; tau 0.01; gamma 0.99"],
+      ["Factual-only arm", "Observed goal repeated twice", "Dose-matched ordinary TD control"],
+      ["Counterfactual arm", "GoToDoor and Fetch on every transition", "Zero nonmatching event reward; goal-specific continuation"],
+      ["Optimization", "10,000 updates; batch 128; LR 1e-4", "Three Q seeds per arm; six completed runs"],
+  ]
+  story += [report_table(twin_q_design, [108, 190, 215], font_size=6.5),
+            caption("Table 14", "Study IV frozen offline qualification. Q seeds vary only the newly initialized critics; they are not independent environment or Dreamer training seeds.")]
+  story += [callout(
+      "Twin-Q target.",
+      "<font name='Courier' size='8'>y_g = r_g + gamma c_g sum_a pi(a | s_next, g) "
+      "min(Q1_target, Q2_target)</font>")]
+  story += [P(
+      "The actor distribution is evaluated exactly rather than sampled. Recorded reward "
+      "is assigned only to the matching goal; nonmatching immediate reward is zero. Goal completion stops the matching "
+      "query but continues the other goal, while physical and non-goal episode endings stop both. The factual control "
+      "duplicates its observed goal across two query slots so both arms receive the same labelled-example dose. The "
+      "original Dreamer value heads are references only and never enter the target.")]
+
+  story += [heading("10.2 Execution integrity and reference critic", 2)]
+  story += [P(
+      "All six 10,000-update runs completed. Latent encoding took 16.5 seconds and the complete clean workflow ran from "
+      "22:41:01 to 22:44:16 BST, approximately 3.25 minutes on the RTX 4090; individual Q runs required 28.9-30.8 "
+      "seconds. Before/after hashes match for all 506 frozen Dreamer arrays, including the actor, critic, reward and "
+      "continuation, representation, world model, normalizer, and optimizer namespaces.")]
+  story += [P(
+      "The common held-out bank exposes the original failure starkly. The frozen source slow critic has factual-return "
+      "MAE 0.7349, predicts mean factual value 0.8627 and mean nonmatching value 0.8742, and places both goals above 0.5 "
+      "on 99.18% of transitions. Its nonmatching value is slightly higher than its factual value. In contrast, both new "
+      "twin-Q systems remain conservative: their mean factual values are -0.0456 and -0.0318 against a recorded "
+      "behavior-return mean of 0.1328. The comparison below is therefore about calibration and selectivity within the "
+      "new critic family, not a claim that either new critic has recovered the original value scale perfectly.")]
+
+  story += [heading("10.3 Counterfactual TD improves calibration and goal selectivity", 2)]
+  story += [TwinQQualificationFigure(), caption(
+      "Figure 14",
+      "Held-out Study IV metrics after 10,000 updates. Bars are means over three Q initializations and whiskers are "
+      "population standard deviations. Return MAE uses factual recorded behavior-policy returns; Bellman MAE evaluates "
+      "one-step self-consistency for both goal queries under the frozen actor. Goal-rank accuracy is measured on successful initial "
+      "states.")]
+  twin_q_results = [
+      ["Held-out metric", "Factual-only", "Counterfactual", "Counterfactual change"],
+      ["Factual return MAE (lower)", "0.441 +/- 0.045", "0.357 +/- 0.024", "-0.084 (-19.0%)"],
+      ["Factual return bias (toward zero)", "-0.178 +/- 0.064", "-0.165 +/- 0.043", "+0.014"],
+      ["All-query Bellman MAE (lower)", "0.090 +/- 0.005", "0.055 +/- 0.004", "-0.035 (-39.0%)"],
+      ["Twin-Q disagreement (lower)", "0.056 +/- 0.003", "0.043 +/- 0.003", "-0.013 (-22.7%)"],
+      ["Matching-minus-nonmatching value", "0.157 +/- 0.004", "0.322 +/- 0.025", "+0.166 (+105.9%)"],
+      ["Successful initial goal rank", "0.500 +/- 0.000", "0.755 +/- 0.048", "+25.5 pp"],
+      ["Mean nonmatching value", "-0.202 +/- 0.064", "-0.354 +/- 0.030", "-0.152 (descriptive)"],
+  ]
+  story += [report_table(
+      twin_q_results, [169, 111, 113, 120], font_size=6.5,
+      alignments=[TA_LEFT, TA_CENTER, TA_CENTER, TA_CENTER]),
+      caption("Table 15", "Final held-out means +/- population SD across three Q initializations. Lower nonmatching value is evidence of separation, not counterfactual calibration, because no unseen-goal return label exists.")]
+  story += [P(
+      "The counterfactual arm improves every primary qualification statistic. Factual return MAE falls by 19.0% rather "
+      "than trading factual calibration for goal separation. All-query Bellman error falls by 39.0%, twin disagreement "
+      "falls by 22.7%, and the matching-minus-nonmatching gap more than doubles. Successful initial-state goal ranking "
+      "moves from exactly chance in every factual-only seed to 68.75-79.69% in the counterfactual seeds. Neither arm "
+      "reproduces the original all-goals-high failure: the rate is 0.10% for factual-only and zero for counterfactual.")]
+  distance_table = [[
+      "Next positive reward", "Held-out transitions", "Factual-only MAE", "Counterfactual MAE", "Difference"]]
+  for label, count, metric in (
+      ("1 action", 64, "factual_return_mae_d1"),
+      ("2-5 actions", 245, "factual_return_mae_d2_5"),
+      ("6-15 actions", 493, "factual_return_mae_d6_15"),
+      ("16+ actions", 654, "factual_return_mae_d16_plus"),
+      ("No future reward", 4641, "factual_return_mae_no_future_reward"),
+  ):
+    factual_mean, _ = twinq_run_mean("factual_only", metric)
+    counterfactual_mean, _ = twinq_run_mean("counterfactual", metric)
+    distance_table.append([
+        label, f"{count:,}", f"{factual_mean:.3f}",
+        f"{counterfactual_mean:.3f}",
+        f"{counterfactual_mean - factual_mean:+.3f}"])
+  story += [report_table(
+      distance_table, [133, 105, 99, 107, 69], font_size=6.7,
+      alignments=[TA_LEFT] + [TA_CENTER] * 4),
+      caption("Table 16", "Factual return MAE by distance from the next positive recorded reward. Counterfactual training improves every bin, including the 654 transitions more than the Dreamer imagination horizon of 15 actions from reward.")]
+
+  story += [heading("10.4 Interpretation and claim boundary", 2)]
+  story += [callout(
+      "Qualification result.",
+      "Ordinary one-step counterfactual twin-Q training creates substantially stronger two-goal separation while also "
+      "improving factual calibration, Bellman consistency, and twin agreement. It does so without an oracle value or "
+      "the original critic bootstrap. This is sufficient to advance the mechanism into a normal CRL-pipeline test, but "
+      "not sufficient to call the critic a validated actor or rehearsal teacher.", LIGHTGREEN, GREEN)]
+  story += [P(
+      "The original theory was incorrect in its simple form. Weak reward/continuation conditioning did not merely "
+      "propagate into an otherwise sound critic: repairing those heads left the existing critic flat, whereas directly "
+      "changing the new critic's labelled TD objective produced selectivity. The remaining problem is critic training "
+      "and target construction itself. The result also shows why a no-bootstrap critic target is unnecessary: one-step TD "
+      "backs up sparse rewards repeatedly through recorded replay, including trajectories whose reward lies beyond the "
+      "15-step imagination horizon.")]
+  story += [P(
+      "The positive result remains deliberately narrow. The three repetitions are Q initialization seeds on one fixed "
+      "Dreamer checkpoint and one replay split. Held-out factual targets are behavior-policy returns rather than exact "
+      "returns under the frozen actor, and no counterfactual ground-truth return exists. The actor is frozen, the new "
+      "critics are not installed into Dreamer, no policy improvement or imagined rehearsal is attempted, and only "
+      "GoToDoor and Fetch are queried. Absolute factual errors remain material, especially within 15 actions of sparse "
+      "reward. The next study must test the same target online in the ordinary CRL pipeline before it is allowed to "
+      "teach an actor.")]
+
+  story += [heading("11. Implications for continual imagined rehearsal")]
+  story += [heading("11.1 What the combined evidence establishes", 2)]
   story += [bullets([
       "<b>Catastrophic forgetting is measurable in MiniGrid.</b> GoToDoor supplies a strong, replicated acquisition-to-collapse signal, so Dreamer is not too strong for the selected sequential regime.",
       "<b>Memory availability is not enough.</b> Both reservoir arms retain old goal episodes, yet old behavior degrades and late tasks become harder to acquire.",
       "<b>Uniform replay is a scientifically useful but poor performance baseline.</b> Its low current-task share reveals why CIR was intended to keep the actor focused on the current posterior while components rehearse old goals.",
-      "<b>The reward model is only partly serviceable.</b> Factual event recognition can remain strong while counterfactual goal semantics remain weak.",
-      "<b>The critic is presently unsafe for unbounded IR.</b> Its real-state calibration is poor, its slow copy repeats the error, and actor-selected imagination increases the target.",
+      "<b>Reward and continuation semantics are directly repairable.</b> Counterfactual labels create the intended same-state separation without changing the representation or behavior objectives.",
+      "<b>The original critic failure is not simple upstream propagation.</b> It remains optimistic and goal-insensitive after reward and continuation repair, so weak head conditioning was not the sole cause.",
+      "<b>Ordinary counterfactual TD is a promising critic mechanism.</b> A separate EMA twin-Q learner improves factual calibration and doubles same-state goal separation without an oracle value or the original critic bootstrap.",
+      "<b>Factual acquisition survives the semantic intervention.</b> The pilot outperforms its matched reference in both policy modes, but one training seed cannot establish a general behavioral advantage.",
       "<b>Forward transfer is not yet present.</b> The next intervention should first solve acquisition and retention; positive transfer remains a later criterion.",
   ])]
 
-  story += [heading("9.2 Recommended next experimental sequence", 2)]
+  story += [heading("11.2 Recommended next experimental sequence", 2)]
   story += [P(
       "The next run should not add a gate around the current teacher. Gating decides <i>when</i> to use a signal; it does "
-      "not make a semantically confused reward head or overoptimistic critic correct. The evidence supports a staged "
-      "mechanistic programme:")]
+      "not make an overoptimistic or goal-insensitive critic correct. Study IV has now supplied a qualified target "
+      "construction, so the evidence supports the following staged mechanistic programme:")]
   story += [bullets([
-      "Train the reward and continuation heads with counterfactual goal labels on real replay states, including explicit nonmatching goals. Require high completion-goal top-1 accuracy and a material matching-minus-nonmatching margin on held-out state banks.",
-      "Regularize or bound the critic during ordinary training. Candidate controls include Monte Carlo calibration on replay, bounded success-probability values, conservative targets, and explicit penalties for values outside the task's feasible return range.",
-      "Before using any critic tail in IR, compare reward-only rehearsal with bounded-bootstrap rehearsal. The unmodified critic-bootstrapped objective should remain a negative control, not the presumed default.",
+      "Treat counterfactual reward and continuation training as a validated head-level intervention, while retaining the ordinary factual losses and stopped feature path used in the pilot.",
+      "Install the Study IV one-step EMA twin-Q target into the ordinary two-goal CRL training pipeline while initially keeping its output out of the actor loss. Preserve the dose-matched factual twin-Q arm and the existing Dreamer critic as controls.",
+      "Repeat held-out factual calibration, same-state goal ranking, Bellman residual, twin disagreement, distance-to-reward, and source-parameter integrity checks during online training. Add fresh-policy factual returns so behavior-policy mismatch can be quantified.",
+      "Only after the online critic remains stable should the actor receive its target. Compare critic-guided learning against a frozen-actor control and reward-only actor training before allowing the critic into imagined rehearsal.",
       "Retain both reservoir allocations. Uniform replay remains the primary component-preservation baseline; 50:50 remains the ordinary-replay comparator that CIR must beat on current acquisition.",
-      "Only after the repaired teacher passes frozen-state and imagined-path audits should a safety gate be calibrated. The gate should veto uncertain or out-of-distribution rehearsal, not compensate for known target bias.",
+      "Only after the repaired teacher passes online real-state and imagined-path audits should a safety gate be calibrated. The gate should veto uncertain or out-of-distribution rehearsal, not compensate for known target bias.",
       "Repeat the four-task stream over more seeds after the intervention is fixed, then carry the validated mechanism through Fetch-style simulated manipulation, redesigned RLScape, and finally the CoBot320Pi arm.",
   ], numbered=True)]
   story += [callout(
-      "Primary next hypothesis.",
-      "Counterfactually supervised reward semantics plus reward-only or bounded-value imagined rehearsal should retain "
-      "old-task competence without reducing current-task exposure below the 50:50 replay control. Success requires both "
-      "behavioral retention and a calibrated, goal-selective teaching signal.", LIGHTGREEN, GREEN)]
+      "Immediate decision.",
+      "The head intervention and the offline counterfactual twin-Q target have passed their respective qualification "
+      "gates. The next experiment should move the same twin-Q target into the usual two-goal CRL pipeline, without yet "
+      "granting it control of the actor.", LIGHTGREEN, GREEN)]
 
-  story += [heading("9.3 Relationship to the RLScape evidence", 2)]
+  story += [heading("11.3 Relationship to the RLScape evidence", 2)]
   story += [P(
       "The MiniGrid baseline does not replace RLScape; it removes one major ambiguity from it. RLScape's large click "
       "action space and Berry Bones task could have masqueraded as agent failure. MiniGrid uses seven shared actions and "
       "still reproduces the two most important mechanistic findings: weak counterfactual reward semantics and severe "
-      "critic optimism. The critic problem is therefore unlikely to be only an RLScape action-resolution artifact. At "
-      "the same time, MiniGrid shows that task difficulty remains consequential: GoToObject and late-task reservoir "
-      "acquisition are weak enough that behavior alone cannot identify the failing component.")]
+      "critic optimism. The critic problem is therefore unlikely to be only an RLScape action-resolution artifact. "
+      "MiniGrid now also supplies a cheap candidate solution: event-local counterfactual labels plus conservative "
+      "one-step twin-Q bootstrapping. It should be validated in MiniGrid's online pipeline before translation to "
+      "RLScape's larger action space.")]
 
-  story += [heading("10. Limitations and claim boundaries")]
+  story += [heading("12. Limitations and claim boundaries")]
   story += [bullets([
-      "<b>Three training seeds.</b> Repetition is sufficient to reveal consistent qualitative failure but not to estimate small arm differences precisely.",
+      "<b>Three baseline seeds and one pilot seed.</b> Study II repetition is sufficient to reveal qualitative failure but not small arm differences; Study III establishes a causal component result in one matched case, not population-level behavioral efficacy.",
+      "<b>Three Q seeds are not three environment seeds.</b> Study IV repeats critic initialization on one frozen Dreamer checkpoint, replay selection, and held-out bank. Its low variance does not measure training-data or representation uncertainty.",
       "<b>Fifty episodes per policy mode and checkpoint.</b> Paired resets control comparisons; each individual proportion retains binomial uncertainty.",
       "<b>Task difficulty remains unequal.</b> GoToObject is weak across arms, and PutNear is strongly sensitive to current-task exposure. Aggregate forgetting cannot replace task-level reporting.",
       "<b>No return-to-A phase.</b> The study measures retention at later checkpoints, not rapid reacquisition. The immutable 800k checkpoints allow a later continuation.",
-      "<b>No IR intervention.</b> The study diagnoses requirements for CIR but does not show that reward-only, bounded, counterfactual, or gated rehearsal succeeds.",
-      "<b>Counterfactual outcomes lack oracle returns.</b> Goal-query differences are valid same-state comparisons, but only factual recorded trajectories receive realized-return calibration labels.",
-      "<b>Fixed state banks come from final uniform replay.</b> This enforces identical evidence across arms but conditions diagnostics on states retained by that replay design.",
+      "<b>No imagined-rehearsal intervention.</b> Studies III and IV change head or offline critic training, not actor adaptation. They do not show that reward-only, counterfactual, critic-guided, or gated rehearsal succeeds in MiniGrid.",
+      "<b>No forgetting test in the pilot.</b> Study III contains only GoToDoor Phase A. Its zero numerical forgetting is structural and must not be interpreted as retention.",
+      "<b>Independent diagnostic banks across runs.</b> Standard and pilot head audits each hold states fixed across goal queries, but use their own final replay banks. Cross-run prediction magnitudes are descriptive; the within-run factual-versus-wrong-goal contrasts carry the causal semantic claim.",
+      "<b>No online twin-Q test.</b> Study IV freezes the representation and actor, trains from a fixed replay bank, and never installs the new Q systems into Dreamer. It cannot measure representation drift, feedback with data collection, or policy improvement.",
+      "<b>Counterfactual outcomes lack oracle returns.</b> Goal-query differences and event-local Bellman targets are valid diagnostics, but only factual recorded trajectories receive realized behavior-return calibration labels.",
+      "<b>Fixed banks condition every diagnostic.</b> Study II and III audits use final uniform-replay banks; Study IV uses one fixed 50:50-replay split. Identical within-study evidence improves arm comparability but limits distributional coverage.",
       "<b>One reduced Dreamer configuration.</b> Results are conditional on the 12M preset, train ratio 32, 100-action horizon, fixed missions, and four-task order.",
       "<b>One serial hardware run.</b> Runtime demonstrates feasibility on the RTX 4090, not cross-platform performance.",
   ], numbered=True)]
 
-  story += [heading("11. Conclusion")]
+  story += [heading("13. Conclusion")]
   story += [P(
-      "Together, the two MiniGrid studies establish a fast and revealing mechanism-development tier for CIR. The "
+      "Together, the four MiniGrid studies establish a fast and revealing mechanism-development tier for CIR. The "
       "independent audition rejected an overconfident task-matching assumption. The sequential baseline then completed "
       "7.2 million training steps, 75,600 paired evaluation episodes, and 90 read-only component audits in 30.17 hours "
       "without a failed scientific unit. Dreamer is not too strong for this regime: catastrophic forgetting is large, "
       "late-task acquisition is replay-sensitive, and forward transfer is absent.")]
   story += [P(
-      "The most important outcome is mechanistic. Uniform reservoir replay preserves data but starves current learning; "
+      "The baseline outcome is mechanistic. Uniform reservoir replay preserves data but starves current learning; "
       "50:50 replay improves acquisition but does not preserve competence. Reward heads recognize factual events without "
       "reliably encoding which goal those events satisfy. Critics become grossly optimistic on real states, slow critics "
-      "repeat the bias, and actor-selected imagination amplifies bootstrap-dominated targets. The mental fallback of "
-      "reward-model-only imagined rehearsal is therefore supported, but only after counterfactual goal semantics are "
-      "repaired. Critic regularization remains valuable for eventual bounded IR, not a prerequisite for testing a "
-      "reward-only positive control. Gating comes after these component failures are corrected and measured.")]
+      "repeat the bias, and actor-selected imagination amplifies bootstrap-dominated targets.")]
+  story += [P(
+      "The counterfactual-head pilot turns one diagnosis into a causal result. Explicit wrong-goal labels reduce "
+      "nonmatching completion reward to approximately two parts per million and correctly mark the same physical event "
+      "as continuing for other goals, while factual GoToDoor acquisition remains strong. Yet the unchanged critic values "
+      "all six goal queries almost equally, and its wrong-goal imagined targets remain 98.96-100% bootstrap across the "
+      "tested horizons. Reward and continuation semantics can therefore be repaired independently, but the critic does "
+      "not become a safe teacher merely because its upstream heads are correct.")]
+  story += [P(
+      "The twin-Q qualification supplies the next causal step. Direct counterfactual critic labels improve factual "
+      "calibration by 19%, reduce all-query Bellman error by 39%, double the matching-versus-nonmatching value gap, and "
+      "raise successful initial-state goal ranking from chance to 75.5%. The new critics remain conservative and are not "
+      "yet validated teachers, but they avoid both an oracle return and the known-bad original value bootstrap. The "
+      "simple theory that weak heads merely propagated optimism into the critic is therefore rejected; critic objective "
+      "and target construction are independent mechanisms.")]
+  story += [P(
+      "The next decision is now concrete: move the qualified one-step counterfactual EMA twin-Q target into the usual "
+      "two-goal CRL pipeline, retain the factual-only twin-Q and original critic controls, and keep the actor isolated "
+      "until real-state calibration remains stable online. Reward-only imagined rehearsal remains the approved actor "
+      "reference, standard critic-bootstrapped IR remains a negative control, and gating remains premature until the "
+      "teaching signal passes both online and imagined-path audits.")]
 
   story += [PageBreak(), heading("Appendix A. Seed-level final results")]
   seed_table = [
@@ -1766,9 +2380,10 @@ def build_story():
 
   story += [heading("Appendix C. Reproducibility package")]
   story += [P(
-      "The report directory contains compact evidence packages for both studies: immutable specifications, complete "
+      "The report directory contains compact evidence packages for all four studies: immutable specifications, complete "
       "aggregate evaluation tables, supervisor provenance, replay-allocation summaries, and every per-checkpoint head "
-      "and critic summary used here. Raw replay archives, checkpoints, JSONL logs, prediction tensors, and rollout "
+      "and critic summary used here, plus the complete Study IV final-run table. Raw replay archives, checkpoints, "
+      "JSONL logs, prediction tensors, latent caches, and rollout "
       "shards remain authoritative on the RTX 4090 under /home/localadmin/experiment_logs/minigrid/.")]
   repro = [
       ["Artifact", "Role"],
@@ -1781,6 +2396,8 @@ def build_story():
       ["data/sequential_baseline/analysis/", "All Study II behavior, replay, drift, and component aggregate tables"],
       ["data/sequential_baseline/diagnostics/", "Compact summaries and specifications for all 90 read-only audits"],
       ["data/sequential_baseline/supervisor_status.json", "Complete Study II commands, attempts, timings, and terminal state"],
+      ["data/counterfactual_heads_phase_a_pilot/", "Study III specification, pairing, analysis, diagnostic summaries, and source hashes"],
+      ["data/twin_q_qualification/", "Study IV specification, final per-seed/aggregate metrics, integrity hashes, and provenance"],
       ["build_report.py", "Reproducible vector-PDF builder"],
   ]
   story += [report_table(repro, [165, 348], font_size=7.4),
@@ -1827,10 +2444,49 @@ def build_story():
   story += [report_table(audit_table, [103, 148, 262], font_size=6.8),
             caption("Table E1", "Study II visibility and integrity evidence.")]
   story += [P(
-      "The compact report package is approximately 19 MB. The excluded raw remote evidence includes about 700 MB of "
+      "The compact report package is approximately 20 MB. The excluded raw remote evidence includes about 700 MB of "
       "diagnostic predictions and per-episode critic shards plus the full 80 GB experiment tree. Compact summaries "
       "record source selections, specification digests, row counts, and before/after parameter hashes so every reported "
       "aggregate can be traced back to its immutable job.")]
+
+  story += [PageBreak(), heading("Appendix F. Study III evidence and provenance")]
+  pilot_evidence = [
+      ["Evidence", "Scope", "Integrity / role"],
+      ["Training", "1 task; seed 0; 200,000 steps", "One completed attempt; 9 immutable snapshots; exact 200k milestone"],
+      ["Evaluation", "18 conditions; 900 episodes", "50 episodes and resets per mode-checkpoint; paired RNG; unchanged checkpoints"],
+      ["Head audits", "0 and 200k; 972 states at 200k", "32 fixed episodes; six goal queries; unchanged parameters"],
+      ["Critic provenance", "0 and 200k; H=1/3/6/15", "32 posterior samples; actor/recorded controls; reward/bootstrap decomposition"],
+      ["Portable evidence", "Spec, status, pairing, analysis, banks, summaries", "Principal SHA-256 hashes recorded in PROVENANCE.md"],
+      ["Raw source", "counterfactual_heads_phase_a_pilot_v1", "Immutable office-4090 root; checkpoints and replay excluded"],
+  ]
+  story += [report_table(pilot_evidence, [101, 160, 252], font_size=6.8),
+            caption("Table F1", "Study III completion and provenance inventory. The diagnostic bank-selection job is infrastructure and is not counted among the four read-only head/critic jobs.")]
+  story += [P(
+      "The experiment is pinned to Git commit f5e6e256bed9d4e7cec59108a3f8405033ab71f1 and specification digest "
+      "7a8fd6d11a1823720a0982179602ca2e0e813aea659e7516be440ab7f80257a9. The authoritative raw root is "
+      "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1. The portable PROVENANCE.md "
+      "records the remote root, copied artifact scope, and principal source hashes. All copied principal files were "
+      "verified byte-for-byte after transfer.")]
+
+  story += [PageBreak(), heading("Appendix G. Study IV evidence and provenance")]
+  twin_q_evidence = [
+      ["Evidence", "Scope", "Integrity / role"],
+      ["Source", "50:50 seed 0 at 400k", "Immutable checkpoint and exact 400k replay milestone"],
+      ["Latent banks", "384 episodes; 18,723 states", "Episode-disjoint train/held-out split; balanced goal/outcome strata"],
+      ["Transitions", "12,242 train; 6,097 held-out", "Recorded one-step posterior transitions; seven discrete actions"],
+      ["Twin-Q training", "2 arms x 3 Q seeds x 10,000 updates", "Six complete resumable runs; final and aggregate tables"],
+      ["Dreamer integrity", "506 arrays; all namespaces", "Before/after SHA-256 groups identical"],
+      ["Portable evidence", "7 copied CSV/JSON sources plus provenance", "Local/remote SHA-256 hashes match byte-for-byte"],
+      ["Raw source", "twin_q_qualification_400k_v2", "Latent caches and 23 MB Q checkpoints retained on office-4090"],
+  ]
+  story += [report_table(twin_q_evidence, [103, 164, 246], font_size=6.8),
+            caption("Table G1", "Study IV completion and provenance inventory.")]
+  story += [P(
+      "The final experiment is pinned to Git commit e1d5d2a37ea9119a30475dd473c2244283775be2. The authoritative "
+      "raw root is /home/localadmin/experiment_logs/minigrid/twin_q_qualification_400k_v2. The portable "
+      "PROVENANCE.md records the exact copied-file SHA-256 hashes, remote root, bank sizes, and timestamps. All seven "
+      "principal files were verified byte-for-byte after transfer. The source checkpoint's 506-array digest is "
+      "16a742de354ed5b1fe9e0f9ea400e952ed80dcf45d3aed4c19f0c09c6a01e46f both before and after latent encoding.")]
 
   story += [heading("References")]
   refs = [
@@ -1853,7 +2509,7 @@ def main() -> int:
       bottomMargin=17 * mm,
       title="MiniGrid Experiments for Continual Imagined Rehearsal",
       author="Steven Davenport",
-      subject="Independent task audition and visibility-first sequential baseline",
+      subject="Task audition, sequential baseline, counterfactual-head pilot, and twin-Q qualification",
   )
   doc.multiBuild(build_story())
   print(REPORT_PDF)

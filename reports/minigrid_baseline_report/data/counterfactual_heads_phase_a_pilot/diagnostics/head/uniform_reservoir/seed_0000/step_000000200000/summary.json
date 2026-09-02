@@ -1,0 +1,1001 @@
+{
+  "actor_cross_goal": [
+    {
+      "entropy_mean": 0.0952153205871582,
+      "entropy_normalized_mean": 0.048930995417945,
+      "mean_distribution_concentration": 0.47497454285621643,
+      "mean_distribution_mode": 2,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 0,
+      "probed_goal_name": "go_to_door",
+      "state_modal_action_concentration": 0.4732510288065844,
+      "states": 972
+    },
+    {
+      "entropy_mean": 0.09801440685987473,
+      "entropy_normalized_mean": 0.050369441213643944,
+      "mean_distribution_concentration": 0.4686419367790222,
+      "mean_distribution_mode": 2,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 1,
+      "probed_goal_name": "fetch",
+      "state_modal_action_concentration": 0.46810699588477367,
+      "states": 972
+    },
+    {
+      "entropy_mean": 0.09867114573717117,
+      "entropy_normalized_mean": 0.05070693823405636,
+      "mean_distribution_concentration": 0.47022759914398193,
+      "mean_distribution_mode": 2,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 2,
+      "probed_goal_name": "go_to_object",
+      "state_modal_action_concentration": 0.4711934156378601,
+      "states": 972
+    },
+    {
+      "entropy_mean": 0.096684031188488,
+      "entropy_normalized_mean": 0.04968576336138927,
+      "mean_distribution_concentration": 0.4750986397266388,
+      "mean_distribution_mode": 2,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 3,
+      "probed_goal_name": "put_near",
+      "state_modal_action_concentration": 0.4763374485596708,
+      "states": 972
+    },
+    {
+      "entropy_mean": 0.097584567964077,
+      "entropy_normalized_mean": 0.05014854771760745,
+      "mean_distribution_concentration": 0.4754493534564972,
+      "mean_distribution_mode": 2,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 4,
+      "probed_goal_name": "unlock_pickup",
+      "state_modal_action_concentration": 0.4732510288065844,
+      "states": 972
+    },
+    {
+      "entropy_mean": 0.09609350562095642,
+      "entropy_normalized_mean": 0.04938229325110783,
+      "mean_distribution_concentration": 0.4704137444496155,
+      "mean_distribution_mode": 2,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 5,
+      "probed_goal_name": "pickup_dist",
+      "state_modal_action_concentration": 0.4722222222222222,
+      "states": 972
+    }
+  ],
+  "actor_distribution": true,
+  "actor_distribution_enabled": true,
+  "bounded_value_enabled": false,
+  "calibration": [
+    {
+      "bin": 0,
+      "count": 98,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7290822267532349,
+      "prediction_mean": 0.5834980607032776,
+      "prediction_min": 0.14872679114341736,
+      "target": "inclusive",
+      "target_mean": 0.11133810877799988
+    },
+    {
+      "bin": 1,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7407878637313843,
+      "prediction_mean": 0.7358080148696899,
+      "prediction_min": 0.7291334867477417,
+      "target": "inclusive",
+      "target_mean": 0.07716343551874161
+    },
+    {
+      "bin": 2,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7480882406234741,
+      "prediction_mean": 0.7446209788322449,
+      "prediction_min": 0.7413103580474854,
+      "target": "inclusive",
+      "target_mean": 0.11284102499485016
+    },
+    {
+      "bin": 3,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.754419207572937,
+      "prediction_mean": 0.7510398030281067,
+      "prediction_min": 0.7481540441513062,
+      "target": "inclusive",
+      "target_mean": 0.12704622745513916
+    },
+    {
+      "bin": 4,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7587814331054688,
+      "prediction_mean": 0.7561661005020142,
+      "prediction_min": 0.754456639289856,
+      "target": "inclusive",
+      "target_mean": 0.11800101399421692
+    },
+    {
+      "bin": 5,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7630742788314819,
+      "prediction_mean": 0.7605224251747131,
+      "prediction_min": 0.7588452100753784,
+      "target": "inclusive",
+      "target_mean": 0.09528324007987976
+    },
+    {
+      "bin": 6,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.767448902130127,
+      "prediction_mean": 0.7652526497840881,
+      "prediction_min": 0.7630798816680908,
+      "target": "inclusive",
+      "target_mean": 0.07828846573829651
+    },
+    {
+      "bin": 7,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7775923013687134,
+      "prediction_mean": 0.7721933722496033,
+      "prediction_min": 0.767454206943512,
+      "target": "inclusive",
+      "target_mean": 0.13930001854896545
+    },
+    {
+      "bin": 8,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.8030064105987549,
+      "prediction_mean": 0.7870113849639893,
+      "prediction_min": 0.7789416313171387,
+      "target": "inclusive",
+      "target_mean": 0.18963740766048431
+    },
+    {
+      "bin": 9,
+      "count": 98,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.9239798188209534,
+      "prediction_mean": 0.8496862649917603,
+      "prediction_min": 0.8031567931175232,
+      "target": "inclusive",
+      "target_mean": 0.7750499248504639
+    },
+    {
+      "bin": 0,
+      "count": 98,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7290822267532349,
+      "prediction_mean": 0.5834980607032776,
+      "prediction_min": 0.14872679114341736,
+      "target": "exclusive",
+      "target_mean": 0.10416463017463684
+    },
+    {
+      "bin": 1,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7407878637313843,
+      "prediction_mean": 0.7358080148696899,
+      "prediction_min": 0.7291334867477417,
+      "target": "exclusive",
+      "target_mean": 0.07716343551874161
+    },
+    {
+      "bin": 2,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7480882406234741,
+      "prediction_mean": 0.7446209788322449,
+      "prediction_min": 0.7413103580474854,
+      "target": "exclusive",
+      "target_mean": 0.11284102499485016
+    },
+    {
+      "bin": 3,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.754419207572937,
+      "prediction_mean": 0.7510398030281067,
+      "prediction_min": 0.7481540441513062,
+      "target": "exclusive",
+      "target_mean": 0.11868539452552795
+    },
+    {
+      "bin": 4,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7587814331054688,
+      "prediction_mean": 0.7561661005020142,
+      "prediction_min": 0.754456639289856,
+      "target": "exclusive",
+      "target_mean": 0.11800101399421692
+    },
+    {
+      "bin": 5,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7630742788314819,
+      "prediction_mean": 0.7605224251747131,
+      "prediction_min": 0.7588452100753784,
+      "target": "exclusive",
+      "target_mean": 0.09528324007987976
+    },
+    {
+      "bin": 6,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.767448902130127,
+      "prediction_mean": 0.7652526497840881,
+      "prediction_min": 0.7630798816680908,
+      "target": "exclusive",
+      "target_mean": 0.07076269388198853
+    },
+    {
+      "bin": 7,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.7775923013687134,
+      "prediction_mean": 0.7721933722496033,
+      "prediction_min": 0.767454206943512,
+      "target": "exclusive",
+      "target_mean": 0.13084641098976135
+    },
+    {
+      "bin": 8,
+      "count": 97,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.8030064105987549,
+      "prediction_mean": 0.7870113849639893,
+      "prediction_min": 0.7789416313171387,
+      "target": "exclusive",
+      "target_mean": 0.1811838001012802
+    },
+    {
+      "bin": 9,
+      "count": 98,
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "prediction_max": 0.9239798188209534,
+      "prediction_mean": 0.8496862649917603,
+      "prediction_min": 0.8031567931175232,
+      "target": "exclusive",
+      "target_mean": 0.6701520085334778
+    }
+  ],
+  "checkpoint": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/runs/uniform_reservoir/seed_0000/snapshots/step_000000200000/checkpoint",
+  "chunk_length": 32,
+  "completion_confusion": [
+    {
+      "continuation_mean": 5.8519664889900014e-05,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 0,
+      "probed_goal_name": "go_to_door",
+      "reward_mean": 0.8440626859664917,
+      "slowvalue_mean": 0.8194966316223145,
+      "value_mean": 0.8176721334457397
+    },
+    {
+      "continuation_mean": 0.997133731842041,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 1,
+      "probed_goal_name": "fetch",
+      "reward_mean": 1.872044435913267e-06,
+      "slowvalue_mean": 0.8153257966041565,
+      "value_mean": 0.8137153387069702
+    },
+    {
+      "continuation_mean": 0.9971548318862915,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 2,
+      "probed_goal_name": "go_to_object",
+      "reward_mean": 1.880503305073944e-06,
+      "slowvalue_mean": 0.8179203271865845,
+      "value_mean": 0.8167135715484619
+    },
+    {
+      "continuation_mean": 0.9971182346343994,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 3,
+      "probed_goal_name": "put_near",
+      "reward_mean": 1.893031594590866e-06,
+      "slowvalue_mean": 0.8190258741378784,
+      "value_mean": 0.8174630403518677
+    },
+    {
+      "continuation_mean": 0.9971567988395691,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 4,
+      "probed_goal_name": "unlock_pickup",
+      "reward_mean": 1.917672989293351e-06,
+      "slowvalue_mean": 0.8160786628723145,
+      "value_mean": 0.8145929574966431
+    },
+    {
+      "continuation_mean": 0.9971396923065186,
+      "count": 16,
+      "event_goal": 0,
+      "event_goal_name": "go_to_door",
+      "probed_goal": 5,
+      "probed_goal_name": "pickup_dist",
+      "reward_mean": 1.7758741250872845e-06,
+      "slowvalue_mean": 0.816527247428894,
+      "value_mean": 0.8153114914894104
+    }
+  ],
+  "completion_selectivity": {
+    "continuation_matching_mean": 5.8519664889900014e-05,
+    "continuation_nonmatching_mean": 0.9971405863761902,
+    "count": 16,
+    "reward_margin": 0.8440608382225037,
+    "reward_matching_mean": 0.8440626859664917,
+    "reward_nonmatching_mean": 1.8678252899917425e-06,
+    "reward_top1_accuracy": 1.0
+  },
+  "continuation_factual": {
+    "auroc": 1.0,
+    "average_precision": 1.0,
+    "brier_clipped": 0.00015078962874933466,
+    "count": 972,
+    "fpr_at_0p01": 0.0,
+    "fpr_at_0p1": 0.0,
+    "fpr_at_0p5": 0.0,
+    "mae": 0.002137742621001543,
+    "mean_prediction": 0.9696738963603735,
+    "mean_target": 0.9713540718633942,
+    "negative_mean": 0.00016363228132831864,
+    "negative_p95": 0.0006905629066750394,
+    "negatives": 25,
+    "positive_mean": 0.9952681483159976,
+    "positive_p95": 0.9977481961250305,
+    "positives": 947,
+    "tpr_at_0p01": 1.0,
+    "tpr_at_0p1": 1.0,
+    "tpr_at_0p5": 1.0
+  },
+  "continuation_stop_by_state": {
+    "goal_completion": {
+      "count": 16,
+      "predicted_stop_mean": 0.9999412894248962,
+      "predicted_stop_p95": 0.9999879747629166
+    },
+    "ordinary": {
+      "count": 956,
+      "predicted_stop_mean": 0.011357676237821579,
+      "predicted_stop_p95": 0.0015051960945129395
+    },
+    "physical_terminal": {
+      "count": 0,
+      "predicted_stop_mean": null,
+      "predicted_stop_p95": null
+    }
+  },
+  "discount": 0.996996996996997,
+  "episodes": 32,
+  "format": 1,
+  "goal_names": [
+    "go_to_door",
+    "fetch",
+    "go_to_object",
+    "put_near",
+    "unlock_pickup",
+    "pickup_dist"
+  ],
+  "head_cross_goal": [
+    {
+      "continuation": {
+        "auroc": 1.0,
+        "average_precision": 1.0,
+        "brier_clipped": 0.00015078962874933466,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 0.002137742621001543,
+        "mean_prediction": 0.9696738963603735,
+        "mean_target": 0.9713540718633942,
+        "negative_mean": 0.00016363228132831864,
+        "negative_p95": 0.0006905629066750394,
+        "negatives": 25,
+        "positive_mean": 0.9952681483159976,
+        "positive_p95": 0.9977481961250305,
+        "positives": 947,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 1.0
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 0,
+      "probed_goal_name": "go_to_door",
+      "reward": {
+        "auroc": 1.0,
+        "average_precision": 1.0,
+        "brier_clipped": 4.789434165848847e-05,
+        "count": 972,
+        "fpr_at_0p01": 0.006276150627615063,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 0.0009759572452107219,
+        "mean_prediction": 0.014153374187948443,
+        "mean_target": 0.014572016373583319,
+        "negative_mean": 0.0002636785933284718,
+        "negative_p95": 1.333940053882543e-05,
+        "negatives": 956,
+        "positive_mean": 0.8440626859664917,
+        "positive_p95": 0.9243721514940262,
+        "positives": 16,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 1.0
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 1.184992314424485e-07,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.00026014943917592365,
+        "mean_prediction": 0.9970425886749731,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.9970425886749731,
+        "positive_p95": 0.9976032376289368,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 1.0
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 1,
+      "probed_goal_name": "fetch",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 1.547528038719503e-13,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 2.424983821027116e-07,
+        "mean_prediction": 2.424983821027116e-07,
+        "mean_target": 0.0,
+        "negative_mean": 2.424983821027116e-07,
+        "negative_p95": 6.769265837647252e-07,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 1.1394907400094668e-07,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.0002559447975315675,
+        "mean_prediction": 0.9970445022170926,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.9970445022170926,
+        "positive_p95": 0.9976032376289368,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 1.0
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 2,
+      "probed_goal_name": "go_to_object",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 1.542143155085777e-13,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 2.391243404037288e-07,
+        "mean_prediction": 2.391243404037288e-07,
+        "mean_target": 0.0,
+        "negative_mean": 2.391243404037288e-07,
+        "negative_p95": 6.744696293026207e-07,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 1.1628794410265432e-07,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.00025891485037627044,
+        "mean_prediction": 0.9970366676403172,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.9970366676403172,
+        "positive_p95": 0.9976032376289368,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 1.0
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 3,
+      "probed_goal_name": "put_near",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 1.569535016273449e-13,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 2.4258223193513876e-07,
+        "mean_prediction": 2.4258223193513876e-07,
+        "mean_target": 0.0,
+        "negative_mean": 2.4258223193513876e-07,
+        "negative_p95": 6.773662562409299e-07,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 1.1582367996386143e-07,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.00025741032366889986,
+        "mean_prediction": 0.9970464059477481,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.9970464059477481,
+        "positive_p95": 0.9976032376289368,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 1.0
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 4,
+      "probed_goal_name": "unlock_pickup",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 1.579647672880328e-13,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 2.4014194035955985e-07,
+        "mean_prediction": 2.4014194035955985e-07,
+        "mean_target": 0.0,
+        "negative_mean": 2.4014194035955985e-07,
+        "negative_p95": 6.769265837647252e-07,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    },
+    {
+      "continuation": {
+        "auroc": null,
+        "average_precision": 1.0,
+        "brier_clipped": 1.1810173397083915e-07,
+        "count": 972,
+        "fpr_at_0p01": null,
+        "fpr_at_0p1": null,
+        "fpr_at_0p5": null,
+        "mae": 0.00026016532148353356,
+        "mean_prediction": 0.9970414848239334,
+        "mean_target": 0.9969969987869263,
+        "negative_mean": null,
+        "negative_p95": null,
+        "negatives": 0,
+        "positive_mean": 0.9970414848239334,
+        "positive_p95": 0.9976032376289368,
+        "positives": 972,
+        "tpr_at_0p01": 1.0,
+        "tpr_at_0p1": 1.0,
+        "tpr_at_0p5": 1.0
+      },
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "probed_goal": 5,
+      "probed_goal_name": "pickup_dist",
+      "reward": {
+        "auroc": null,
+        "average_precision": null,
+        "brier_clipped": 1.4329716972843207e-13,
+        "count": 972,
+        "fpr_at_0p01": 0.0,
+        "fpr_at_0p1": 0.0,
+        "fpr_at_0p5": 0.0,
+        "mae": 2.3483385143367998e-07,
+        "mean_prediction": 2.3483385143367998e-07,
+        "mean_target": 0.0,
+        "negative_mean": 2.3483385143367998e-07,
+        "negative_p95": 6.485429025815381e-07,
+        "negatives": 972,
+        "positive_mean": null,
+        "positive_p95": null,
+        "positives": 0,
+        "tpr_at_0p01": null,
+        "tpr_at_0p1": null,
+        "tpr_at_0p5": null
+      }
+    }
+  ],
+  "head_uncertainty": {
+    "continuation_entropy": {
+      "mean": 0.02104053646326065,
+      "p95": 0.023192569613456726
+    },
+    "reward_entropy": {
+      "mean": 0.001925395568832755,
+      "p95": 6.094115724408766e-05
+    },
+    "slowvalue_entropy": {
+      "mean": 0.7123923897743225,
+      "p95": 1.1410819053649903
+    },
+    "value_entropy": {
+      "mean": 0.7109023928642273,
+      "p95": 1.0918260514736176
+    }
+  },
+  "initial_value_cross_goal": [
+    {
+      "count": 32,
+      "failure_mean": 0.7014144659042358,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.733984112739563,
+      "probed_goal": 0,
+      "probed_goal_name": "go_to_door",
+      "success_auroc": 0.7109375,
+      "success_average_precision": 0.6763132904677023,
+      "success_mean": 0.7665536999702454,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.6889166831970215,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.7246106863021851,
+      "probed_goal": 1,
+      "probed_goal_name": "fetch",
+      "success_auroc": 0.703125,
+      "success_average_precision": 0.6601713138755473,
+      "success_mean": 0.7603046894073486,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.6788250803947449,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.7182143330574036,
+      "probed_goal": 2,
+      "probed_goal_name": "go_to_object",
+      "success_auroc": 0.7109375,
+      "success_average_precision": 0.6746047970590304,
+      "success_mean": 0.7576035857200623,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.6689469218254089,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.7072268724441528,
+      "probed_goal": 3,
+      "probed_goal_name": "put_near",
+      "success_auroc": 0.6953125,
+      "success_average_precision": 0.6563635651629072,
+      "success_mean": 0.7455068826675415,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.6818461418151855,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.7197360992431641,
+      "probed_goal": 4,
+      "probed_goal_name": "unlock_pickup",
+      "success_auroc": 0.68359375,
+      "success_average_precision": 0.6557040998217469,
+      "success_mean": 0.7576260566711426,
+      "successes": 16
+    },
+    {
+      "count": 32,
+      "failure_mean": 0.6684104204177856,
+      "observed_goal": 0,
+      "observed_goal_name": "go_to_door",
+      "prediction_mean": 0.7087759971618652,
+      "probed_goal": 5,
+      "probed_goal_name": "pickup_dist",
+      "success_auroc": 0.69140625,
+      "success_average_precision": 0.6516236995456944,
+      "success_mean": 0.7491415739059448,
+      "successes": 16
+    }
+  ],
+  "integrity_after": {
+    "actor": {
+      "arrays": 11,
+      "sha256": "82e3399b34938013a0ffdeb1be3263be06165733b3e0a8264701c1eed2e156de"
+    },
+    "all": {
+      "arrays": 506,
+      "sha256": "c937af82dbc187405816201a70c41536c28f348ccbe2d09ac1e922383d6cefa4"
+    },
+    "bounded_value": {
+      "arrays": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "critic": {
+      "arrays": 22,
+      "sha256": "0aeeb04b07ce04ae4d6846856d89d141c81a46aa17957f3694d323e274f27e23"
+    },
+    "normalizers": {
+      "arrays": 2,
+      "sha256": "3a4568dd4c44484c4f698055c904c8a5e681b8915bdb8b74b64a3bafede4f58a"
+    },
+    "optimizers": {
+      "arrays": 402,
+      "sha256": "b6feea998b33c11628241cb1830cce13195665e970d12c6c4da596c76ca76753"
+    },
+    "representation": {
+      "arrays": 58,
+      "sha256": "9ad43149643679ebe86144de23706ac1d5b3ea936506cce8f5c2c2ca37a1dad4"
+    },
+    "reward_continuation": {
+      "arrays": 10,
+      "sha256": "6224817b3803220622254a30fc25456e0fde33e91162f29029726a4bd3f60cbb"
+    },
+    "world_model": {
+      "arrays": 68,
+      "sha256": "97f7ef3eea0e218f41fe3a5f191e846187c3c30f309568835315bd6ad02b17a3"
+    }
+  },
+  "integrity_before": {
+    "actor": {
+      "arrays": 11,
+      "sha256": "82e3399b34938013a0ffdeb1be3263be06165733b3e0a8264701c1eed2e156de"
+    },
+    "all": {
+      "arrays": 506,
+      "sha256": "c937af82dbc187405816201a70c41536c28f348ccbe2d09ac1e922383d6cefa4"
+    },
+    "bounded_value": {
+      "arrays": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "critic": {
+      "arrays": 22,
+      "sha256": "0aeeb04b07ce04ae4d6846856d89d141c81a46aa17957f3694d323e274f27e23"
+    },
+    "normalizers": {
+      "arrays": 2,
+      "sha256": "3a4568dd4c44484c4f698055c904c8a5e681b8915bdb8b74b64a3bafede4f58a"
+    },
+    "optimizers": {
+      "arrays": 402,
+      "sha256": "b6feea998b33c11628241cb1830cce13195665e970d12c6c4da596c76ca76753"
+    },
+    "representation": {
+      "arrays": 58,
+      "sha256": "9ad43149643679ebe86144de23706ac1d5b3ea936506cce8f5c2c2ca37a1dad4"
+    },
+    "reward_continuation": {
+      "arrays": 10,
+      "sha256": "6224817b3803220622254a30fc25456e0fde33e91162f29029726a4bd3f60cbb"
+    },
+    "world_model": {
+      "arrays": 68,
+      "sha256": "97f7ef3eea0e218f41fe3a5f191e846187c3c30f309568835315bd6ad02b17a3"
+    }
+  },
+  "integrity_equal": true,
+  "representation": {
+    "deter_rms_mean": 0.13413919508457184,
+    "posterior_entropy_mean": 0.6238265037536621,
+    "posterior_entropy_std": 0.07578439265489578,
+    "stoch_rms_mean": 0.25
+  },
+  "reward_factual": {
+    "auroc": 1.0,
+    "average_precision": 1.0,
+    "brier_clipped": 4.789434165848847e-05,
+    "count": 972,
+    "fpr_at_0p01": 0.006276150627615063,
+    "fpr_at_0p1": 0.0,
+    "fpr_at_0p5": 0.0,
+    "mae": 0.0009759572452107219,
+    "mean_prediction": 0.014153374187948443,
+    "mean_target": 0.014572016373583319,
+    "negative_mean": 0.0002636785933284718,
+    "negative_p95": 1.333940053882543e-05,
+    "negatives": 956,
+    "positive_mean": 0.8440626859664917,
+    "positive_p95": 0.9243721514940262,
+    "positives": 16,
+    "tpr_at_0p01": 1.0,
+    "tpr_at_0p1": 1.0,
+    "tpr_at_0p5": 1.0
+  },
+  "reward_factual_regression": {
+    "bias": -0.00041864218563487617,
+    "count": 972,
+    "mae": 0.0009759572452107219,
+    "pearson": 0.9991545324984227,
+    "prediction_max": 0.931098461151123,
+    "prediction_mean": 0.014153374187948443,
+    "prediction_min": 8.071452839431004e-08,
+    "prediction_outside_unit_interval_fraction": 0.0,
+    "rmse": 0.00692057379546584,
+    "spearman": 0.22039508361454752,
+    "target_mean": 0.014572016373583319
+  },
+  "selection": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/diagnostics/banks/seed_0000/selection.json",
+  "selection_sha256": "1d9f6dd25e43a2e09a222a10da0aa15afeda0be20b615176d05fb9ae29cf5d0a",
+  "states": 972,
+  "value": [
+    {
+      "goal": 0,
+      "goal_name": "go_to_door",
+      "initial_failure_mean": 0.7014144659042358,
+      "initial_success_mean": 0.7665536999702454,
+      "initial_value_success_ap": 0.6763132904677023,
+      "initial_value_success_auroc": 0.7109375,
+      "slowvalue_exclusive": {
+        "bias": 0.5830642360687992,
+        "count": 972,
+        "mae": 0.5976928300664994,
+        "pearson": 0.2506603718457244,
+        "prediction_max": 0.925638735294342,
+        "prediction_mean": 0.7514237308790409,
+        "prediction_min": 0.1542692482471466,
+        "prediction_outside_unit_interval_fraction": 0.0,
+        "rmse": 0.6647196556246271,
+        "spearman": 0.3084745921474241,
+        "target_mean": 0.16835949481024173
+      },
+      "slowvalue_inclusive": {
+        "bias": 0.5684922196952159,
+        "count": 972,
+        "mae": 0.5853685920467838,
+        "pearson": 0.27750349425855814,
+        "prediction_max": 0.925638735294342,
+        "prediction_mean": 0.7514237308790409,
+        "prediction_min": 0.1542692482471466,
+        "prediction_outside_unit_interval_fraction": 0.0,
+        "rmse": 0.6563865007901526,
+        "spearman": 0.35246364320738416,
+        "target_mean": 0.18293151118382506
+      },
+      "value_exclusive": {
+        "bias": 0.5821504792497482,
+        "count": 972,
+        "mae": 0.596760948468383,
+        "pearson": 0.257172558638301,
+        "prediction_max": 0.9239798188209534,
+        "prediction_mean": 0.7505099740599899,
+        "prediction_min": 0.14872679114341736,
+        "prediction_outside_unit_interval_fraction": 0.0,
+        "rmse": 0.6636313218855031,
+        "spearman": 0.3112603398871844,
+        "target_mean": 0.16835949481024173
+      },
+      "value_inclusive": {
+        "bias": 0.5675784628761649,
+        "count": 972,
+        "mae": 0.5844885832917543,
+        "pearson": 0.2837454086301048,
+        "prediction_max": 0.9239798188209534,
+        "prediction_mean": 0.7505099740599899,
+        "prediction_min": 0.14872679114341736,
+        "prediction_outside_unit_interval_fraction": 0.0,
+        "rmse": 0.655326715210269,
+        "spearman": 0.3542816135352833,
+        "target_mean": 0.18293151118382506
+      },
+      "value_slow_gap_mae": 0.003768275259062648,
+      "value_slow_gap_max": 0.07838183641433716
+    }
+  ]
+}

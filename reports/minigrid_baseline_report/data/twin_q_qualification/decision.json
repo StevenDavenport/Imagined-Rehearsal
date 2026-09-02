@@ -1,0 +1,15 @@
+{
+  "counterfactual_minus_factual": {
+    "bellman_mae_all_queries": -0.03510161549446234,
+    "both_goals_above_0p5_fraction": -0.0010387622327920835,
+    "factual_return_bias": 0.013787015896612409,
+    "factual_return_mae": -0.08376866164504287,
+    "matching_minus_nonmatching_mean": 0.16579282897801065,
+    "nonmatching_value_mean": -0.15200581298884053,
+    "q_disagreement_mean": -0.012702198358167799,
+    "successful_initial_goal_rank_accuracy": 0.25520833333333337
+  },
+  "format": 1,
+  "interpretation_note": "Held-out return targets are behavior-policy returns. They test factual calibration but are not counterfactual ground truth.",
+  "question": "Does ordinary counterfactual one-step twin-Q training improve goal selectivity without materially harming factual calibration?"
+}

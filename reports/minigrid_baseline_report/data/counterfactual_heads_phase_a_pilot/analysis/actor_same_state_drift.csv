@@ -1,0 +1,2 @@
+after_step,arm,before_step,entropy_after,entropy_before,goal_id,js_divergence_mean,js_divergence_p95,modal_action_agreement,seed,states,task
+200000,uniform_reservoir,0,0.09521526843309402,1.9458987712860107,0,0.45623263716697693,0.47843414545059204,0.1574074074074074,0,972,go_to_door

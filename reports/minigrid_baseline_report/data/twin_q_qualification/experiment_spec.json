@@ -1,0 +1,56 @@
+{
+  "arms": [
+    "factual_only",
+    "counterfactual"
+  ],
+  "critic": {
+    "batch_size": 128,
+    "checkpoint_every": 2000,
+    "gamma": 0.99,
+    "hidden_layers": 2,
+    "hidden_size": 256,
+    "kind": "independent_discrete_action_twin_q",
+    "learning_rate": 0.0001,
+    "output_initialization_scale": 0.001,
+    "report_every": 500,
+    "target_ema_tau": 0.01,
+    "updates": 10000
+  },
+  "format": 1,
+  "git_revision": "e1d5d2a37ea9119a30475dd473c2244283775be2",
+  "goal_names": [
+    "go_to_door",
+    "fetch"
+  ],
+  "goals": [
+    0,
+    1
+  ],
+  "invariants": {
+    "actor_frozen": true,
+    "counterfactual_scope": "observed event labels for both selected goals",
+    "dreamer_parameters_frozen": true,
+    "existing_value_used_as_bootstrap": false,
+    "factual_control_dose_matched": true,
+    "reward_oracle_used": false,
+    "target": "r_g + gamma * c_g * E_frozen_actor[min(Q1_target,Q2_target)]"
+  },
+  "name": "minigrid_offline_twin_q_qualification_v1",
+  "q_seeds": [
+    0,
+    1,
+    2
+  ],
+  "selection": {
+    "heldout_failures_per_goal": 32,
+    "heldout_successes_per_goal": 32,
+    "seed": 20260901,
+    "train_failures_per_goal": 64,
+    "train_successes_per_goal": 64
+  },
+  "source": {
+    "checkpoint": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/runs/current_old_50_50/seed_0000/snapshots/step_000000400000/checkpoint",
+    "checkpoint_done_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "replay": "/home/localadmin/experiment_logs/minigrid/sequential_baseline_12m_v1/runs/current_old_50_50/seed_0000/milestones/step_000000400000/replay"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "actor_drift_comparisons": 1,
+  "arm_summaries": [
+    {
+      "arm": "uniform_reservoir",
+      "mean_backward_transfer": 0.0,
+      "mean_final_success": 0.88,
+      "mean_forgetting_from_peak": 0.0,
+      "mean_forward_transfer": 0.0,
+      "mean_initial_success": 0.02,
+      "mean_post_acquisition_success": 0.88,
+      "policy_mode": "sampled",
+      "task_seed_pairs": 1
+    },
+    {
+      "arm": "uniform_reservoir",
+      "mean_backward_transfer": 0.0,
+      "mean_final_success": 0.86,
+      "mean_forgetting_from_peak": 0.0,
+      "mean_forward_transfer": 0.0,
+      "mean_initial_success": 0.0,
+      "mean_post_acquisition_success": 0.86,
+      "policy_mode": "deterministic",
+      "task_seed_pairs": 1
+    }
+  ],
+  "component_loss_snapshots": 8,
+  "diagnostic_jobs": 4,
+  "diagnostic_jobs_complete": 4,
+  "evaluation_complete": true,
+  "evaluation_rows": 18,
+  "expected_evaluation_rows": 18,
+  "experiment": "minigrid_counterfactual_heads_phase_a_pilot",
+  "format": 1,
+  "interpretation_guardrails": [
+    "This single-task pilot tests goal selectivity and factual acquisition; it is not evidence about catastrophic forgetting.",
+    "Counterfactual oracle labels supervise only the reward and continuation heads on frozen posterior features.",
+    "Actor and critic objectives are unchanged; counterfactual critic values remain read-only diagnostics rather than supervised targets.",
+    "Sampled and deterministic policy results remain separate."
+  ],
+  "replay_snapshots": 8,
+  "tables": {
+    "actor_same_state_drift": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/analysis/actor_same_state_drift.csv",
+    "arm_summary": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/analysis/arm_summary.csv",
+    "component_losses_by_goal": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/analysis/component_losses_by_goal.csv",
+    "diagnostic_inventory": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/analysis/diagnostic_inventory.csv",
+    "evaluation_curves": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/analysis/evaluation_curves.csv",
+    "replay_allocation": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/analysis/replay_allocation.csv",
+    "transfer_and_forgetting": "/home/localadmin/experiment_logs/minigrid/counterfactual_heads_phase_a_pilot_v1/analysis/transfer_and_forgetting.csv"
+  },
+  "transfer_rows": 2
+}

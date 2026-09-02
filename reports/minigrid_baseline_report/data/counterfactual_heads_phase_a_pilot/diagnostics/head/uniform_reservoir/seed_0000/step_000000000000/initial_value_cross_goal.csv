@@ -1,0 +1,7 @@
+observed_goal,observed_goal_name,probed_goal,probed_goal_name,count,successes,prediction_mean,success_mean,failure_mean,success_auroc,success_average_precision
+0,go_to_door,0,go_to_door,32,16,0.0,0.0,0.0,0.5,1.0
+0,go_to_door,1,fetch,32,16,0.0,0.0,0.0,0.5,1.0
+0,go_to_door,2,go_to_object,32,16,0.0,0.0,0.0,0.5,1.0
+0,go_to_door,3,put_near,32,16,0.0,0.0,0.0,0.5,1.0
+0,go_to_door,4,unlock_pickup,32,16,0.0,0.0,0.0,0.5,1.0
+0,go_to_door,5,pickup_dist,32,16,0.0,0.0,0.0,0.5,1.0
