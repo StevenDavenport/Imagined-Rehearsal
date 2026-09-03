@@ -55,7 +55,9 @@ checkpoint and replay split, and counterfactual queries have no oracle returns.
 
 Contents:
 
-- `build_report.py`: reproducible ReportLab source with embedded vector figures;
+- `report.tex`: canonical native LaTeX source;
+- `figures/`: vector plot assets included by the LaTeX report;
+- `build_report.py`: retained legacy ReportLab source used for the original report;
 - `data/`: Study I immutable specification and compact analysis artifacts;
 - `data/sequential_baseline/analysis/`: complete Study II aggregate tables;
 - `data/sequential_baseline/diagnostics/`: compact summaries and audit specs
@@ -98,9 +100,9 @@ four-trained-goal scope and all six configured goal slots.
 Regenerate with:
 
 ```bash
-/home/zythax/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3.12 \
-  reports/minigrid_baseline_report/build_report.py
+cd reports/minigrid_baseline_report
+tectonic report.tex
 ```
 
-The generated PDF is written alongside the source as `report.pdf`, matching
+The compiled PDF is written alongside the source as `report.pdf`, matching
 the layout used by the other report packages in this repository.
